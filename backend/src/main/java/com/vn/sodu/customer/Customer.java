@@ -39,6 +39,6 @@ public class Customer {
     private LoyaltyTier tier;
 
     @OneToOne
-    @JoinColumn(name = "id", unique = true)
+    @JoinColumn(name = "account_id", unique = true)
     private Account account;
 }
