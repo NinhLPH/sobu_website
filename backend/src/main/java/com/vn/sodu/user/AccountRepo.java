@@ -10,9 +10,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface AccountRepo extends JpaRepository<Account, Long> {
-    Optional<Account> findByUsername(String username);
-    Optional<Account> findByEmail(String email);
-    Optional<Account> findByUsernameAndStatus(String username, Account.AccountStatus status);
-    Optional<Account> findByIdAndStatus(Long id, Account.AccountStatus status);
+    Optional<Account> findByEmail(String username);
     Page<Account> findAll(Pageable pageable);
 }

@@ -24,9 +24,6 @@ public class Account {
     private Customer customer;
 
     @Column(nullable = false, unique = true, length = 255)
-    private String username;
-
-    @Column(nullable = false, unique = true, length = 255)
     private String email;
 
     @Column(nullable = false, unique = true, length = 255)

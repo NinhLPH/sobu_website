@@ -1,10 +1,10 @@
 package com.vn.sodu.user.service;
 
+import com.vn.sodu.customer.Customer;
+import com.vn.sodu.customer.dto.CreateCustomerRequest;
+import com.vn.sodu.customer.service.CustomerService;
 import com.vn.sodu.mail.EmailService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.AccountRepo;
-import com.vn.sodu.user.ActivationToken;
-import com.vn.sodu.user.Role;
+import com.vn.sodu.user.*;
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.mapper.AccountMapper;
 import com.vn.sodu.security.JwtService;
@@ -29,8 +29,9 @@ public class AuthService {
     private final UserDetailsService userDetailsService;
     private final AccountMapper accountMapper;
     private final PasswordEncrypt passwordEncrypt;
-    private final com.vn.sodu.user.ActivationTokenRepo activationTokenRepo;
+    private final ActivationTokenRepo activationTokenRepo;
     private final EmailService emailService;
+    private final CustomerService customerService;
 
     /**
      * Authenticate user and generate JWT tokens
@@ -48,7 +49,7 @@ public class AuthService {
             }
 
             // Find user by email
-            Account account = accountRepo.findByUsername(request.getEmail())
+            Account account = accountRepo.findByEmail(request.getEmail())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
             // Check if account is active
@@ -108,7 +109,7 @@ public class AuthService {
             
             // Load user details
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            Account account = accountRepo.findByUsername(username)
+            Account account = accountRepo.findByEmail(username)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
             // Generate new access token
@@ -140,7 +141,7 @@ public class AuthService {
         log.info("Register attempt for email: {}", request.getEmail());
         
         // Check if email already exists
-        if (accountRepo.findByUsername(request.getEmail()).isPresent()) {
+        if (accountRepo.findByEmail(request.getEmail()).isPresent()) {
             throw new RuntimeException("Email already registered");
         }
        try {
@@ -156,6 +157,9 @@ public class AuthService {
             
             
             Account savedAccount = accountRepo.save(account);
+
+            Customer newCustomer = customerService.createCustomer(savedAccount.getId(),
+                    CreateCustomerRequest.builder().build() );
            // create activation token
             String token = java.util.UUID.randomUUID().toString();
             ActivationToken activationToken = ActivationToken.builder()

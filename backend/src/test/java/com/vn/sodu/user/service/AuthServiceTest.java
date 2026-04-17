@@ -1,11 +1,11 @@
 package com.vn.sodu.user.service;
 
+import com.vn.sodu.customer.service.CustomerService;
 import com.vn.sodu.mail.EmailService;
 import com.vn.sodu.user.Account;
 import com.vn.sodu.user.AccountRepo;
 import com.vn.sodu.user.ActivationToken;
 import com.vn.sodu.user.ActivationTokenRepo;
-import com.vn.sodu.user.Role;
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.mapper.AccountMapper;
 import com.vn.sodu.security.JwtService;
@@ -57,6 +57,9 @@ class AuthServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private com.vn.sodu.customer.service.CustomerService customerService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -69,9 +72,11 @@ class AuthServiceTest {
     void setUp() {
         testAccount = new Account();
         testAccount.setId(1L);
-        testAccount.setUsername("test@example.com");
+        testAccount.setEmail("test@example.com");
         testAccount.setPasswordHash("encryptedPassword");
         testAccount.setStatus(Account.AccountStatus.ACTIVE);
+        testAccount.setFullName("Test User");
+        testAccount.setPhone("0123456789");
 
         testUserDetails = new User("test@example.com", "password", java.util.Collections.emptyList());
 
@@ -91,7 +96,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("Should login successfully with valid credentials")
     void testLoginSuccess() {
-        when(accountRepo.findByUsername("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
         when(passwordEncrypt.decrypt("encryptedPassword")).thenReturn("password123");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
         when(jwtService.generateAccessToken(testUserDetails)).thenReturn("accessToken");
@@ -107,24 +112,24 @@ class AuthServiceTest {
         assertEquals("refreshToken", response.getRefreshToken());
         assertEquals("Bearer", response.getTokenType());
         assertEquals(3600L, response.getExpiresIn());
-        verify(accountRepo).findByUsername("test@example.com");
+        verify(accountRepo).findByEmail("test@example.com");
     }
 
     @Test
     @DisplayName("Should fail login with non-existent user")
     void testLoginUserNotFound() {
-        when(accountRepo.findByUsername("nonexistent@example.com")).thenReturn(Optional.empty());
+        when(accountRepo.findByEmail("nonexistent@example.com")).thenReturn(Optional.empty());
 
         loginRequest.setEmail("nonexistent@example.com");
         
         assertThrows(RuntimeException.class, () -> authService.login(loginRequest));
-        verify(accountRepo).findByUsername("nonexistent@example.com");
+        verify(accountRepo).findByEmail("nonexistent@example.com");
     }
 
     @Test
     @DisplayName("Should fail login with incorrect password")
     void testLoginInvalidPassword() {
-        when(accountRepo.findByUsername("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
         when(passwordEncrypt.decrypt("encryptedPassword")).thenReturn("correctPassword");
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.login(loginRequest));
@@ -135,7 +140,7 @@ class AuthServiceTest {
     @DisplayName("Should fail login with inactive account")
     void testLoginInactiveAccount() {
         testAccount.setStatus(Account.AccountStatus.INACTIVE);
-        when(accountRepo.findByUsername("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.login(loginRequest));
         assertEquals("Account is not active. Please activate your account.", exception.getMessage());
@@ -145,7 +150,7 @@ class AuthServiceTest {
     @DisplayName("Should fail login with banned account")
     void testLoginBannedAccount() {
         testAccount.setStatus(Account.AccountStatus.BANNED);
-        when(accountRepo.findByUsername("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.login(loginRequest));
         assertEquals("Account is not active. Please activate your account.", exception.getMessage());
@@ -198,7 +203,7 @@ class AuthServiceTest {
         when(jwtService.isTokenValid("validRefreshToken")).thenReturn(true);
         when(jwtService.extractUsername("validRefreshToken")).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
-        when(accountRepo.findByUsername("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
         when(jwtService.generateAccessToken(testUserDetails)).thenReturn("newAccessToken");
 
         AccountDTO accountDTO = new AccountDTO();
@@ -245,7 +250,7 @@ class AuthServiceTest {
         when(jwtService.isTokenValid("validToken")).thenReturn(true);
         when(jwtService.extractUsername("validToken")).thenReturn("nonexistent@example.com");
         when(userDetailsService.loadUserByUsername("nonexistent@example.com")).thenReturn(testUserDetails);
-        when(accountRepo.findByUsername("nonexistent@example.com")).thenReturn(Optional.empty());
+        when(accountRepo.findByEmail("nonexistent@example.com")).thenReturn(Optional.empty());
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(request));
         assertEquals("User not found", exception.getMessage());
@@ -259,7 +264,7 @@ class AuthServiceTest {
         Account newAccount = new Account();
         RegisterResponse registerResponse = new RegisterResponse();
         
-        when(accountRepo.findByUsername("newuser@example.com")).thenReturn(Optional.empty());
+        when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.empty());
         when(passwordEncrypt.encrypt("newpassword123")).thenReturn("encryptedNewPassword");
         when(accountMapper.toEntity(registerRequest)).thenReturn(newAccount);
         when(accountRepo.save(any(Account.class))).thenReturn(newAccount);
@@ -269,7 +274,7 @@ class AuthServiceTest {
         RegisterResponse response = authService.register(registerRequest);
 
         assertNotNull(response);
-        verify(accountRepo).findByUsername("newuser@example.com");
+        verify(accountRepo).findByEmail("newuser@example.com");
         verify(passwordEncrypt).encrypt("newpassword123");
         verify(accountRepo).save(any(Account.class));
         verify(emailService).sendActivationEmail(any(Account.class), anyString());
@@ -278,7 +283,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("Should fail register when email already exists")
     void testRegisterEmailAlreadyExists() {
-        when(accountRepo.findByUsername("newuser@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.of(testAccount));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.register(registerRequest));
         assertEquals("Email already registered", exception.getMessage());
@@ -287,7 +292,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("Should set account to inactive status on registration")
     void testRegisterAccountInactiveStatus() {
-        when(accountRepo.findByUsername("newuser@example.com")).thenReturn(Optional.empty());
+        when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.empty());
         Account newAccount = new Account();
         when(accountMapper.toEntity(registerRequest)).thenReturn(newAccount);
         when(passwordEncrypt.encrypt("newpassword123")).thenReturn("encrypted");
@@ -302,7 +307,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("Should set customer role on registration")
     void testRegisterCustomerRoleAssigned() {
-        when(accountRepo.findByUsername("newuser@example.com")).thenReturn(Optional.empty());
+        when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.empty());
         Account newAccount = new Account();
         when(accountMapper.toEntity(registerRequest)).thenReturn(newAccount);
         when(passwordEncrypt.encrypt("newpassword123")).thenReturn("encrypted");
