@@ -3,7 +3,7 @@ import { IoMdMail } from "react-icons/io";
 
 const Footer = () => {
     return (
-        <footer className="bg-surface pt-20 pb-10">
+        <footer className="pt-20 pb-10">
             <div className="container mx-auto px-8">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
                     <div className="space-y-6">
@@ -13,7 +13,7 @@ const Footer = () => {
                         </p>
                         <div className="flex gap-4">
                             {[<FaFacebook/>, <FaInstagramSquare/>, <FaYoutube/>].map(social => (
-                                <div key={social} className="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center text-primary font-bold text-xs hover:bg-primary-container hover:text-white transition-all cursor-pointer">
+                                <div key={social} className="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center text-primary font-bold text-xl hover:bg-primary-container hover:text-white transition-all cursor-pointer">
                                     {social}
                                 </div>
                             ))}

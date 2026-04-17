@@ -27,13 +27,13 @@ const Header = () => {
                     </div>
                 </div>
             </div>
-            <div className="bg-surface border-t border-outline/10 h-12 flex items-center">
+            <div className="border-t border-outline/10 h-12 flex items-center">
                 <div className="container mx-auto px-8 flex gap-10">
                     {['Sản phẩm', 'Hàng mới', 'Hướng dẫn', 'Dịch vụ', 'Mô hình Custom'].map((item) => (
                         <a
                             key={item}
                             href={`#${item}`}
-                            className="text-[11px] font-bold tracking-blueprint uppercase text-on-surface hover:text-primary transition-colors"
+                            className="text-[11.5px] font-bold tracking-blueprint uppercase text-on-surface hover:text-primary transition-colors"
                         >
                             {item}
                         </a>
