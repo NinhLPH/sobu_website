@@ -15,6 +15,8 @@ public class LoyaltyTier {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private TierName name;
+
     private Double minTotalMoney; // điều kiện lên hạng
 
     private Double discountRate; // optional (%)
