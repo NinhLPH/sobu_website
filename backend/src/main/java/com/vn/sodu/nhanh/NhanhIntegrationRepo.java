@@ -7,5 +7,6 @@ import java.util.Optional;
 
 @Repository
 public interface NhanhIntegrationRepo extends JpaRepository<NhanhIntegration, Long> {
-    Optional<NhanhIntegration> findFirstByOrderByCreatedAtDesc();
+
+    Optional<NhanhIntegration> findByBusinessId(Long businessId);
 }

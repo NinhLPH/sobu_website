@@ -20,9 +20,6 @@ public class NhanhService {
     @Value("${nhanh.client-id}")
     private String clientId;
 
-    @Value("${nhanh.client-secret}")
-    private String clientSecret;
-
     @Value("${nhanh.redirect-uri}")
     private String redirectUri;
 
@@ -45,12 +42,18 @@ public class NhanhService {
             throw new RuntimeException("Failed to get accessToken from Nhanh");
         }
 
-        NhanhIntegration entity = new NhanhIntegration();
+        // tìm theo businessId (QUAN TRỌNG)
+        NhanhIntegration entity = nhanhIntegrationRepo
+                .findByBusinessId(response.getBusinessId())
+                .orElse(new NhanhIntegration());
+
+        entity.setBusinessId(response.getBusinessId());
+        entity.setAppId(clientId);
         entity.setAccessToken(response.getAccessToken());
-        entity.setShopId(String.valueOf(response.getBusinessId()));
+        entity.setExpiredAt(response.getExpiredAt());
 
         nhanhIntegrationRepo.save(entity);
 
-        log.info("Saved Nhanh token OK");
+        log.info("Saved/Updated Nhanh token OK, businessId={}", response.getBusinessId());
     }
 }

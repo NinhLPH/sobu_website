@@ -16,19 +16,23 @@ public class NhanhIntegration {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String shopId;
+    // businessId từ Nhanh
+    @Column(nullable = false, unique = true)
+    private Long businessId;
 
-    @Column(columnDefinition = "TEXT")
+    // appId (để support multi app nếu cần)
+    @Column(nullable = false)
+    private String appId;
+
+    @Column(columnDefinition = "TEXT", nullable = false)
     private String accessToken;
 
-    @Column(columnDefinition = "TEXT")
-    private String refreshToken;
-
-    private LocalDateTime expiresAt;
+    // expiredAt từ Nhanh là UNIX timestamp
+    private Long expiredAt;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

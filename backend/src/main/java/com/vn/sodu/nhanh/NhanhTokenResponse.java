@@ -8,4 +8,5 @@ import lombok.Setter;
 public class NhanhTokenResponse {
     private String accessToken;
     private Long businessId;
+    private Long expiredAt;
 }
