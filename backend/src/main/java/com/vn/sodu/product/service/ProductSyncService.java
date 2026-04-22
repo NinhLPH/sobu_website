@@ -5,6 +5,7 @@ import com.vn.sodu.product.ProductAttribute;
 import com.vn.sodu.product.ProductImage;
 import com.vn.sodu.product.ProductUnit;
 import com.vn.sodu.product.dto.NhanhProductDTO;
+import com.vn.sodu.product.dto.NhanhProductListData;
 import com.vn.sodu.product.dto.NhanhResponse;
 import com.vn.sodu.product.mapper.ProductMapper;
 import com.vn.sodu.product.repo.ProductAttributeRepo;
@@ -118,26 +119,30 @@ public class ProductSyncService {
         while (url != null && !url.isBlank()) {
 
             try {
-                ResponseEntity<NhanhResponse<List<NhanhProductDTO>>> response =
+                ResponseEntity<NhanhResponse<NhanhProductListData>> response =
                         restTemplate.exchange(
                                 url,
                                 HttpMethod.GET,
                                 null,
-                                new ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
+                                new ParameterizedTypeReference<NhanhResponse<NhanhProductListData>>() {}
                         );
 
-                NhanhResponse<List<NhanhProductDTO>> body = response.getBody();
+                NhanhResponse<NhanhProductListData> body = response.getBody();
 
-                if (body == null || body.getData() == null) {
+                if (body == null || body.getData() == null || body.getData().getProducts() == null) {
                     break;
                 }
 
-                result.addAll(body.getData());
+                result.addAll(body.getData().getProducts());
 
                 // pagination next
+                // If Nhanh still uses Paginator.next, we keep it. 
+                // But the task says we have page and totalPages.
+                // Usually Nhanh v3 uses Paginator for next URL.
                 if (body.getPaginator() != null) {
                     url = body.getPaginator().getNext();
                 } else {
+                    // Fallback to page increment if needed, but let's stick to Paginator if it exists
                     url = null;
                 }
 

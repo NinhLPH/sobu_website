@@ -3,6 +3,7 @@ package com.vn.sodu.product.brand.service;
 import com.vn.sodu.product.brand.Brand;
 import com.vn.sodu.product.brand.BrandRepo;
 import com.vn.sodu.product.brand.dto.NhanhBrandDTO;
+import com.vn.sodu.product.brand.dto.NhanhBrandListData;
 import com.vn.sodu.product.brand.mapper.BrandMapper;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.RequiredArgsConstructor;
@@ -77,20 +78,20 @@ public class BrandSyncService {
 
         while (url != null && !url.isBlank()) {
             try {
-                ResponseEntity<NhanhResponse<List<NhanhBrandDTO>>> response =
+                ResponseEntity<NhanhResponse<NhanhBrandListData>> response =
                         restTemplate.exchange(
                                 url,
                                 HttpMethod.GET,
                                 null,
-                                new ParameterizedTypeReference<NhanhResponse<List<NhanhBrandDTO>>>() {}
+                                new ParameterizedTypeReference<NhanhResponse<NhanhBrandListData>>() {}
                         );
 
-                NhanhResponse<List<NhanhBrandDTO>> body = response.getBody();
-                if (body == null || body.getData() == null) {
+                NhanhResponse<NhanhBrandListData> body = response.getBody();
+                if (body == null || body.getData() == null || body.getData().getBrands() == null) {
                     break;
                 }
 
-                result.addAll(body.getData());
+                result.addAll(body.getData().getBrands());
 
                 if (body.getPaginator() != null) {
                     url = body.getPaginator().getNext();

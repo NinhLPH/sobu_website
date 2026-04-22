@@ -3,6 +3,7 @@ package com.vn.sodu.product.category.service;
 import com.vn.sodu.product.category.Category;
 import com.vn.sodu.product.category.CategoryRepo;
 import com.vn.sodu.product.category.dto.NhanhCategoryDTO;
+import com.vn.sodu.product.category.dto.NhanhCategoryListData;
 import com.vn.sodu.product.category.mapper.CategoryMapper;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.RequiredArgsConstructor;
@@ -94,21 +95,21 @@ public class CategorySyncService {
 
         while (url != null && !url.isBlank()) {
             try {
-                ResponseEntity<NhanhResponse<List<NhanhCategoryDTO>>> response =
+                ResponseEntity<NhanhResponse<NhanhCategoryListData>> response =
                         restTemplate.exchange(
                                 url,
                                 HttpMethod.GET,
                                 null,
-                                new ParameterizedTypeReference<NhanhResponse<List<NhanhCategoryDTO>>>() {
+                                new ParameterizedTypeReference<NhanhResponse<NhanhCategoryListData>>() {
                                 }
                         );
 
-                NhanhResponse<List<NhanhCategoryDTO>> body = response.getBody();
-                if (body == null || body.getData() == null) {
+                NhanhResponse<NhanhCategoryListData> body = response.getBody();
+                if (body == null || body.getData() == null || body.getData().getCategories() == null) {
                     break;
                 }
 
-                result.addAll(body.getData());
+                result.addAll(body.getData().getCategories());
 
                 if (body.getPaginator() != null) {
                     url = body.getPaginator().getNext();
