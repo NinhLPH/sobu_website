@@ -2,7 +2,6 @@ package com.vn.sodu.user.mapper;
 
 import com.vn.sodu.user.Account;
 import com.vn.sodu.user.dto.*;
-import com.vn.sodu.user.dto.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
