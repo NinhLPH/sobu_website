@@ -22,6 +22,6 @@ public class NhanhResponse<T> {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Paginator {
-        private String next;
+        private Object next;
     }
 }

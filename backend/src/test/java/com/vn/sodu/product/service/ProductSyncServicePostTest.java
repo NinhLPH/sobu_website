@@ -2,7 +2,7 @@ package com.vn.sodu.product.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.product.dto.NhanhProductDTO;
-import com.vn.sodu.product.dto.NhanhProductListResponse;
+import com.vn.sodu.product.dto.NhanhResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.MediaType;
@@ -18,12 +18,12 @@ public class ProductSyncServicePostTest {
     public void testPostRequestBodyStructure() throws Exception {
         // Verify POST request body structure
         Map<String, Object> body = Map.of(
-                "page", 1,
-                "pageSize", 50
+                "filters", Map.of("updatedAtFrom", 1704067200L),
+                "paginator", Map.of("size", 50)
         );
 
-        assertEquals(1, body.get("page"));
-        assertEquals(50, body.get("pageSize"));
+        assertEquals(1704067200L, ((Map<?, ?>) body.get("filters")).get("updatedAtFrom"));
+        assertEquals(50, ((Map<?, ?>) body.get("paginator")).get("size"));
     }
 
     @Test
@@ -31,27 +31,27 @@ public class ProductSyncServicePostTest {
         String json = """
                 {
                     "code": 1,
-                    "data": {
-                        "products": [
-                            {"id": 1, "name": "Product 1"},
-                            {"id": 2, "name": "Product 2"}
-                        ],
-                        "page": 1,
-                        "totalPages": 3
+                    "data": [
+                        {"id": 1, "name": "Product 1"},
+                        {"id": 2, "name": "Product 2"}
+                    ],
+                    "paginator": {
+                        "next": "cursor-2"
                     }
                 }
                 """;
 
         ObjectMapper mapper = new ObjectMapper();
-        NhanhProductListResponse response = mapper.readValue(json, NhanhProductListResponse.class);
+        NhanhResponse<List<NhanhProductDTO>> response = mapper.readerFor(
+                mapper.getTypeFactory().constructParametricType(NhanhResponse.class,
+                        mapper.getTypeFactory().constructCollectionType(List.class, NhanhProductDTO.class))
+        ).readValue(json);
 
         // Verify response
         assertEquals(1, response.getCode(), "API should return code = 1");
         assertNotNull(response.getData());
-        assertNotNull(response.getData().getProducts());
-        assertEquals(2, response.getData().getProducts().size());
-        assertEquals(1, response.getData().getPage());
-        assertEquals(3, response.getData().getTotalPages());
+        assertEquals(2, response.getData().size());
+        assertEquals("cursor-2", response.getPaginator().getNext());
     }
 
     @Test
@@ -64,7 +64,10 @@ public class ProductSyncServicePostTest {
                 """;
 
         ObjectMapper mapper = new ObjectMapper();
-        NhanhProductListResponse response = mapper.readValue(json, NhanhProductListResponse.class);
+        NhanhResponse<List<NhanhProductDTO>> response = mapper.readerFor(
+                mapper.getTypeFactory().constructParametricType(NhanhResponse.class,
+                        mapper.getTypeFactory().constructCollectionType(List.class, NhanhProductDTO.class))
+        ).readValue(json);
 
         assertNotEquals(1, response.getCode(), "Should fail if code != 1");
     }
@@ -81,21 +84,20 @@ public class ProductSyncServicePostTest {
 
     @Test
     public void testPaginationLogic() {
-        // Simulate pagination with page and totalPages
-        int currentPage = 1;
-        int totalPages = 5;
+        Map<String, Object> paginator = Map.of(
+                "size", 50,
+                "next", Map.of("id", 100)
+        );
 
-        assertTrue(currentPage < totalPages, "Should continue pagination if current page < total pages");
-
-        currentPage = 5;
-        assertFalse(currentPage < totalPages, "Should stop pagination if current page >= total pages");
+        assertEquals(50, paginator.get("size"));
+        assertTrue(paginator.containsKey("next"));
     }
 
     @Test
     public void testHttpEntityCreation() {
         Map<String, Object> body = Map.of(
-                "page", 1,
-                "pageSize", 50
+                "filters", Map.of("updatedAtFrom", 1704067200L),
+                "paginator", Map.of("size", 50)
         );
 
         org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();

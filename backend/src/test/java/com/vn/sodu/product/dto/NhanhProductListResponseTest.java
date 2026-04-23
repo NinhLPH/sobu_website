@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,29 +15,32 @@ public class NhanhProductListResponseTest {
         String json = """
                 {
                     "code": 1,
-                    "data": {
-                        "products": [
-                            {
-                                "id": 1,
-                                "name": "Product 1",
-                                "code": "P001"
-                            }
-                        ],
-                        "page": 1,
-                        "totalPages": 5
+                    "data": [
+                        {
+                            "id": 1,
+                            "name": "Product 1",
+                            "code": "P001"
+                        }
+                    ],
+                    "paginator": {
+                        "next": {
+                            "id": 100
+                        }
                     }
                 }
                 """;
 
         ObjectMapper mapper = new ObjectMapper();
-        NhanhProductListResponse response = mapper.readValue(json, NhanhProductListResponse.class);
+        NhanhResponse<List<NhanhProductDTO>> response = mapper.readerFor(
+                mapper.getTypeFactory().constructParametricType(NhanhResponse.class,
+                        mapper.getTypeFactory().constructCollectionType(List.class, NhanhProductDTO.class))
+        ).readValue(json);
 
         assertEquals(1, response.getCode());
         assertNotNull(response.getData());
-        assertNotNull(response.getData().getProducts());
-        assertEquals(1, response.getData().getProducts().size());
-        assertEquals(1, response.getData().getPage());
-        assertEquals(5, response.getData().getTotalPages());
+        assertEquals(1, response.getData().size());
+        assertNotNull(response.getPaginator());
+        assertInstanceOf(Map.class, response.getPaginator().getNext());
     }
 
     @Test
@@ -44,19 +48,18 @@ public class NhanhProductListResponseTest {
         String json = """
                 {
                     "code": 1,
-                    "data": {
-                        "products": [],
-                        "page": 1,
-                        "totalPages": 1
-                    }
+                    "data": []
                 }
                 """;
 
         ObjectMapper mapper = new ObjectMapper();
-        NhanhProductListResponse response = mapper.readValue(json, NhanhProductListResponse.class);
+        NhanhResponse<List<NhanhProductDTO>> response = mapper.readerFor(
+                mapper.getTypeFactory().constructParametricType(NhanhResponse.class,
+                        mapper.getTypeFactory().constructCollectionType(List.class, NhanhProductDTO.class))
+        ).readValue(json);
 
-        assertNotNull(response.getData().getProducts());
-        assertTrue(response.getData().getProducts().isEmpty());
+        assertNotNull(response.getData());
+        assertTrue(response.getData().isEmpty());
     }
 
     @Test
@@ -64,20 +67,22 @@ public class NhanhProductListResponseTest {
         String json = """
                 {
                     "code": 1,
-                    "data": {
-                        "products": [],
-                        "page": 1,
-                        "totalPages": 1,
-                        "unknownField": "ignored"
+                    "data": [],
+                    "paginator": {
+                        "next": "cursor-2"
                     },
-                    "unknownRootField": "also ignored"
+                    "unknownRootField": "ignored"
                 }
                 """;
 
         ObjectMapper mapper = new ObjectMapper();
-        NhanhProductListResponse response = mapper.readValue(json, NhanhProductListResponse.class);
+        NhanhResponse<List<NhanhProductDTO>> response = mapper.readerFor(
+                mapper.getTypeFactory().constructParametricType(NhanhResponse.class,
+                        mapper.getTypeFactory().constructCollectionType(List.class, NhanhProductDTO.class))
+        ).readValue(json);
 
         assertNotNull(response);
         assertEquals(1, response.getCode());
+        assertEquals("cursor-2", response.getPaginator().getNext());
     }
 }

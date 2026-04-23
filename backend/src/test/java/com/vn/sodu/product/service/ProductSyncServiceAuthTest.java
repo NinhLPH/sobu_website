@@ -33,8 +33,8 @@ public class ProductSyncServiceAuthTest {
     public void testPostRequestWithAuth() {
         // Test the request structure
         Map<String, Object> body = Map.of(
-                "page", 1,
-                "pageSize", 50
+                "filters", Map.of("updatedAtFrom", 1704067200L),
+                "paginator", Map.of("size", 50)
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -79,9 +79,8 @@ public class ProductSyncServiceAuthTest {
     public void testAuthHeaderIsSeparate() {
         // Verify token goes in headers, not in body
         Map<String, Object> body = Map.of(
-                "page", 1,
-                "pageSize", 50
-                // No token in body!
+                "filters", Map.of("updatedAtFrom", 1704067200L),
+                "paginator", Map.of("size", 50)
         );
 
         HttpHeaders headers = new HttpHeaders();

@@ -1,7 +1,7 @@
 package com.vn.sodu.product.service;
 
 import com.vn.sodu.product.dto.NhanhProductDTO;
-import com.vn.sodu.product.dto.NhanhProductListResponse;
+import com.vn.sodu.product.dto.NhanhResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,52 +37,58 @@ public class ProductSyncServiceFetcherTest {
     private ProductSyncService productSyncService;
 
     @Test
-    @DisplayName("Should collect products across multiple pages")
+    @DisplayName("Should collect products across multiple next cursors")
     void testFetchAllProductsMultiPage() {
-        // Prepare pages: 3 pages, each with 2 products
-        List<NhanhProductListResponse> pages = new ArrayList<>();
-        for (int p = 1; p <= 3; p++) {
-            NhanhProductDTO a = new NhanhProductDTO(); a.setId((long) (p * 10 + 1));
-            NhanhProductDTO b = new NhanhProductDTO(); b.setId((long) (p * 10 + 2));
-            List<NhanhProductDTO> list = Arrays.asList(a, b);
-            NhanhProductListResponse.Data data = new NhanhProductListResponse.Data(list, p, 3);
-            NhanhProductListResponse resp = new NhanhProductListResponse(1, data);
-            pages.add(resp);
-        }
+        List<NhanhResponse<List<NhanhProductDTO>>> pages = new ArrayList<>();
 
-        Function<Integer, NhanhProductListResponse> fetcher = page -> pages.get(page - 1);
+        NhanhProductDTO first = new NhanhProductDTO();
+        first.setId(11L);
+        NhanhProductDTO second = new NhanhProductDTO();
+        second.setId(12L);
+        pages.add(new NhanhResponse<>(1, Arrays.asList(first, second), new NhanhResponse.Paginator("cursor-2")));
+
+        NhanhProductDTO third = new NhanhProductDTO();
+        third.setId(21L);
+        NhanhProductDTO fourth = new NhanhProductDTO();
+        fourth.setId(22L);
+        pages.add(new NhanhResponse<>(1, Arrays.asList(third, fourth), null));
+
+        List<Object> cursors = new ArrayList<>();
+        Function<Object, NhanhResponse<List<NhanhProductDTO>>> fetcher = cursor -> {
+            cursors.add(cursor);
+            return pages.get(cursors.size() - 1);
+        };
 
         List<NhanhProductDTO> result = productSyncService.fetchAllProductsWithFetcher(fetcher);
 
         assertNotNull(result);
-        assertEquals(6, result.size());
-        // ensure ids present
+        assertEquals(4, result.size());
+        assertNull(cursors.get(0));
+        assertEquals("cursor-2", cursors.get(1));
         assertTrue(result.stream().anyMatch(x -> x.getId() != null && x.getId() == 11L));
-        assertTrue(result.stream().anyMatch(x -> x.getId() != null && x.getId() == 32L));
+        assertTrue(result.stream().anyMatch(x -> x.getId() != null && x.getId() == 22L));
     }
 
     @Test
     @DisplayName("Should throw when API returns non-success code")
     void testFetchAllProductsNonSuccessCodeThrows() {
-        NhanhProductListResponse bad = new NhanhProductListResponse(0, null);
-        Function<Integer, NhanhProductListResponse> fetcher = page -> bad;
+        Function<Object, NhanhResponse<List<NhanhProductDTO>>> fetcher =
+                cursor -> new NhanhResponse<>(0, null, null);
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> productSyncService.fetchAllProductsWithFetcher(fetcher));
 
-        String msg = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase();
-        assertTrue(msg.contains("nhanh api error") || msg.contains("code") || msg.contains("invalid response") || msg.contains("null"),
-                "Expected message to indicate API error or invalid/ null response");
+        assertTrue(ex.getMessage().toLowerCase().contains("nhanh api error"));
     }
 
     @Test
     @DisplayName("Should throw when response is null")
     void testFetchAllProductsNullResponseThrows() {
-        Function<Integer, NhanhProductListResponse> fetcher = page -> null;
+        Function<Object, NhanhResponse<List<NhanhProductDTO>>> fetcher = cursor -> null;
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> productSyncService.fetchAllProductsWithFetcher(fetcher));
 
-        assertTrue(ex.getMessage().toLowerCase().contains("invalid response") || ex.getMessage().toLowerCase().contains("null"));
+        assertTrue(ex.getMessage().toLowerCase().contains("invalid response"));
     }
 }

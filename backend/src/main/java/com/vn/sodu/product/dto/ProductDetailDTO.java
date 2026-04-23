@@ -18,20 +18,27 @@ import java.util.List;
 public class ProductDetailDTO {
 
     private Long id;
+    private Long externalId;
     private String name;
+    private String otherName;
     private String code;
     private String barcode;
+    private String status;
     private String description;
     private String content;
     private BigDecimal price;
     private BigDecimal wholesalePrice;
+    private BigDecimal oldPrice;
+    private Integer vat;
     private String avatarImage;
     private String brandName;
     private String categoryName;
     private Double stockAvailable;
+    private Double stockRemain;
     private List<ProductUnitDTO> units;
     private List<ProductAttributeDTO> attributes;
     private List<String> images;
+    private java.time.LocalDateTime updatedAt;
 
 }
 

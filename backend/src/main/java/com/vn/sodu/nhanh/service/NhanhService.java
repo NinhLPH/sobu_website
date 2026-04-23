@@ -59,10 +59,21 @@ public class NhanhService {
 
     // Get valid access token from first active integration
     public String getValidAccessToken() {
-        // Get first (or only) integration record
-        return nhanhIntegrationRepo.findAll().stream()
-                .findFirst()
+        return getIntegration()
                 .map(NhanhIntegration::getAccessToken)
                 .orElseThrow(() -> new RuntimeException("No Nhanh integration found. Please authenticate first."));
+    }
+
+    public java.util.Optional<NhanhIntegration> getIntegration() {
+        return nhanhIntegrationRepo.findAll().stream().findFirst();
+    }
+
+    @Transactional
+    public void updateLastSyncTime(Long time) {
+        getIntegration().ifPresent(entity -> {
+            entity.setLastProductSyncTime(time);
+            nhanhIntegrationRepo.save(entity);
+            log.info("Updated lastSyncTime={} for businessId={}", time, entity.getBusinessId());
+        });
     }
 }
