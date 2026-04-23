@@ -47,7 +47,9 @@ class ProductSyncServiceIncrementalTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(productSyncService, "nhanhProductsUrl", "http://test-url");
+        ReflectionTestUtils.setField(productSyncService, "nhanhBaseUrl", "https://pos.open.nhanh.vn/api");
+        ReflectionTestUtils.setField(productSyncService, "clientId", "77323");
+        ReflectionTestUtils.setField(productSyncService, "businessId", "224003");
     }
 
     @Test
@@ -105,6 +107,14 @@ class ProductSyncServiceIncrementalTest {
         assertEquals(timestamp, filters.get("updatedAtFrom"));
         assertEquals(50, paginator.get("size"));
         assertFalse(paginator.containsKey("next"));
+    }
+
+    @Test
+    @DisplayName("Should build product URL from base URL, client id, and business id")
+    void testBuildProductListUrl() {
+        String url = ReflectionTestUtils.invokeMethod(productSyncService, "buildProductListUrl");
+
+        assertEquals("https://pos.open.nhanh.vn/v3.0/product/list?appId=77323&businessId=224003", url);
     }
 
     @Test

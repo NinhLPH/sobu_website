@@ -42,8 +42,10 @@ public class ProductSyncService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${nhanh.api.products-url:}")
-    private String nhanhProductsUrl;
+    private static final String PRODUCT_LIST_PATH = "/v3.0/product/list";
+
+    @Value("${nhanh.base-url:}")
+    private String nhanhBaseUrl;
 
     @Value("${nhanh.client-id:}")
     private String clientId;
@@ -173,9 +175,7 @@ public class ProductSyncService {
     // =============================
     public List<NhanhProductDTO> fetchAllProducts(Long lastSyncTime) {
 
-        if (nhanhProductsUrl == null || nhanhProductsUrl.isBlank()) {
-            throw new IllegalStateException("nhanh.api.products-url is not configured");
-        }
+        String url = buildProductListUrl();
 
         String accessToken = nhanhService.getValidAccessToken();
 
@@ -186,10 +186,6 @@ public class ProductSyncService {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.set("Authorization", accessToken);
-            String url = UriComponentsBuilder.fromHttpUrl(nhanhProductsUrl)
-                    .queryParam("appId", clientId)
-                    .queryParam("businessId", businessId)
-                    .toUriString();
             log.info(url);
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
@@ -209,6 +205,24 @@ public class ProductSyncService {
 
             return withRetry(call, 3, 500);
         });
+    }
+
+    String buildProductListUrl() {
+        if (nhanhBaseUrl == null || nhanhBaseUrl.isBlank()) {
+            throw new IllegalStateException("nhanh.base-url is not configured");
+        }
+        if (clientId == null || clientId.isBlank()) {
+            throw new IllegalStateException("nhanh.client-id is not configured");
+        }
+        if (businessId == null || businessId.isBlank()) {
+            throw new IllegalStateException("nhanh.business-id is not configured");
+        }
+
+        return UriComponentsBuilder.fromHttpUrl(nhanhBaseUrl)
+                .replacePath(PRODUCT_LIST_PATH)
+                .queryParam("appId", clientId)
+                .queryParam("businessId", businessId)
+                .toUriString();
     }
 
     Map<String, Object> buildProductListRequestBody(Long lastSyncTime, Object nextCursor) {
