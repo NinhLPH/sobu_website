@@ -56,4 +56,13 @@ public class NhanhService {
 
         log.info("Saved/Updated Nhanh token OK, businessId={}", response.getBusinessId());
     }
+
+    // Get valid access token from first active integration
+    public String getValidAccessToken() {
+        // Get first (or only) integration record
+        return nhanhIntegrationRepo.findAll().stream()
+                .findFirst()
+                .map(NhanhIntegration::getAccessToken)
+                .orElseThrow(() -> new RuntimeException("No Nhanh integration found. Please authenticate first."));
+    }
 }

@@ -1,11 +1,13 @@
 package com.vn.sodu.product.service;
 
+import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.ProductAttribute;
 import com.vn.sodu.product.ProductImage;
 import com.vn.sodu.product.ProductUnit;
 import com.vn.sodu.product.dto.NhanhProductDTO;
 import com.vn.sodu.product.dto.NhanhProductListData;
+import com.vn.sodu.product.dto.NhanhProductListResponse;
 import com.vn.sodu.product.dto.NhanhResponse;
 import com.vn.sodu.product.mapper.ProductMapper;
 import com.vn.sodu.product.repo.ProductAttributeRepo;
@@ -15,8 +17,9 @@ import com.vn.sodu.product.repo.ProductUnitRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -36,6 +40,7 @@ public class ProductSyncService {
     private final ProductAttributeRepo productAttributeRepo;
     private final ProductImageRepo productImageRepo;
     private final ProductMapper productMapper;
+    private final NhanhService nhanhService;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -112,45 +117,67 @@ public class ProductSyncService {
             throw new IllegalStateException("nhanh.api.products-url is not configured");
         }
 
+        String accessToken = nhanhService.getValidAccessToken();
+
+        return fetchAllProductsWithFetcher(page -> {
+            Map<String, Object> body = Map.of(
+                    "page", page,
+                    "pageSize", 50
+            );
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + accessToken);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+            ResponseEntity<NhanhProductListResponse> response =
+                    restTemplate.postForEntity(nhanhProductsUrl, request, NhanhProductListResponse.class);
+
+            return response.getBody();
+        });
+    }
+
+    // Package-private for testing: supply a fetcher function that returns NhanhProductListResponse for a page
+    List<NhanhProductDTO> fetchAllProductsWithFetcher(java.util.function.Function<Integer, NhanhProductListResponse> fetcher) {
         List<NhanhProductDTO> result = new java.util.ArrayList<>();
 
-        String url = nhanhProductsUrl;
+        int page = 1;
+        int totalPages = 1;
 
-        while (url != null && !url.isBlank()) {
-
+        do {
+            NhanhProductListResponse resp;
             try {
-                ResponseEntity<NhanhResponse<NhanhProductListData>> response =
-                        restTemplate.exchange(
-                                url,
-                                HttpMethod.GET,
-                                null,
-                                new ParameterizedTypeReference<NhanhResponse<NhanhProductListData>>() {}
-                        );
-
-                NhanhResponse<NhanhProductListData> body = response.getBody();
-
-                if (body == null || body.getData() == null || body.getData().getProducts() == null) {
-                    break;
-                }
-
-                result.addAll(body.getData().getProducts());
-
-                // pagination next
-                // If Nhanh still uses Paginator.next, we keep it. 
-                // But the task says we have page and totalPages.
-                // Usually Nhanh v3 uses Paginator for next URL.
-                if (body.getPaginator() != null) {
-                    url = body.getPaginator().getNext();
-                } else {
-                    // Fallback to page increment if needed, but let's stick to Paginator if it exists
-                    url = null;
-                }
-
-            } catch (RestClientException ex) {
-                log.error("Failed to fetch products from Nhanh API. url={}", url, ex);
+                resp = fetcher.apply(page);
+            } catch (Exception ex) {
+                log.error("Failed to fetch products for page={}", page, ex);
                 throw new RuntimeException("Nhanh API fetch failed", ex);
             }
-        }
+
+            if (resp == null) {
+                log.error("Nhanh response is null for page={}", page);
+                throw new RuntimeException("Invalid response: null");
+            }
+
+            if (resp.getData() == null) {
+                log.error("Nhanh response data is null for page={}", page);
+                throw new RuntimeException("Invalid response: data is null");
+            }
+
+            if (resp.getCode() != 1) {
+                log.error("Nhanh API returned non-success code for page={}: {}", page, resp.getCode());
+                throw new RuntimeException("Nhanh API error, code=" + resp.getCode());
+            }
+
+            if (resp.getData().getProducts() != null) {
+                result.addAll(resp.getData().getProducts());
+            } else {
+                log.warn("Products is null for page={}", page);
+            }
+
+            totalPages = resp.getData().getTotalPages();
+            page++;
+        } while (page <= totalPages);
 
         return result;
     }
