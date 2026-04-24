@@ -1,10 +1,10 @@
 package com.vn.sodu.user.service;
 
+import com.vn.sodu.customer.Customer;
+import com.vn.sodu.customer.dto.CreateCustomerRequest;
+import com.vn.sodu.customer.service.CustomerService;
 import com.vn.sodu.mail.EmailService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.AccountRepo;
-import com.vn.sodu.user.ActivationToken;
-import com.vn.sodu.user.Role;
+import com.vn.sodu.user.*;
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.mapper.AccountMapper;
 import com.vn.sodu.security.JwtService;
@@ -29,8 +29,9 @@ public class AuthService {
     private final UserDetailsService userDetailsService;
     private final AccountMapper accountMapper;
     private final PasswordEncrypt passwordEncrypt;
-    private final com.vn.sodu.user.ActivationTokenRepo activationTokenRepo;
+    private final ActivationTokenRepo activationTokenRepo;
     private final EmailService emailService;
+    private final CustomerService customerService;
 
     /**
      * Authenticate user and generate JWT tokens
@@ -156,6 +157,9 @@ public class AuthService {
             
             
             Account savedAccount = accountRepo.save(account);
+
+            Customer newCustomer = customerService.createCustomer(savedAccount.getId(),
+                    CreateCustomerRequest.builder().build() );
            // create activation token
             String token = java.util.UUID.randomUUID().toString();
             ActivationToken activationToken = ActivationToken.builder()

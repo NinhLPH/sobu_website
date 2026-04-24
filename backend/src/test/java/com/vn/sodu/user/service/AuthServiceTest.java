@@ -1,11 +1,11 @@
 package com.vn.sodu.user.service;
 
+import com.vn.sodu.customer.service.CustomerService;
 import com.vn.sodu.mail.EmailService;
 import com.vn.sodu.user.Account;
 import com.vn.sodu.user.AccountRepo;
 import com.vn.sodu.user.ActivationToken;
 import com.vn.sodu.user.ActivationTokenRepo;
-import com.vn.sodu.user.Role;
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.mapper.AccountMapper;
 import com.vn.sodu.security.JwtService;
@@ -57,6 +57,9 @@ class AuthServiceTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private com.vn.sodu.customer.service.CustomerService customerService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -72,6 +75,8 @@ class AuthServiceTest {
         testAccount.setEmail("test@example.com");
         testAccount.setPasswordHash("encryptedPassword");
         testAccount.setStatus(Account.AccountStatus.ACTIVE);
+        testAccount.setFullName("Test User");
+        testAccount.setPhone("0123456789");
 
         testUserDetails = new User("test@example.com", "password", java.util.Collections.emptyList());
 
