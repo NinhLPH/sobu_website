@@ -84,6 +84,23 @@ Frontend is a placeholder (`README.md` file only) - currently no build configura
 - **`utilites/`** - Helpers
   - `PasswordEncrypt` - encryption/decryption for passwords (custom implementation)
 
+- **`product/`** - Product management and catalog
+  - `Product`, `ProductImage`, `ProductAttribute`, `ProductUnit`, `ProductVideo` entities
+  - `ProductSyncService` - syncs products from Nhanh.vn API
+  - `ProductService` - product CRUD operations
+  - `ProductController`, `ProductSyncController` - REST endpoints
+  - `brand/` - Brand management with Nhanh sync (`BrandSyncService`)
+  - `category/` - Category management with Nhanh sync (`CategorySyncService`)
+  - Mapper components for DTOs with entity conversions
+
+- **`nhanh/`** - Third-party Nhanh.vn integration
+  - `NhanhClient` - HTTP client for Nhanh.vn API calls (OAuth2-based)
+  - `NhanhService` - handles token management and API communication
+  - `NhanhIntegration` (entity) - stores connection credentials and OAuth tokens
+  - `NhanhController` - REST endpoints for OAuth callback and sync triggers
+  - Response DTOs: `NhanhTokenResponse`, `NhanhTokenApiResponse`
+  - Nhanh API contract documented in `NHANH_API_CONTRACT.md` (product, category, brand endpoints)
+
 ### Key Patterns
 
 1. **Service Layer Pattern**: All business logic in `*Service` classes with `@Service` annotation
@@ -102,6 +119,11 @@ Frontend is a placeholder (`README.md` file only) - currently no build configura
 - **ActivationToken** - email verification tokens with expiration
 - **Customer** - extended customer profile tied to Account
 - **LoyaltyTier, LoyaltyRule, LoyaltyTransaction** - loyalty/points system
+- **NhanhIntegration** - OAuth2 credentials and tokens for Nhanh.vn API connection
+- **Product** - product catalog with references to categories and brands
+- **ProductImage, ProductAttribute, ProductUnit, ProductVideo** - product details
+- **Category** - product categories with sync metadata from Nhanh.vn
+- **Brand** - product brands with sync metadata from Nhanh.vn
 
 MySQL is the database (`application-dev.properties` shows localhost:3306/sodu).
 
@@ -137,6 +159,14 @@ MySQL is the database (`application-dev.properties` shows localhost:3306/sodu).
 - Passwords stored as encrypted strings (not hashed) using custom `PasswordEncrypt`
 - Login flow decrypts stored password and compares with request password
 - **Note**: This is non-standard; consider bcrypt for production
+
+### Nhanh.vn Integration
+- OAuth2-based connection requires `NhanhIntegration` entity with access token
+- `NhanhClient` handles HTTP requests to Nhanh API (base URL: `https://pos.open.nhanh.vn/api`)
+- Token refresh is automatic when expired via `NhanhService.getAccessToken()`
+- Product/Category/Brand sync endpoints are in `ProductSyncController`, `CategorySyncController`, `BrandSyncController`
+- Nhanh API contract specifies response format (see `NHANH_API_CONTRACT.md`)
+- Configuration via environment variables: `NHANH_CLIENT_ID`, `NHANH_CLIENT_SECRET`, `NHANH_REDIRECT_URI`
 
 ## Testing
 
@@ -196,10 +226,24 @@ All endpoints tagged with module (e.g., `@Tag(name = "Authentication", ...)`) fo
 - Refresh token logic is in `AuthService.refreshToken()`
 
 ### Adding Database Entities
-- Create entity class with JPA annotations in `user/`, `customer/`, etc.
+- Create entity class with JPA annotations in `user/`, `customer/`, `product/`, etc.
 - Create `*Repo extends JpaRepository<Entity, ID>` interface
 - Create service with business logic
 - Ensure Hibernate DDL-auto is set appropriately (currently `update`)
+
+### Working with Nhanh.vn Integration
+- Ensure `NhanhIntegration` record exists with valid OAuth tokens before syncing
+- Use `NhanhService.getAccessToken()` to get fresh token (auto-refreshes if expired)
+- Call `ProductSyncService.syncProductsFromNhanh()` to pull products
+- Call `CategorySyncService.syncCategoriesFromNhanh()` to pull categories
+- Call `BrandSyncService.syncBrandsFromNhanh()` to pull brands
+- Nhanh API responses are paginated - sync services handle pagination internally
+- Synced data updates local entities via `ProductMapper`, `CategoryMapper`, `BrandMapper`
+
+### Adding Product Features
+- New product attributes go in `ProductAttribute` entity linked to `Product`
+- Use `ProductSyncService` as example for consuming external data sources
+- Product filters are handled in `ProductService` query methods
 
 ## Common Issues
 
@@ -207,3 +251,7 @@ All endpoints tagged with module (e.g., `@Tag(name = "Authentication", ...)`) fo
 - **Database Connection**: Verify MySQL is running on localhost:3306 and database `sodu` exists
 - **Email Service**: Configure `spring.mail.*` properties with valid SMTP credentials
 - **Account Activation**: Tokens expire after 24 hours; regenerate if needed
+- **Nhanh OAuth Errors**: Ensure environment variables `NHANH_CLIENT_ID`, `NHANH_CLIENT_SECRET`, `NHANH_REDIRECT_URI` are set
+- **Nhanh Token Expired**: `NhanhService` auto-refreshes tokens, but ensure `refresh_token` is stored in `NhanhIntegration`
+- **Product Sync Failures**: Check Nhanh API endpoint `/api/product/search` - paginated responses may timeout on large datasets
+- **Category/Brand Not Syncing**: Verify nhanh endpoint URLs are correct (typically `/api/category/search`, `/api/brand/search`)

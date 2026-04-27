@@ -31,7 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Codex local working notes (never commit)
 .codex/
-.notebook/
-.env
-.md
