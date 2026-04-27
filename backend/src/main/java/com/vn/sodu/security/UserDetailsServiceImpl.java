@@ -22,6 +22,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     private final AccountRepo accountRepo;
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Account account = accountRepo.findByEmail(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
