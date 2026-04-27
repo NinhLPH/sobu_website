@@ -1,0 +1,97 @@
+import {Product} from "../interface/product";
+
+export const mockProducts: Product[] = [
+    {
+        id: 'SB-FER-082',
+        name: 'Mẫu Xe Ferrari F8 Tributo Red',
+        price: 2450000,
+        originalPrice: 2900000,
+        category: 'Mô hình siêu xe',
+        scale: '1:24',
+        brand: 'N/A',
+        description: 'Mỗi chi tiết nhỏ nhất trên mô hình Ferrari F8 Tributo này đều được tinh chỉnh thủ công để đảm bảo độ chính xác tuyệt đối so với nguyên bản. Phiên bản giới hạn 500 chiếc toàn thế giới có số series riêng.',
+        imageUrl: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+        thumbnailUrls: [
+            'https://images.unsplash.com/photo-1583121274602-3e2820c69888?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+            'https://images.unsplash.com/photo-1614200187524-dc4b892acf16?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+            'https://images.unsplash.com/photo-1730110206448-10297c1902bd?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+        ],
+        isNew: true,
+        rating: 4.9,
+        reviewsCount: 120,
+    },
+    {
+        id: 'MM-F488',
+        name: 'Ferrari 488 GTE "AF Corse"',
+        price: 2450000,
+        category: 'Mô hình xe đua',
+        scale: '1:24',
+        brand: 'N/A',
+        description: 'Mô hình xe đua Ferrari 488 GTE.',
+        imageUrl: 'https://images.unsplash.com/photo-1629661414961-62b0d03007ab?q=80&w=1171&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+        rating: 4.5,
+        reviewsCount: 45
+    },
+    {
+        id: 'GUN-PG-01',
+        name: 'PG Unleashed RX-78-2 Gundam',
+        price: 5890000,
+        category: 'Mô hình lắp ráp',
+        scale: '1:60',
+        brand: 'Bandai',
+        description: 'Perfect Grade Unleashed RX-78-2. Siêu phẩm mô hình lắp ráp.',
+        imageUrl: 'https://product.hstatic.net/1000231532/product/gundam_shop_ban_rx-78-2_gundam_pg_unleashed_445279d9bbe74732ad1d1e8c47e509c1_master.jpg',
+        thumbnailUrls: [
+            'https://product.hstatic.net/1000231532/product/gundam_shop_ban_rx-78-2_gundam_pg_unleashed_445279d9bbe74732ad1d1e8c47e509c1_master.jpg',
+            'https://product.hstatic.net/1000231532/product/gunpla_shop_ban_rx-78-2_gundam_pg_unleashed_777312e5e58b4a048e36d180c48dca66_master.jpg'
+        ]
+    },
+    {
+        id: 'LT-DAYTONA',
+        name: 'Ferrari Daytona SP3',
+        price: 8500000,
+        originalPrice: 9200000,
+        category: 'LEGO Technic',
+        scale: '1:8',
+        brand: 'LEGO',
+        description: 'LEGO Technic Ferrari Daytona SP3.',
+        imageUrl: 'https://www.mykingdom.com.vn/cdn/shop/files/42143_14974512-209e-4be9-a830-11504fe351c5.jpg?v=1725530410',
+        isHot: true,
+    },
+    {
+        id: 'FIG-ZORO',
+        name: 'Roronoa Zoro - Wano Country Figure',
+        price: 1250000,
+        category: 'Action Figures',
+        brand: 'Bandai Spirits',
+        description: 'Roronoa Zoro Wano Country Figure.',
+        imageUrl: 'https://down-vn.img.susercontent.com/file/vn-11134201-7ras8-mccp9anpf1hu68@resize_w450_nl.webp',
+    },
+    {
+        id: 'TAM-GTR',
+        name: 'Nissan Skyline GT-R R34 Model Kit',
+        price: 850000,
+        category: 'Model Kits 1:24',
+        brand: 'Tamiya',
+        description: 'Nissan Skyline GT-R R34 Model Kit by Tamiya.',
+        imageUrl: 'https://d7z22c0gz59ng.cloudfront.net/japan_contents/img/usr/item/pkg/24210_p1.jpg',
+    },
+    {
+        id: 'TLS-KEM-PRO',
+        name: 'Kềm cắt Precision Pro',
+        price: 450000,
+        category: 'Phụ kiện',
+        brand: 'SOBU',
+        description: 'Kềm cắt chi tiết.',
+        imageUrl: 'https://down-vn.img.susercontent.com/file/vn-11134207-81ztc-mm00wy89e7t079.webp',
+    },
+    {
+        id: 'TLS-SON-12',
+        name: 'Set sơn Acrylic 12 màu',
+        price: 820000,
+        category: 'Phụ kiện',
+        brand: 'SOBU',
+        description: 'Set 12 màu sơn acrylic.',
+        imageUrl: 'https://down-vn.img.susercontent.com/file/9f736b18c9989ea4fd00868ef2c6ebf0.webp',
+    }
+];
