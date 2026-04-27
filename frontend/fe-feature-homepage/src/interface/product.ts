@@ -8,6 +8,7 @@ export interface Product {
     brand: string;
     imageUrl: string;
     description: string;
+    stock: number;
     isNew?: boolean;
     isHot?: boolean;
     rating?: number;
