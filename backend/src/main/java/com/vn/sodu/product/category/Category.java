@@ -20,13 +20,14 @@ public class Category {
     @Id
     private Long id;
 
-    @Column(name = "parentId")
+    @Column(name = "parent_id")
     private Long parentId;
 
     private String code;
 
     private String name;
 
+    @Column(name = "sort_order")
     private Integer order;
 
     private String image;
@@ -38,6 +39,6 @@ public class Category {
 
     // ===== RELATION (READ ONLY) =====
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parentId", insertable = false, updatable = false)
+    @JoinColumn(name = "parent_id", insertable = false, updatable = false)
     private Category parent;
 }

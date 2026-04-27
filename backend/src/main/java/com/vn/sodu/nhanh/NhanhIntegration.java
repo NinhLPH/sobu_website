@@ -30,6 +30,8 @@ public class NhanhIntegration {
     // expiredAt từ Nhanh là UNIX timestamp
     private Long expiredAt;
 
+    private Long lastProductSyncTime;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

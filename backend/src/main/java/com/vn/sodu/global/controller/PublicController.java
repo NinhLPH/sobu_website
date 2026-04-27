@@ -3,6 +3,8 @@ package com.vn.sodu.global.controller;
 import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.product.dto.ProductDetailDTO;
 import com.vn.sodu.product.dto.ProductFilterRequest;
+import com.vn.sodu.product.category.dto.CategoryListItemDTO;
+import com.vn.sodu.product.category.service.CategoryService;
 import com.vn.sodu.product.dto.ProductListItemDTO;
 import com.vn.sodu.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +33,7 @@ import java.util.List;
 @Tag(name = "Public Products", description = "Guest-facing product catalogue endpoints")
 public class PublicController {
     private final ProductService productService;
+    private final CategoryService categoryService;
 
     @GetMapping("/products")
     @Operation(
@@ -95,5 +98,19 @@ public class PublicController {
     ) {
         Page<ProductListItemDTO> result = productService.searchProducts(query, request);
         return ResponseEntity.ok(PageResponse.from(result));
+    }
+
+    @GetMapping("/categories")
+    @Operation(
+            summary = "Get all public categories",
+            description = "Returns the list of all categories for guest users."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Categories retrieved successfully",
+                    content = @Content(mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = CategoryListItemDTO.class))))
+    })
+    public ResponseEntity<List<CategoryListItemDTO>> getAllCategories() {
+        return ResponseEntity.ok(categoryService.getAll());
     }
 }

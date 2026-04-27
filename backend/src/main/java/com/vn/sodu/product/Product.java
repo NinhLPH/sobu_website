@@ -10,11 +10,14 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "products",
-            indexes = {
-                @Index(name = "idx_product_status_category", columnList = "status, categoryId"),
-                @Index(name = "idx_product_brand", columnList = "brandId"),
-               @Index(name = "idx_product_code", columnList = "code")
-   }
+       uniqueConstraints = {
+           @UniqueConstraint(columnNames = "external_id")
+       },
+       indexes = {
+           @Index(name = "idx_product_status_category", columnList = "status, categoryId"),
+           @Index(name = "idx_product_brand", columnList = "brandId"),
+           @Index(name = "idx_product_code", columnList = "code")
+       }
 )
 @Getter
 @Setter
@@ -25,6 +28,10 @@ public class Product {
 
     @Id
     private Long id;
+
+    // external id from Nhanh API (nhanh_id). Nullable; used for upsert mapping.
+    @Column(name = "external_id", unique = true)
+    private Long externalId;
 
     private Long parentId;
 

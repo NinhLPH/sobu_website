@@ -19,6 +19,7 @@ public class ProductListItemDTO {
     private String name;
     private String code;
     private BigDecimal price;
+    private String status;
     private String avatarImage;
     private String brandName;
     private String categoryName;

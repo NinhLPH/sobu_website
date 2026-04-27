@@ -105,17 +105,17 @@ public class AuthService {
             }
 
             // Extract username from refresh token
-            final String username = jwtService.extractUsername(refreshToken);
+            final String email = jwtService.extractUsername(refreshToken);
             
             // Load user details
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            Account account = accountRepo.findByEmail(username)
+            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            Account account = accountRepo.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
             // Generate new access token
             String newAccessToken = jwtService.generateAccessToken(userDetails);
 
-            log.info("Refresh token successful for email: {}", username);
+            log.info("Refresh token successful for email: {}", email);
 
             return LoginResponse.builder()
                     .accessToken(newAccessToken)

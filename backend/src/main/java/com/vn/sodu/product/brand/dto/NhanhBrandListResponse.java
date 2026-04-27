@@ -1,4 +1,4 @@
-package com.vn.sodu.product.dto;
+package com.vn.sodu.product.brand.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
@@ -6,22 +6,25 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class NhanhResponse<T> {
+public class NhanhBrandListResponse {
     private int code;
-    private T data;
-
-    private Paginator paginator;
+    private Data data;
 
     @Getter
     @Setter
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class Paginator {
-        private Object next;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Data {
+        private List<NhanhBrandDTO> brands;
+        private int page;
+        private int totalPages;
     }
 }

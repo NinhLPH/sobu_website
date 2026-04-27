@@ -30,6 +30,8 @@ public class ProductMapper {
 
         Product product = new Product();
         product.setId(dto.getId());
+        // Map externalId from Nhanh DTO for upsert mapping
+        product.setExternalId(dto.getId());
         product.setParentId(dto.getParentId());
         product.setCode(dto.getCode());
         product.setBarcode(dto.getBarcode());
@@ -186,6 +188,7 @@ public class ProductMapper {
                 .name(entity.getName())
                 .code(entity.getCode())
                 .price(entity.getRetailPrice())
+                .status(entity.getStatus())
                 .avatarImage(entity.getAvatarImage())
                 .brandName(entity.getBrandName())
                 .categoryName(entity.getCategoryName())
@@ -249,20 +252,27 @@ public class ProductMapper {
 
         return ProductDetailDTO.builder()
                 .id(product.getId())
+                .externalId(product.getExternalId())
                 .name(product.getName())
+                .otherName(product.getOtherName())
                 .code(product.getCode())
                 .barcode(product.getBarcode())
+                .status(product.getStatus())
                 .description(product.getDescription())
                 .content(product.getContent())
                 .price(product.getRetailPrice())
                 .wholesalePrice(product.getWholesalePrice())
+                .oldPrice(product.getOldPrice())
+                .vat(product.getVat())
                 .avatarImage(product.getAvatarImage())
                 .brandName(product.getBrandName())
                 .categoryName(product.getCategoryName())
                 .stockAvailable(product.getStockAvailable())
+                .stockRemain(product.getStockRemain())
                 .units(unitDTOs)
                 .attributes(attributeDTOs)
                 .images(imageUrls)
+                .updatedAt(product.getUpdatedAt())
                 .build();
     }
 }
