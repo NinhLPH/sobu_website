@@ -5,16 +5,16 @@ export default function AdminLayout() {
     const location = useLocation();
 
     const menu = [
-        { name: 'Products', path: '/admin/products', icon: Package },
-        { name: 'Categories', path: '/admin/categories', icon: ListTree },
-        { name: 'Orders', path: '/admin/orders', icon: ShoppingCart },
-        { name: 'Requests', path: '/admin/requests', icon: MessageSquare },
+        { name: 'Sản phẩm', path: '/admin/products', icon: Package },
+        { name: 'Danh mục', path: '/admin/categories', icon: ListTree },
+        { name: 'Đơn hàng', path: '/admin/orders', icon: ShoppingCart },
+        { name: 'Yêu cầu', path: '/admin/requests', icon: MessageSquare },
     ];
 
     return (
         <div className="flex min-h-[calc(100vh-80px)] mt-20 max-w-7xl mx-auto w-full border-t border-outline-variant/30">
             <aside className="w-64 flex-shrink-0 border-r border-outline-variant/30 bg-white">
-                <div className="p-6">
+                <div className="p-6 pt-16">
                     <h2 className="text-sm font-bold text-outline uppercase tracking-widest mb-6">Admin Panel</h2>
                     <nav className="space-y-2">
                         {menu.map((item) => {

@@ -1,6 +1,6 @@
 import {useState} from 'react';
+import {Link} from 'react-router-dom';
 import {Eye, Search} from 'lucide-react';
-
 import {useAdminStore} from '../../store/useAdminStore';
 import {formatCurrency} from "../../util/format";
 
@@ -31,7 +31,7 @@ export default function AdminOrders() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="pt-6 space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-on-surface">Quản lý Đơn hàng</h1>
             </div>
@@ -89,10 +89,10 @@ export default function AdminOrders() {
                                     </select>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    <button
-                                        className="text-secondary hover:text-primary transition-colors inline-block p-1">
+                                    <Link to={`/admin/orders/${order.id}`}
+                                          className="text-secondary hover:text-primary transition-colors inline-block p-1">
                                         <Eye className="w-5 h-5"/>
-                                    </button>
+                                    </Link>
                                 </td>
                             </tr>
                         ))}

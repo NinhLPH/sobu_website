@@ -59,7 +59,7 @@ export default function AdminRequests() {
     };
 
     return (
-        <div className="space-y-6 flex flex-col md:flex-row gap-6">
+        <div className="pt-6 space-y-6 flex flex-col md:flex-row gap-6">
 
             {/* Left side: List */}
             <div className="flex-1 space-y-4">

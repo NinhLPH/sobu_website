@@ -1,10 +1,13 @@
 import {Link} from 'react-router-dom';
-import {ShoppingCart, User, Search, Rocket, Shield} from 'lucide-react';
+import {ShoppingCart, User, Search, Rocket, Shield, ChevronDown} from 'lucide-react';
 import {useCartStore} from "../../store/useCartStore";
+import {useAdminStore} from "../../store/useAdminStore";
 
 export default function Header() {
     const items = useCartStore(state => state.items);
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+    const categories = useAdminStore(state => state.categories);
 
     return (
         <header
@@ -49,7 +52,33 @@ export default function Header() {
                 <nav
                     className="flex items-center gap-8 font-['Be_Vietnam_Pro'] tracking-tight text-sm font-medium overflow-x-auto pb-2 md:pb-0">
                     <Link to="/" className="text-primary font-bold border-b-2 border-primary pb-1 whitespace-nowrap">Trang chủ</Link>
-                    <Link to="#" className="text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap">Hàng mới</Link>
+                    <div className="relative group">
+                        <Link to="/products" className="flex items-center gap-1 text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap pb-1">
+                            Sản phẩm
+                            <ChevronDown className="w-4 h-4 transition-transform duration-300 group-hover:rotate-180" />
+                        </Link>
+
+                        {/* Menu xổ xuống */}
+                        <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-outline-variant/30 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 flex flex-col py-2 z-50">
+                            <Link
+                                to="/products"
+                                className="px-4 py-2 text-sm text-slate-800 dark:text-slate-200 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-bold border-b border-outline-variant/20 mb-1"
+                            >
+                                Tất cả sản phẩm
+                            </Link>
+
+                            {/* Lặp qua danh sách categories */}
+                            {categories.map(category => (
+                                <Link
+                                    key={category.id}
+                                    to={`/category/${category.id}`}
+                                    className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    {category.name}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
                     <Link to="#" className="text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap">Hướng dẫn</Link>
                     <Link to="#" className="text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap">Dịch vụ</Link>
                     <Link to="#" className="text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap">Mô hình Custom</Link>

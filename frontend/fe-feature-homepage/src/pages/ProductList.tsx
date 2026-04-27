@@ -10,7 +10,7 @@ export default function ProductList() {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [priceRange, setPriceRange] = useState<number>(5000000);
 
-    const categories = Array.from(new Set(mockProducts.map(p => p.category)));
+    const categories = Array.from(new Set(mockProducts.map(p => p.category).filter(Boolean))) as string[];
 
     const handleCategoryToggle = (category: string) => {
         setSelectedCategories(prev =>
@@ -22,7 +22,7 @@ export default function ProductList() {
 
     const filteredProducts = useMemo(() => {
         return mockProducts.filter(p => {
-            const categoryMatch = selectedCategories.length === 0 || selectedCategories.includes(p.category);
+            const categoryMatch = selectedCategories.length === 0 || (p.category !== undefined && selectedCategories.includes(p.category));
             const priceMatch = p.price <= priceRange;
             return categoryMatch && priceMatch;
         });

@@ -42,11 +42,10 @@ export const useAdminStore = create<AdminState>((set) => ({
 
     addCategory: (category) => set((state) => {
         if (category.parentId) {
-            // chỗ này để cat lồng nhau khá phức tạp... -_-
             const addNested = (cats: Category[]): Category[] =>
                 cats.map(c => c.id === category.parentId
                     ? { ...c, children: [...(c.children || []), category] }
-                    : { ...c, children: c.children ? addNested(c.children) : undefined });
+                    : { ...c, children: c.children ? addNested(c.children) : c.children });
             return { categories: addNested(state.categories) };
         }
         return { categories: [...state.categories, category] };
@@ -55,13 +54,14 @@ export const useAdminStore = create<AdminState>((set) => ({
         const updateNested = (cats: Category[]): Category[] =>
             cats.map(c => c.id === id
                 ? { ...c, ...updates }
-                : { ...c, children: c.children ? updateNested(c.children) : undefined });
+                : { ...c, children: c.children ? updateNested(c.children) : c.children });
         return { categories: updateNested(state.categories) };
     }),
+
     deleteCategory: (id) => set((state) => {
         const deleteNested = (cats: Category[]): Category[] =>
             cats.filter(c => c.id !== id)
-                .map(c => ({ ...c, children: c.children ? deleteNested(c.children) : undefined }));
+                .map(c => ({ ...c, children: c.children ? deleteNested(c.children) : c.children }));
         return { categories: deleteNested(state.categories) };
     }),
 
