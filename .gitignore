@@ -4,3 +4,7 @@
 .env
 /backend/.codex
 *.md
+/.agent
+/.gitnexus
+/.claude
+*.json

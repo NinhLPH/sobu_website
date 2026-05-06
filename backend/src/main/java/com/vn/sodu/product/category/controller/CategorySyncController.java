@@ -18,7 +18,7 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin/categories")
-@Tag(name = "Category Sync", description = "Admin endpoints for syncing categories from the upstream source")
+@Tag(name = "Admin Sync", description = "Admin endpoints for syncing data from the upstream source")
 public class CategorySyncController {
 
     private final CategorySyncService categorySyncService;

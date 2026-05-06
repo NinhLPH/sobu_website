@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 @RestController
 @RequestMapping("/api/nhanh")
 @RequiredArgsConstructor
+@Tag(name = "Nhanh Integration", description = "OAuth and connection endpoints for Nhanh integration")
 public class NhanhController {
 
     private final NhanhService nhanhService;

@@ -29,8 +29,8 @@ import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/public")
-@Tag(name = "Public Products", description = "Guest-facing product catalogue endpoints")
+@RequestMapping({"/api/public", "/api/v1/public"})
+@Tag(name = "Public Catalog", description = "Guest-facing product catalogue endpoints")
 public class PublicController {
     private final ProductService productService;
     private final CategoryService categoryService;
