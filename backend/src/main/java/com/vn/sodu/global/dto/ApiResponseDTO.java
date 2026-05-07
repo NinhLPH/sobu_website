@@ -30,6 +30,10 @@ public class ApiResponseDTO<T> {
                 .build();
     }
 
+    public static <T> ApiResponseDTO<T> success(T data, String message) {
+        return success(data, message, org.springframework.http.HttpStatus.OK.value());
+    }
+
     public static <T> ApiResponseDTO<T> error(String message, String error, int statusCode) {
         return ApiResponseDTO.<T>builder()
                 .success(false)
