@@ -30,7 +30,7 @@ public class ProductSyncControllerIntegrationTest {
     void adminUserCanCallSyncEndpoint() throws Exception {
         doNothing().when(productSyncService).syncProducts();
 
-        mockMvc.perform(post("/admin/products/sync")
+        mockMvc.perform(post("/api/admin/products/sync")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 

@@ -1,14 +1,15 @@
 package com.vn.sodu.request;
 
-import com.vn.sodu.product.brand.Brand;
-import com.vn.sodu.product.category.Category;
+import com.vn.sodu.user.Account;
 import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.security.core.userdetails.User;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -27,28 +28,49 @@ public class Request {
     @Column(nullable = false)
     private String customerPhone; // KEY MATCHING
 
-    @Enumerated(EnumType.STRING)
-    private RequestStatus status;
+    @Version
+    private Long version;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private RequestStatus status = RequestStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private OrderType type;
 
+    @Column(precision = 19, scale = 2)
     private BigDecimal totalAmount;
+
+    @Column(precision = 19, scale = 2)
+    private BigDecimal depositAmount;
 
     @Column(columnDefinition = "JSON")
     private String customRequirements;
-
-    @Column(columnDefinition = "JSON")
-    private String uploadedImages;
 
     // Nhanh sync
     private String nhanhOrderId;
     private String nhanhOrderCode;
 
     // Relations
-    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL)
-    private List<RequestItem> items;
+    @Builder.Default
+    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RequestItem> items = new ArrayList<>();
 
-    @ManyToOne
-    private User admin;
+    @Builder.Default
+    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RequestAttachment> attachments = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "admin_id")
+    private Account admin;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 }

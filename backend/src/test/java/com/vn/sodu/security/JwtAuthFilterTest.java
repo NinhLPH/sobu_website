@@ -163,7 +163,9 @@ class JwtAuthFilterTest {
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
         when(jwtService.extractUsername(token)).thenThrow(new RuntimeException("Invalid token"));
 
-        assertThrows(RuntimeException.class, () -> jwtAuthFilter.doFilterInternal(request, response, filterChain));
+        jwtAuthFilter.doFilterInternal(request, response, filterChain);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(filterChain).doFilter(request, response);
     }
 
     // ─── User Details Loading Tests ────────────────────────────────────────────────
@@ -191,8 +193,9 @@ class JwtAuthFilterTest {
         when(userDetailsService.loadUserByUsername("nonexistent@example.com"))
             .thenThrow(new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found"));
 
-        assertThrows(org.springframework.security.core.userdetails.UsernameNotFoundException.class,
-            () -> jwtAuthFilter.doFilterInternal(request, response, filterChain));
+        jwtAuthFilter.doFilterInternal(request, response, filterChain);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(filterChain).doFilter(request, response);
     }
 
     // ─── Multiple Filter Chain Tests ────────────────────────────────────────────────
