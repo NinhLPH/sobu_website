@@ -2,6 +2,12 @@
 **/node_modules/
 **/dist/
 .env
+/backend/.codex
+*.md
+/.agent
+/.gitnexus
+/.claude
+*.json
 backend/Introduction.md
 # Added by code-review-graph
 .code-review-graph/

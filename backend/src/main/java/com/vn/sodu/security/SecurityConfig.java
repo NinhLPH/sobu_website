@@ -42,11 +42,15 @@ public class SecurityConfig {
                                 "/api/auth/health",
                                 "/api/auth/activate",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**",
-                                "/swagger-ui.html",
-                                "/api/public/**",
-                                "/api/nhanh/**"
-                        ).permitAll()
+                        "/v3/api-docs/**",
+                        "/swagger-ui.html",
+                        "/actuator/health",
+                        "/actuator/info",
+                        "/actuator/nhanh-health",
+                        "/api/public/**",
+                        "/api/v1/public/**",
+                        "/api/nhanh/**"
+                ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
