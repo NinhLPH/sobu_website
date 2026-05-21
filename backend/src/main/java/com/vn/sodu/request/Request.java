@@ -46,6 +46,7 @@ public class Request {
     @Column(precision = 19, scale = 2)
     private BigDecimal depositAmount;
 
+    @Convert(converter = PlainTextJsonConverter.class)
     @Column(columnDefinition = "JSON")
     private String customRequirements;
 

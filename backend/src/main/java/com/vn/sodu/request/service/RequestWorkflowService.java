@@ -20,6 +20,7 @@ import com.vn.sodu.request.repo.RequestSnapshotRepo;
 import com.vn.sodu.request.repo.RequestTimelineRepo;
 import com.vn.sodu.request.strategy.RequestStrategy;
 import com.vn.sodu.request.strategy.RequestStrategyFactory;
+import com.vn.sodu.order.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +51,7 @@ public class RequestWorkflowService {
     private final RequestTransitionPolicy requestTransitionPolicy;
     private final RequestEditPolicy requestEditPolicy;
     private final ObjectMapper objectMapper;
+    private final OrderService orderService;
 
     @Transactional
     public Request createRequest(CreateRequestDto dto) {
@@ -153,6 +155,10 @@ public class RequestWorkflowService {
 
         request.setStatus(targetStatus);
         Request saved = requestRepo.save(request);
+
+        if (targetStatus == RequestStatus.APPROVED) {
+            orderService.createFromApprovedRequest(saved);
+        }
 
         appendTimeline(saved, "STATUS_CHANGE", from, targetStatus, actor, note);
         appendSnapshot(saved, "STATUS_CHANGE");
