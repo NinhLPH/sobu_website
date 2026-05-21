@@ -1,20 +1,25 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ChevronRight, Star, ShoppingBag, Clock, Edit, Truck, ShieldCheck, Minus, Plus } from 'lucide-react';
+import {useState, useEffect} from 'react';
+import {useParams, Link} from 'react-router-dom';
+import {ChevronRight, Star, ShoppingBag, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
 
-import { mockProducts } from '../data/mockData';
-
-import { useCartStore } from '../store/useCartStore';
+import {mockProducts} from '../data/mockData';
+import {useCartStore} from '../store/useCartStore';
 import {formatCurrency} from "../util/format";
+import ProductSlider from "../components/common/ProductSlider";
 
 export default function ProductDetail() {
-    const { id } = useParams();
-    const product = mockProducts.find(p => p.id === id) || mockProducts[0]; // fallback for demo
+    const {id} = useParams();
+    const product = mockProducts.find(p => p.id === id) || mockProducts[0];
     const [quantity, setQuantity] = useState(1);
     const addToCart = useCartStore(state => state.addToCart);
-
     const [mainImage, setMainImage] = useState(product.imageUrl);
 
+    useEffect(() => {
+        setMainImage(product.imageUrl);
+        setQuantity(1);
+    }, [id, product]);
+
+    const relatedProducts = mockProducts.filter(p => p.id !== id);
     const decreaseQuantity = () => setQuantity(prev => Math.max(1, prev - 1));
     const increaseQuantity = () => setQuantity(prev => prev + 1);
 
@@ -23,153 +28,185 @@ export default function ProductDetail() {
     };
 
     return (
-        <main className="max-w-7xl mx-auto px-6 pt-32 pb-24">
-            {/* Breadcrumb */}
-            <nav className="flex items-center space-x-2 text-sm text-on-surface-variant mb-8 font-medium">
-                <Link to="/" className="hover:text-primary">Trang chủ</Link>
-                <ChevronRight className="w-4 h-4" />
-                <Link to="/products" className="hover:text-primary">Sản phẩm</Link>
-                <ChevronRight className="w-4 h-4" />
+        <main className="max-w-screen-2xl mx-auto px-6 pt-24 pb-16 bg-surface">
+            <nav className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant mb-6">
+                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
+                <ChevronRight className="w-3.5 h-3.5"/>
+                <Link to="/products" className="hover:text-primary transition-colors">Sản phẩm</Link>
+                <ChevronRight className="w-3.5 h-3.5"/>
                 <span className="text-primary">{product.category}</span>
             </nav>
 
-            {/* Product Detail Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-                {/* Left: Product Image Gallery */}
-                <div className="lg:col-span-7 space-y-6">
-                    <div className="relative rounded-xl overflow-hidden bg-white shadow-sm border border-outline-variant/30 aspect-[4/3] flex items-center justify-center p-8">
-                        <img
-                            className="w-full h-full object-contain"
-                            src={mainImage}
-                            alt={product.name}
-                        />
-                        <div className="absolute top-6 left-6 flex flex-col gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+                <div className="lg:col-span-7 space-y-4">
+                    <div
+                        className="relative rounded-2xl overflow-hidden bg-surface-container-lowest shadow-[0_20px_50px_-15px_rgba(14,48,78,0.06)] aspect-[4/3] flex items-center justify-center p-8">
+                        <img className="w-full h-full object-contain" src={mainImage} alt={product.name}/>
+                        <div className="absolute top-6 left-6 flex flex-col gap-2">
                             {product.isNew && (
-                                <span className="bg-primary text-white px-4 py-1 rounded-full text-xs font-bold tracking-wider uppercase shadow-sm">
-                  Hàng mới
-                </span>
-                            )}
-                            {product.scale && (
-                                <span className="bg-secondary-container text-on-secondary-container px-4 py-1 rounded-full text-xs font-bold tracking-wider uppercase shadow-sm">
-                  Tỉ lệ {product.scale}
-                </span>
+                                <span
+                                    className="bg-primary text-white px-3.5 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase shadow-md">
+                                    Mới
+                                </span>
                             )}
                         </div>
                     </div>
-
-                    {/* Thumbnails Grid */}
                     <div className="grid grid-cols-4 gap-4">
-                        {product.thumbnailUrls && product.thumbnailUrls.map((url, index) => (
+                        {product.thumbnailUrls?.map((url, index) => (
                             <div
                                 key={index}
                                 onClick={() => setMainImage(url)}
-                                className={`aspect-square rounded-lg bg-white shadow-sm overflow-hidden border-2 cursor-pointer transition-all p-2 flex items-center justify-center
-                  ${mainImage === url ? 'border-primary opacity-100' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                                className={`aspect-square rounded-xl bg-surface-container-lowest shadow-sm overflow-hidden cursor-pointer transition-all duration-300 p-2.5 flex items-center justify-center
+                                ${mainImage === url ? 'ring-2 ring-primary scale-95' : 'hover:scale-105 hover:shadow-md'}`}
                             >
-                                <img className="w-full h-full object-contain" src={url} alt={`Thumbnail ${index + 1}`} />
+                                <img className="w-full h-full object-contain" src={url} alt={`Thumb ${index}`}/>
                             </div>
                         ))}
                     </div>
                 </div>
-
-                {/* Right: Product Information */}
-                <div className="lg:col-span-5 space-y-8 lg:sticky lg:top-36 flex flex-col">
+                <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-28">
                     <div>
-                        <p className="text-sm font-bold text-secondary mb-2 tracking-widest uppercase">Phòng trưng bày SOBU</p>
-                        <h1 className="text-4xl md:text-5xl font-black text-on-surface tracking-tighter leading-tight mb-4">
+                        <p className="text-[10px] font-black text-outline mb-2 tracking-widest uppercase">{product.brand}</p>
+                        <h1 className="text-2xl md:text-3xl font-black text-on-surface tracking-tight leading-tight mb-4">
                             {product.name}
                         </h1>
-
-                        <div className="flex flex-wrap items-center gap-4 text-on-surface-variant text-sm font-medium">
-                            <span>Mã: <span className="text-on-surface">{product.id}</span></span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-outline-variant hidden sm:block"></span>
-                            <div className="flex items-center">
-                                <Star className="text-[#FFB800] w-4 h-4 fill-[#FFB800]" />
-                                <span className="ml-1 text-on-surface font-bold">{product.rating || 5.0}</span>
-                                <span className="ml-1">({product.reviewsCount || 0} đánh giá)</span>
+                        <div className="flex items-center gap-4 text-xs font-bold">
+                            <span className="bg-surface-container px-3 py-1.5 rounded-full text-on-surface">
+                                Mã: {product.id}
+                            </span>
+                            <div className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-full">
+                                <Star className="text-[#FFB800] w-3.5 h-3.5 fill-[#FFB800]"/>
+                                <span>{product.rating || 5.0}</span>
+                                <span className="text-outline">({product.reviewsCount || 0})</span>
                             </div>
                         </div>
                     </div>
-
-                    <div className="bg-surface-container-low p-6 rounded-xl border-l-4 border-primary shadow-sm">
-                        <p className="text-on-surface-variant text-sm font-medium mb-1">Giá bán hiện tại</p>
-                        <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-black text-primary tracking-tight">
-                {formatCurrency(product.price)}
-              </span>
-                            {product.originalPrice && (
-                                <span className="text-lg text-on-surface-variant line-through font-medium">
-                  {formatCurrency(product.originalPrice)}
-                </span>
-                            )}
-                        </div>
+                    <div className="flex items-baseline gap-3">
+                        <span className="text-3xl font-black text-primary tracking-tight">
+                            {formatCurrency(product.price)}
+                        </span>
+                        {product.originalPrice && (
+                            <span className="text-sm text-outline line-through font-bold">
+                                {formatCurrency(product.originalPrice)}
+                            </span>
+                        )}
                     </div>
 
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider">Thông số kỹ thuật</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-white rounded-lg border border-outline-variant/30">
-                                <p className="text-[10px] text-on-surface-variant uppercase font-bold">Thương hiệu</p>
-                                <p className="text-sm font-semibold text-on-surface">{product.brand}</p>
-                            </div>
-                            <div className="p-3 bg-white rounded-lg border border-outline-variant/30">
-                                <p className="text-[10px] text-on-surface-variant uppercase font-bold">Danh mục</p>
-                                <p className="text-sm font-semibold text-on-surface">{product.category}</p>
-                            </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-surface-container-low p-3.5 rounded-xl">
+                            <p className="text-[9px] text-outline uppercase font-black tracking-widest mb-0.5">Tỷ lệ</p>
+                            <p className="font-bold text-on-surface text-sm">{product.scale || 'N/A'}</p>
                         </div>
-                        <p className="text-sm text-on-surface-variant leading-relaxed mt-4">
-                            {product.description}
-                        </p>
+                        <div className="bg-surface-container-low p-3.5 rounded-xl">
+                            <p className="text-[9px] text-outline uppercase font-black tracking-widest mb-0.5">Tình
+                                trạng</p>
+                            <p className="font-bold text-on-surface text-sm">{product.stock > 0 ? 'Còn hàng' : 'Hết hàng'}</p>
+                        </div>
                     </div>
-
-                    {/* Action Controls */}
-                    <div className="space-y-6 pt-4">
-                        <div className="flex items-center gap-6">
-                            <span className="text-sm font-bold text-on-surface-variant uppercase tracking-wider">Số lượng</span>
-                            <div className="flex items-center bg-white border border-outline-variant/30 rounded-full px-2 py-1 shadow-sm">
-                                <button
-                                    onClick={decreaseQuantity}
-                                    className="w-10 h-10 flex items-center justify-center text-on-surface hover:text-primary transition-colors disabled:opacity-50"
-                                    disabled={quantity <= 1}
-                                >
-                                    <Minus className="w-4 h-4" />
-                                </button>
-                                <span className="w-12 text-center font-bold text-lg">{quantity}</span>
-                                <button
-                                    onClick={increaseQuantity}
-                                    className="w-10 h-10 flex items-center justify-center text-on-surface hover:text-primary transition-colors"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button
-                                onClick={handleAddToCart}
-                                className="bg-primary text-white py-4 px-6 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-transform active:scale-95 hover:brightness-110"
-                            >
-                                <ShoppingBag className="w-5 h-5" />
-                                <span>Thêm vào giỏ</span>
+                    <p className="text-on-surface-variant text-sm font-medium leading-relaxed">
+                        {product.description}
+                    </p>
+                    <div className="flex items-center gap-4 pt-4">
+                        <div className="flex items-center bg-surface-container rounded-full px-1.5 py-1.5">
+                            <button onClick={decreaseQuantity}
+                                    className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm hover:text-primary transition-colors disabled:opacity-50">
+                                <Minus className="w-4 h-4"/>
                             </button>
-                            <button className="bg-surface-container-highest text-on-surface py-4 px-6 rounded-lg font-bold flex items-center justify-center gap-2 border border-outline-variant/30 transition-transform active:scale-95 hover:bg-outline-variant/20">
-                                <Clock className="w-5 h-5" />
-                                <span>Đặt trước</span>
+                            <span className="w-12 text-center font-black text-base">{quantity}</span>
+                            <button onClick={increaseQuantity}
+                                    className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm hover:text-primary transition-colors">
+                                <Plus className="w-4 h-4"/>
                             </button>
                         </div>
+                        <button onClick={handleAddToCart}
+                                className="flex-1 bg-gradient-to-br from-primary to-primary-container text-white h-12 rounded-full font-black text-sm flex items-center justify-center gap-2 shadow-[0_10px_20px_-5px_rgba(75,186,254,0.3)] hover:scale-[1.01] transition-transform">
+                            <ShoppingBag className="w-4.5 h-4.5"/> Thêm vào giỏ
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-6 pt-5 border-t border-outline-variant/20">
+                        <div className="flex items-center gap-2.5 text-on-surface font-bold text-xs">
+                            <div
+                                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
+                                <Truck className="w-4 h-4"/>
+                            </div>
+                            Giao hàng toàn quốc
+                        </div>
+                        <div className="flex items-center gap-2.5 text-on-surface font-bold text-xs">
+                            <div
+                                className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
+                                <ShieldCheck className="w-4 h-4"/>
+                            </div>
+                            Bảo hành chính hãng
+                        </div>
                     </div>
 
-                    <div className="flex items-center justify-between py-6 border-t border-outline-variant/30 mt-auto">
-                        <div className="flex items-center gap-2 text-on-surface-variant">
-                            <Truck className="text-primary w-5 h-5" />
-                            <span className="text-sm font-medium">Giao miễn phí</span>
+                </div>
+            </div>
+
+            <div className="mt-16 pt-12 border-t border-surface-container-high max-w-4xl mx-auto">
+                <div className="flex gap-8 border-b border-surface-container mb-6">
+                    <button
+                        className="text-sm font-black text-primary border-b-2 border-primary pb-3 uppercase tracking-wider">
+                        Mô tả chi tiết
+                    </button>
+                    <button
+                        className="text-sm font-bold text-outline hover:text-on-surface pb-3 uppercase tracking-wider transition-colors cursor-not-allowed">
+                        Đánh giá khách hàng
+                    </button>
+                </div>
+                <div className="space-y-6">
+                    <p className="text-sm font-bold text-on-surface uppercase tracking-wide">
+                        Giới thiệu về dòng sản phẩm {product.name}
+                    </p>
+                    <p className="text-xs text-on-surface-variant leading-relaxed font-medium text-justify">
+                        {product.description}
+                    </p>
+                    <div
+                        className="mt-8 bg-surface-container-lowest rounded-2xl p-4 shadow-sm border border-surface-container/60">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-outline mb-4 block">
+                            Thông số kỹ thuật sản phẩm
+                        </span>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3.5 text-xs font-bold">
+                            <div className="flex justify-between py-2 border-b border-surface-container-low">
+                                <span className="text-outline font-medium">Mã sản phẩm:</span>
+                                <span className="text-on-surface font-black">{product.id}</span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b border-surface-container-low">
+                                <span className="text-outline font-medium">Thương hiệu sản xuất:</span>
+                                <span
+                                    className="text-on-surface font-black">{product.brand !== 'N/A' ? product.brand : 'Chính hãng SOBU'}</span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b border-surface-container-low">
+                                <span className="text-outline font-medium">Tỷ lệ mô hình:</span>
+                                <span className="text-on-surface font-black">{product.scale || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b border-surface-container-low">
+                                <span className="text-outline font-medium">Phân nhóm danh mục:</span>
+                                <span className="text-on-surface font-black">{product.category}</span>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 text-on-surface-variant">
-                            <ShieldCheck className="text-primary w-5 h-5" />
-                            <span className="text-sm font-medium">Bảo hành 12th</span>
-                        </div>
+                    </div>
+                    <div
+                        className="mt-6 bg-primary-container/10 border border-primary/10 rounded-2xl p-4 text-[11px] text-on-surface-variant font-medium leading-relaxed">
+                        <span className="font-black text-primary uppercase tracking-wide block mb-1">⚠️ Khuyến nghị từ SOBU Workshop:</span>
+                        Sản phẩm là mô hình tĩnh cao cấp có nhiều chi tiết cơ khí nhỏ, vui lòng tránh tầm tay trẻ em
+                        dưới 3 tuổi. Bảo quản nơi khô ráo, tránh ánh nắng mặt trời trực tiếp để giữ màu sơn tĩnh điện
+                        luôn ở trạng thái bóng bẩy nhất.
                     </div>
                 </div>
+            </div>
+
+            <div className="mt-20 pt-12 border-t border-surface-container-high w-full">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-lg font-black text-on-surface uppercase tracking-tight">
+                        Sản phẩm có thể bạn sẽ thích
+                    </h2>
+                    <Link to="/products" className="text-xs font-bold text-primary hover:underline transition-colors">
+                        Xem tất cả
+                    </Link>
+                </div>
+                <ProductSlider products={relatedProducts}/>
             </div>
         </main>
     );

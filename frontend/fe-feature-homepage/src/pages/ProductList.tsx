@@ -1,133 +1,184 @@
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import {useState, useMemo} from 'react';
+import {Link} from 'react-router-dom';
+import {ChevronRight, SlidersHorizontal, X} from 'lucide-react';
 
-import { mockProducts } from '../data/mockData';
-
-import ProductCard from "../components/common/ProductCart";
+import {mockProducts} from '../data/mockData';
+import ProductCard from "../components/common/ProductCard";
 
 export default function ProductList() {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-    const [priceRange, setPriceRange] = useState<number>(5000000);
+    const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+    const [selectedScales, setSelectedScales] = useState<string[]>([]);
+    const [inStockOnly, setInStockOnly] = useState<boolean>(false);
+    const [priceRange, setPriceRange] = useState<number>(10000000);
 
     const categories = Array.from(new Set(mockProducts.map(p => p.category).filter(Boolean))) as string[];
+    const brands = Array.from(new Set(mockProducts.map(p => p.brand).filter(b => b && b !== 'N/A'))) as string[];
+    const scales = Array.from(new Set(mockProducts.map(p => p.scale).filter(Boolean))) as string[];
 
-    const handleCategoryToggle = (category: string) => {
-        setSelectedCategories(prev =>
-            prev.includes(category)
-                ? prev.filter(c => c !== category)
-                : [...prev, category]
-        );
+    const toggleFilter = (item: string, list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>) => {
+        setList(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
     };
 
     const filteredProducts = useMemo(() => {
         return mockProducts.filter(p => {
-            const categoryMatch = selectedCategories.length === 0 || (p.category !== undefined && selectedCategories.includes(p.category));
+            const catMatch = selectedCategories.length === 0 || (p.category && selectedCategories.includes(p.category));
+            const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(p.brand);
+            const scaleMatch = selectedScales.length === 0 || (p.scale && selectedScales.includes(p.scale));
+            const stockMatch = !inStockOnly || p.stock > 0;
             const priceMatch = p.price <= priceRange;
-            return categoryMatch && priceMatch;
+
+            return catMatch && brandMatch && scaleMatch && stockMatch && priceMatch;
         });
-    }, [selectedCategories, priceRange]);
+    }, [selectedCategories, selectedBrands, selectedScales, inStockOnly, priceRange]);
+
+    const clearFilters = () => {
+        setSelectedCategories([]);
+        setSelectedBrands([]);
+        setSelectedScales([]);
+        setInStockOnly(false);
+        setPriceRange(10000000);
+    };
 
     return (
-        <main className="max-w-7xl mx-auto px-6 pt-32 pb-20">
-            {/* Breadcrumbs */}
-            <nav className="flex items-center gap-2 text-xs text-on-surface-variant mb-6">
-                <Link to="/" className="hover:text-primary">Trang chủ</Link>
-                <ChevronRight className="w-3 h-3" />
-                <span className="font-bold text-on-surface">Danh mục Sản phẩm</span>
+        <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
+            {/* Header / Breadcrumb */}
+            <nav className="flex items-center gap-2 text-sm font-bold text-on-surface-variant mb-8">
+                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
+                <ChevronRight className="w-4 h-4"/>
+                <span className="text-primary">Cửa hàng</span>
             </nav>
-
-            <header className="mb-10">
-                <h1 className="text-4xl font-extrabold tracking-tight mb-3">Tất cả sản phẩm</h1>
-                <p className="text-on-surface-variant max-w-2xl">
-                    Khám phá bộ sưu tập mô hình đa dạng nhất. Từ những bộ lắp ráp Technic phức tạp đến những Figure chi tiết cao cho nhà sưu tầm chuyên nghiệp.
-                </p>
+            <header className="mb-12">
+                <h1 className="text-5xl font-black tracking-tighter mb-4 text-on-surface uppercase">Tất cả sản phẩm</h1>
             </header>
 
-            <div className="flex flex-col lg:flex-row gap-8 items-start">
-                {/* Sidebar Filters */}
-                <aside className="w-full lg:w-64 space-y-8 lg:sticky lg:top-32 flex-shrink-0">
-                    <div className="bg-white border border-outline-variant/30 rounded-lg p-6 shadow-sm">
-                        {/* Categories */}
+            <div className="flex flex-col lg:flex-row gap-10 items-start">
+                {/* ---------------- SIDEBAR BỘ LỌC ---------------- */}
+                <aside className="w-full lg:w-72 flex-shrink-0 lg:sticky lg:top-28">
+                    <div
+                        className="bg-surface-container-lowest rounded-[2rem] p-8 shadow-[0_20px_40px_-15px_rgba(14,48,78,0.05)]">
+                        <div className="flex items-center justify-between mb-8 pb-4 relative">
+                            <div className="flex items-center gap-3">
+                                <SlidersHorizontal className="w-5 h-5 text-primary"/>
+                                <h2 className="text-lg font-black uppercase tracking-widest text-on-surface">Bộ lọc</h2>
+                            </div>
+                            <div className="absolute bottom-0 left-0 w-full h-[2px] bg-surface-container"></div>
+                        </div>
+
                         <div className="mb-8">
-                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4">Danh mục</h3>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Danh mục</h3>
                             <div className="space-y-3">
-                                {categories.map((category) => (
-                                    <label key={category} className="flex items-center gap-3 cursor-pointer group">
-                                        <input
-                                            type="checkbox"
-                                            className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary cursor-pointer"
-                                            checked={selectedCategories.includes(category)}
-                                            onChange={() => handleCategoryToggle(category)}
-                                        />
-                                        <span className={`text-sm transition-colors ${selectedCategories.includes(category) ? 'text-primary font-semibold' : 'group-hover:text-primary'}`}>
-                      {category}
-                    </span>
+                                {categories.map(cat => (
+                                    <label key={cat} className="flex items-center gap-3 cursor-pointer group">
+                                        <div
+                                            className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${selectedCategories.includes(cat) ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}>
+                                            {selectedCategories.includes(cat) &&
+                                                <div className="w-2 h-2 bg-white rounded-sm"></div>}
+                                        </div>
+                                        <span
+                                            className={`text-sm font-medium transition-colors ${selectedCategories.includes(cat) ? 'text-primary font-bold' : 'text-on-surface group-hover:text-primary'}`}>{cat}</span>
                                     </label>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Price Range */}
                         <div className="mb-8">
-                            <h3 className="text-sm font-bold uppercase tracking-wider mb-4">Giá bán (Tối đa)</h3>
-                            <div className="space-y-4">
-                                <input
-                                    type="range"
-                                    min="500000"
-                                    max="10000000"
-                                    step="500000"
-                                    value={priceRange}
-                                    onChange={(e) => setPriceRange(Number(e.target.value))}
-                                    className="w-full h-1.5 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary"
-                                />
-                                <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant">
-                                    <span className="bg-surface-variant px-2 py-1 rounded">500k</span>
-                                    <span className="bg-primary-container text-on-primary-container px-2 py-1 rounded">
-                    {priceRange / 1000}k
-                  </span>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Thương
+                                hiệu</h3>
+                            <div className="max-h-[160px] overflow-y-auto custom-scrollbar pr-2 space-y-3">
+                                {brands.map(brand => (
+                                    <label key={brand} className="flex items-center gap-3 cursor-pointer group">
+                                        <div
+                                            className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${selectedBrands.includes(brand) ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}>
+                                            {selectedBrands.includes(brand) &&
+                                                <div className="w-2 h-2 bg-white rounded-sm"></div>}
+                                        </div>
+                                        <span
+                                            className={`text-sm font-medium transition-colors ${selectedBrands.includes(brand) ? 'text-primary font-bold' : 'text-on-surface group-hover:text-primary'}`}>{brand}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mb-8">
+                            <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Tỉ lệ mô
+                                hình</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {scales.map(scale => (
+                                    <button
+                                        key={scale}
+                                        onClick={() => toggleFilter(scale, selectedScales, setSelectedScales)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${selectedScales.includes(scale) ? 'bg-primary text-white shadow-md' : 'bg-surface-container text-on-surface hover:bg-surface-container-high'}`}
+                                    >
+                                        {scale}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="mb-8">
+                            <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Tình
+                                trạng</h3>
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <div
+                                    className={`w-10 h-6 rounded-full p-1 transition-colors ${inStockOnly ? 'bg-primary' : 'bg-surface-container'}`}>
+                                    <div
+                                        className={`w-4 h-4 bg-white rounded-full transition-transform ${inStockOnly ? 'translate-x-4' : 'translate-x-0'}`}></div>
                                 </div>
+                                <span className="text-sm font-medium text-on-surface">Chỉ hiện hàng có sẵn</span>
+                            </label>
+                        </div>
+                        <div>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Khoảng
+                                giá</h3>
+                            <input type="range" min="500000" max="20000000" step="500000" value={priceRange}
+                                   onChange={(e) => setPriceRange(Number(e.target.value))}
+                                   className="w-full h-2 bg-surface-container rounded-full appearance-none cursor-pointer accent-primary mb-3"/>
+                            <div
+                                className="text-center font-black text-primary text-lg">{new Intl.NumberFormat('vi-VN').format(priceRange)}đ
                             </div>
                         </div>
                     </div>
                 </aside>
 
-                {/* Product Grid */}
+                {/* ---------------- PRODUCT GRID ---------------- */}
                 <div className="flex-1 w-full">
-                    {/* Grid Controls */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-4 border border-outline-variant/30 rounded-lg shadow-sm">
-                        <p className="text-sm text-on-surface-variant font-medium">
-                            Đang hiển thị <span className="text-on-surface font-bold">{filteredProducts.length}</span> kết quả phù hợp
-                        </p>
-                        <div className="flex items-center gap-3 w-full sm:w-auto">
-                            <span className="text-xs font-bold text-on-surface-variant uppercase">Sắp xếp:</span>
-                            <select className="bg-surface-container-low border border-outline-variant/30 rounded-md px-4 py-1.5 text-sm font-semibold focus:ring-2 focus:ring-primary w-full sm:w-48 outline-none">
-                                <option>Mới nhất</option>
-                                <option>Giá: Thấp đến Cao</option>
-                                <option>Giá: Cao đến Thấp</option>
-                                <option>Bán chạy nhất</option>
+                    <div
+                        className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 bg-surface-container-lowest px-6 py-4 rounded-2xl shadow-[0_10px_30px_-15px_rgba(14,48,78,0.05)]">
+                        <div className="flex items-center gap-2">
+                            <p className="text-sm text-on-surface-variant font-bold">Hiển thị <span
+                                className="text-primary text-lg">{filteredProducts.length}</span> kết quả</p>
+                            {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedScales.length > 0) && (
+                                <button onClick={clearFilters}
+                                        className="ml-4 flex items-center gap-1 text-xs font-bold text-error bg-error/10 px-3 py-1 rounded-full hover:bg-error/20">
+                                    <X className="w-3 h-3"/> Xóa lọc
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs font-bold uppercase tracking-widest text-outline">Sắp xếp:</span>
+                            <select
+                                className="bg-surface-container rounded-full px-5 py-2 text-sm font-bold text-on-surface outline-none cursor-pointer">
+                                <option>Hàng Mới Nhất</option>
+                                <option>Giá tăng dần</option>
+                                <option>Giá giảm dần</option>
                             </select>
                         </div>
                     </div>
-
                     {filteredProducts.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
                             {filteredProducts.map(product => (
-                                <ProductCard key={product.id} product={product} />
+                                <ProductCard key={product.id} product={product}/>
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-white border border-outline-variant/30 rounded-xl p-12 text-center shadow-sm">
-                            <h3 className="text-xl font-bold mb-2">Không tìm thấy sản phẩm</h3>
-                            <p className="text-on-surface-variant">Vui lòng điều chỉnh bộ lọc để xem thêm các sản phẩm khác.</p>
-                            <button
-                                onClick={() => {
-                                    setSelectedCategories([]);
-                                    setPriceRange(10000000);
-                                }}
-                                className="mt-6 text-primary font-bold hover:underline"
-                            >
-                                Xóa tất cả bộ lọc
+                        <div
+                            className="bg-surface-container-lowest rounded-[2rem] p-16 text-center border-2 border-dashed border-outline-variant/30">
+                            <h3 className="text-2xl font-black mb-4 text-on-surface">Không tìm thấy sản phẩm</h3>
+                            <p className="text-on-surface-variant font-medium">Không có mô hình nào khớp với bộ lọc của
+                                bạn.</p>
+                            <button onClick={clearFilters}
+                                    className="mt-8 px-8 py-3 bg-primary text-white rounded-full font-bold shadow-md hover:scale-105 transition-transform">Xóa
+                                tất cả bộ lọc
                             </button>
                         </div>
                     )}

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import {BrowserRouter as Router, Routes, Route, Navigate} from 'react-router-dom';
 
 import Cart from './pages/Cart';
 import Header from "./components/common/Header";
@@ -12,29 +12,37 @@ import AdminCategories from "./pages/admin/Categories";
 import AdminOrders from "./pages/admin/Orders";
 import AdminRequests from "./pages/admin/Requests";
 import AdminOrderDetail from "./pages/admin/OrderDetails";
+import BlogList from "./pages/BlogList";
+import BlogDetail from "./pages/BlogDetail";
+import ServicesPage from "./pages/ServicesPage";
+import Membership from "./pages/Membership";
 
 export default function App() {
     return (
         <Router>
             <div className="flex flex-col min-h-screen">
-                <Header />
+                <Header/>
                 <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/products" element={<ProductList />} />
-                    <Route path="/product/:id" element={<ProductDetail />} />
-                    <Route path="/cart" element={<Cart />} />
-                    <Route path="/category/:category" element={<ProductList />} />
+                    <Route path="/" element={<HomePage/>}/>
+                    <Route path="/products" element={<ProductList/>}/>
+                    <Route path="/product/:id" element={<ProductDetail/>}/>
+                    <Route path="/cart" element={<Cart/>}/>
+                    <Route path="/category/:category" element={<ProductList/>}/>
+                    <Route path="/blog" element={<BlogList/>}/>
+                    <Route path="/blog/:id" element={<BlogDetail/>}/>
+                    <Route path="/services" element={<ServicesPage/>}/>
+                    <Route path="/membership" element={<Membership/>}/>
 
-                    <Route path="/admin" element={<AdminLayout />}>
-                        <Route index element={<Navigate to="/admin/products" replace />} />
-                        <Route path="products" element={<AdminProducts />} />
-                        <Route path="categories" element={<AdminCategories />} />
-                        <Route path="orders" element={<AdminOrders />} />
-                        <Route path="orders/:id" element={<AdminOrderDetail />} />
-                        <Route path="requests" element={<AdminRequests />} />
+                    <Route path="/admin" element={<AdminLayout/>}>
+                        <Route index element={<Navigate to="/admin/products" replace/>}/>
+                        <Route path="products" element={<AdminProducts/>}/>
+                        <Route path="categories" element={<AdminCategories/>}/>
+                        <Route path="orders" element={<AdminOrders/>}/>
+                        <Route path="orders/:id" element={<AdminOrderDetail/>}/>
+                        <Route path="requests" element={<AdminRequests/>}/>
                     </Route>
                 </Routes>
-                <Footer />
+                <Footer/>
             </div>
         </Router>
     );

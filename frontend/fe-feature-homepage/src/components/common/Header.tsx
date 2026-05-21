@@ -1,88 +1,271 @@
-import {Link} from 'react-router-dom';
-import {ShoppingCart, User, Search, Rocket, Shield, ChevronDown} from 'lucide-react';
+import {useState, useEffect, useRef} from 'react';
+import {Link, useNavigate} from 'react-router-dom';
+import {
+    ShoppingCart, User, Search, Shield, ChevronDown, ChevronRight,
+    Car, Box, Wrench, Diamond, Layers, Trash2
+} from 'lucide-react';
 import {useCartStore} from "../../store/useCartStore";
 import {useAdminStore} from "../../store/useAdminStore";
+import {formatCurrency} from "../../util/format";
+import {megaMenuBrands} from "../../data/mockData";
+
+const getCategoryIcon = (catId: string) => {
+    switch (catId) {
+        case 'CAT_VEHICLE':
+            return Car;
+        case 'CAT_MECHA':
+            return Box;
+        case 'CAT_FIGURE':
+            return User;
+        case 'CAT_ACCESSORY':
+            return Wrench;
+        case 'CAT_LEGO':
+            return Layers;
+        default:
+            return Diamond;
+    }
+};
 
 export default function Header() {
-    const items = useCartStore(state => state.items);
-    const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+    const navigate = useNavigate();
 
+    const {items, removeFromCart, getTotals} = useCartStore();
+    const {subtotal} = getTotals();
+    const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
     const categories = useAdminStore(state => state.categories);
+    const [activeParentId, setActiveParentId] = useState<string | null>(null);
+    const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
+    const cartRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (cartRef.current && !cartRef.current.contains(event.target as Node)) {
+                setIsMiniCartOpen(false);
+            }
+        }
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (categories && categories.length > 0 && !activeParentId) {
+            setActiveParentId(categories[0].id);
+        }
+    }, [categories, activeParentId]);
+
+    const activeParentCategory = categories?.find(cat => cat.id === activeParentId) || categories?.[0];
 
     return (
-        <header
-            className="fixed top-0 z-50 w-full bg-slate-50/80 dark:bg-slate-200/80 backdrop-blur-xl shadow-sm border-b border-outline-variant/30">
-            <div className="flex flex-col w-full px-6 py-4 max-w-screen-2xl mx-auto">
-                <div className="flex items-center justify-between gap-8 mb-4">
+        <header className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between px-6 py-4 max-w-screen-2xl mx-auto">
+                {/* Logo */}
+                <div className="flex items-center gap-10">
                     <Link to="/"
-                          className="flex items-center gap-2 text-3xl font-black tracking-tighter text-primary-container">
-                        <Rocket className="w-8 h-8 fill-primary-container"/>
+                          className="bg-primary-container text-white px-6 py-2 rounded-xl font-black text-xl tracking-widest hover:scale-105 transition-transform shadow-md">
                         SOBU
                     </Link>
-                    <div className="flex-1 max-w-2xl relative hidden md:block">
+
+                    {/* Navigation */}
+                    <nav className="hidden lg:flex items-center gap-8 font-bold text-sm text-on-surface-variant">
+                        <Link to="/" className="text-on-surface hover:text-primary transition-colors">Trang chủ</Link>
+                        <div className="relative group py-2">
+                            <Link to="/products"
+                                  className="flex items-center gap-1 hover:text-primary transition-colors text-on-surface">
+                                Danh mục <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180"/>
+                            </Link>
+                            <div
+                                className="absolute top-full -left-20 w-[950px] bg-surface-container-lowest rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(14,48,78,0.15)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 p-8 cursor-default flex flex-col gap-6">
+                                <div className="grid grid-cols-12 gap-6 min-h-[300px]">
+                                    <div
+                                        className="col-span-4 border-r border-surface-container pr-4 flex flex-col gap-1.5">
+                                        <span
+                                            className="text-[11px] font-black uppercase tracking-wider text-outline mb-2 block px-2">Danh mục chính</span>
+                                        {categories?.map((parent) => {
+                                            const IconComponent = getCategoryIcon(parent.id);
+                                            const isActive = activeParentId === parent.id;
+                                            return (
+                                                <div
+                                                    key={parent.id}
+                                                    onMouseEnter={() => setActiveParentId(parent.id)}
+                                                    className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 cursor-pointer ${
+                                                        isActive ? 'bg-primary text-white shadow-md shadow-primary/20 scale-[1.02]' : 'hover:bg-surface-container text-on-surface'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <IconComponent className="w-5 h-5"/>
+                                                        <span className="font-bold text-sm">{parent.name}</span>
+                                                    </div>
+                                                    {parent.children && parent.children.length > 0 && (
+                                                        <ChevronRight
+                                                            className={`w-4 h-4 ${isActive ? 'text-white' : 'text-outline/60'}`}/>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="col-span-8 pl-4 flex flex-col">
+                                        <span
+                                            className="text-[11px] font-black uppercase tracking-wider text-outline mb-4 block">Dòng sản phẩm chi tiết</span>
+                                        {activeParentCategory && activeParentCategory.children && activeParentCategory.children.length > 0 ? (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {activeParentCategory.children.map((child) => (
+                                                    <Link key={child.id} to={`/products?category=${child.id}`}
+                                                          className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-surface-container-low hover:bg-primary-container/20 border border-transparent hover:border-primary/20 transition-all group/child">
+                                                        <span
+                                                            className="text-sm font-bold text-on-surface group-hover/child:text-primary transition-colors">{child.name}</span>
+                                                        <span
+                                                            className="text-[10px] bg-surface-container text-outline group-hover/child:bg-primary group-hover/child:text-white px-2 py-0.5 rounded-md font-medium transition-colors">Xem</span>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div
+                                                className="flex flex-col items-center justify-center flex-1 text-outline/60 border border-dashed border-surface-container rounded-2xl p-6">
+                                                <Layers className="w-8 h-8 mb-2 stroke-[1.5]"/>
+                                                <p className="text-xs font-medium">Danh mục này hiện tại không phân
+                                                    nhánh nhỏ hơn</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-surface-container pt-4">
+                                    <span
+                                        className="text-[11px] font-black uppercase tracking-wider text-outline mb-3 block">Thương hiệu phân phối</span>
+                                    <div className="grid grid-cols-6 gap-x-4 gap-y-2">
+                                        {megaMenuBrands.map((brand, idx) => (
+                                            <Link key={idx} to={`/products?brand=${brand}`}
+                                                  className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors truncate">• {brand}</Link>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Link to="/services" className="hover:text-primary transition-colors">Dịch vụ</Link>
+                        <Link to="/membership" className="hover:text-primary transition-colors">Thẻ thành viên</Link>
+                        <Link to="/blog" className="hover:text-primary transition-colors">Tin tức</Link>
+                    </nav>
+                </div>
+
+                {/* Right Actions */}
+                <div className="flex items-center gap-6">
+                    <div className="relative hidden md:block w-64">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline w-4 h-4"/>
                         <input
-                            className="w-full bg-surface-container-low border border-outline-variant/30 rounded-md px-6 py-2.5 pr-12 text-sm focus:ring-2 focus:ring-primary/40 transition-all outline-none"
-                            placeholder="Tìm kiếm mô hình, thương hiệu..."
-                            type="text"
-                        />
-                        <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-outline w-5 h-5"/>
+                            className="w-full bg-surface-container rounded-full pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/40 transition-all outline-none border-none placeholder:text-outline/70 font-medium"
+                            placeholder="Tìm kiếm mô hình..." type="text"/>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <Link to="/admin" className="p-2 hover:bg-white/50 dark:hover:bg-slate-800/50 rounded-full transition-all duration-300 group" title="Trang Quản Trị">
-                            <Shield className="text-secondary w-6 h-6 group-hover:text-primary transition-colors" />
+
+                    <div className="flex items-center gap-3">
+                        <Link to="/admin"
+                              className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors"
+                              title="Admin">
+                            <Shield className="w-5 h-5"/>
                         </Link>
-                        <Link to="/cart"
-                              className="p-2 hover:bg-white/50 dark:hover:bg-slate-800/50 rounded-full transition-all duration-300 relative group">
-                            <ShoppingCart
-                                className="text-primary-container w-6 h-6 group-hover:scale-110 transition-transform"/>
-                            {itemCount > 0 && (
-                                <span
-                                    className="absolute top-0 right-0 w-4 h-4 bg-error text-red-600 text-[10px] flex items-center justify-center rounded-full font-bold">
-                                    {itemCount}
-                                </span>
+
+                        <div className="relative" ref={cartRef}>
+                            <button
+                                onClick={() => setIsMiniCartOpen(!isMiniCartOpen)}
+                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all relative group ${isMiniCartOpen ? 'bg-primary/10 text-primary' : 'text-on-surface hover:bg-surface-container'}`}
+                                title="Giỏ hàng"
+                            >
+                                <ShoppingCart className="w-5 h-5 transition-transform group-hover:scale-105"/>
+                                {itemCount > 0 && (
+                                    <span
+                                        className="absolute top-0 right-0 w-4 h-4 bg-error text-red-600 text-[9px] flex items-center justify-center rounded-full font-black shadow-sm">
+                                        {itemCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {/* MINI CART DROPDOWN*/}
+                            {isMiniCartOpen && (
+                                <div
+                                    className="absolute top-full right-0 mt-2 w-[340px] bg-surface-container-lowest rounded-2xl shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] border border-surface-container/60 p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                                    <div
+                                        className="flex items-center justify-between pb-3 border-b border-surface-container-high/60 mb-3">
+                                        <span className="text-xs font-black uppercase tracking-wider text-on-surface">Giỏ hàng sản phẩm ({itemCount})</span>
+                                    </div>
+
+                                    {items.length === 0 ? (
+                                        // Empty State của Mini Cart
+                                        <div className="py-8 flex flex-col items-center justify-center text-center">
+                                            <ShoppingCart className="w-8 h-8 text-outline/40 mb-2 stroke-[1.5]"/>
+                                            <p className="text-[11px] text-outline font-bold">Chưa có sản phẩm nào!</p>
+                                        </div>
+                                    ) : (
+                                        // List Items State
+                                        <>
+                                            <div
+                                                className="space-y-3.5 max-h-[240px] overflow-y-auto pr-1 scrollbar-hide">
+                                                {items.map(({product, quantity}) => (
+                                                    <div key={product.id}
+                                                         className="flex gap-3 items-center group/item text-xs font-bold">
+                                                        {/* Thumbnail ảnh sản phẩm */}
+                                                        <div
+                                                            className="w-12 h-12 rounded-lg bg-surface-container-low p-1.5 shrink-0 flex items-center justify-center">
+                                                            <img src={product.imageUrl} alt={product.name}
+                                                                 className="w-full h-full object-contain"/>
+                                                        </div>
+                                                        {/* Tên và Số lượng */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="text-on-surface font-bold truncate pr-2 leading-tight">{product.name}</h4>
+                                                            <p className="text-[10px] text-outline mt-0.5">Số
+                                                                lượng: {quantity}</p>
+                                                        </div>
+                                                        {/* Giá thành & Nút xóa */}
+                                                        <div
+                                                            className="text-right shrink-0 flex flex-col items-end gap-0.5">
+                                                            <span
+                                                                className="text-primary font-black">{formatCurrency(product.price * quantity)}</span>
+                                                            <button
+                                                                onClick={() => removeFromCart(product.id)}
+                                                                className="text-outline hover:text-error transition-colors p-0.5"
+                                                                title="Xóa khỏi giỏ"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5"/>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Tổng tiền tạm tính & Nút điều hướng */}
+                                            <div className="mt-4 pt-3 border-t border-surface-container-high/60">
+                                                <div
+                                                    className="flex justify-between items-center mb-3.5 text-xs font-bold">
+                                                    <span className="text-outline">Tổng cộng:</span>
+                                                    <span
+                                                        className="text-base font-black text-on-surface">{formatCurrency(subtotal)}</span>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setIsMiniCartOpen(false);
+                                                        navigate('/cart');
+                                                    }}
+                                                    className="w-full py-2.5 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl text-xs font-black uppercase tracking-widest text-center shadow-md shadow-primary/10 hover:scale-[1.01] transition-transform"
+                                                >
+                                                    Đi đến thanh toán
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             )}
-                        </Link>
-                        <button
-                            className="p-2 hover:bg-white/50 dark:hover:bg-slate-800/50 rounded-full transition-all duration-300">
-                            <User className="text-primary-container w-6 h-6"/>
+                        </div>
+
+                        <button className="flex items-center gap-2 pl-2">
+                            <div
+                                className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+                                <User className="w-5 h-5"/>
+                            </div>
                         </button>
                     </div>
                 </div>
-
-                <nav
-                    className="flex items-center gap-8 font-['Be_Vietnam_Pro'] tracking-tight text-sm font-medium overflow-x-auto pb-2 md:pb-0">
-                    <Link to="/" className="text-primary font-bold border-b-2 border-primary pb-1 whitespace-nowrap">Trang chủ</Link>
-                    <div className="relative group">
-                        <Link to="/products" className="flex items-center gap-1 text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap pb-1">
-                            Sản phẩm
-                            <ChevronDown className="w-4 h-4 transition-transform duration-300 group-hover:rotate-180" />
-                        </Link>
-
-                        {/* Menu xổ xuống */}
-                        <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-outline-variant/30 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 flex flex-col py-2 z-50">
-                            <Link
-                                to="/products"
-                                className="px-4 py-2 text-sm text-slate-800 dark:text-slate-200 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-bold border-b border-outline-variant/20 mb-1"
-                            >
-                                Tất cả sản phẩm
-                            </Link>
-
-                            {/* Lặp qua danh sách categories */}
-                            {categories.map(category => (
-                                <Link
-                                    key={category.id}
-                                    to={`/category/${category.id}`}
-                                    className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                >
-                                    {category.name}
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-                    <Link to="#" className="text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap">Hướng dẫn</Link>
-                    <Link to="#" className="text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap">Dịch vụ</Link>
-                    <Link to="#" className="text-slate-600 hover:text-primary transition-all duration-300 whitespace-nowrap">Mô hình Custom</Link>
-                </nav>
             </div>
         </header>
     );

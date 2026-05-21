@@ -1,153 +1,197 @@
-import { Link } from 'react-router-dom';
-import { ChevronRight, Trash2, Minus, Plus, ArrowLeft, Truck, CreditCard, ShoppingCart } from 'lucide-react';
-import { useCartStore } from '../store/useCartStore';
+import {useState, useEffect} from 'react';
+import {Link} from 'react-router-dom';
+import {Trash2, Minus, Plus, ShoppingBag} from 'lucide-react';
+import {useCartStore} from '../store/useCartStore';
 import {formatCurrency} from "../util/format";
 
+interface QuantityControllerProps {
+    quantity: number;
+    onIncrease: () => void;
+    onDecrease: () => void;
+    onChange: (value: number) => void;
+}
+
+function QuantityController({quantity, onIncrease, onDecrease, onChange}: QuantityControllerProps) {
+    const [inputValue, setInputValue] = useState(quantity.toString());
+
+    useEffect(() => {
+        setInputValue(quantity.toString());
+    }, [quantity]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        // Chỉ cho phép nhập chuỗi rỗng (khi xóa) hoặc các ký tự là số tự nhiên
+        if (val === '' || /^\d+$/.test(val)) {
+            setInputValue(val);
+            const num = parseInt(val, 10);
+            if (!isNaN(num) && num > 0) {
+                onChange(num);
+            }
+        }
+    };
+
+    const handleInputBlur = () => {
+        const num = parseInt(inputValue, 10);
+        // Nếu click ra ngoài khi đang để trống hoặc số không hợp lệ -> reset về 1
+        if (isNaN(num) || num <= 0) {
+            setInputValue('1');
+            onChange(1);
+        }
+    };
+
+    return (
+        <div
+            className="flex items-center bg-surface-container rounded-full px-1 py-1 w-fit border border-surface-container-high/40">
+            <button
+                onClick={onDecrease}
+                className="w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm text-on-surface hover:text-primary transition-colors disabled:opacity-50"
+                disabled={quantity <= 1}
+            >
+                <Minus className="w-3 h-3"/>
+            </button>
+            <input
+                type="text"
+                value={inputValue}
+                onChange={handleInputChange}
+                onBlur={handleInputBlur}
+                className="w-9 text-center font-black text-xs bg-transparent border-none outline-none focus:ring-0 p-0 text-on-surface"
+            />
+            <button
+                onClick={onIncrease}
+                className="w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm text-on-surface hover:text-primary transition-colors"
+            >
+                <Plus className="w-3 h-3"/>
+            </button>
+        </div>
+    );
+}
+
 export default function Cart() {
-    const { items, removeFromCart, updateQuantity, getTotals } = useCartStore();
-    const { subtotal, total, itemCount } = getTotals();
+    const {items, removeFromCart, updateQuantity, getTotals} = useCartStore();
+    const {subtotal, itemCount} = getTotals();
 
     if (items.length === 0) {
         return (
-            <main className="max-w-7xl mx-auto px-6 py-32 flex flex-col items-center justify-center min-h-[60vh]">
-                <div className="w-24 h-24 bg-surface-container rounded-full flex items-center justify-center mb-6">
-                    <ShoppingCart className="w-10 h-10 text-outline" /> {/* Actually let's use a simpler Icon */}
+            <main
+                className="max-w-screen-2xl mx-auto px-6 py-32 flex flex-col items-center justify-center min-h-[60vh] bg-surface">
+                <div
+                    className="w-24 h-24 bg-surface-container rounded-full flex items-center justify-center mb-6 shadow-inner">
+                    <ShoppingBag className="w-10 h-10 text-primary opacity-40"/>
                 </div>
-                <h2 className="text-2xl font-bold mb-4">Giỏ hàng trống</h2>
-                <p className="text-on-surface-variant mb-8">Bạn chưa có sản phẩm nào trong giỏ hàng.</p>
-                <Link to="/products" className="bg-primary text-white px-8 py-3 rounded-full font-bold shadow-md hover:brightness-110 transition-all">
-                    Tiếp tục mua sắm
+                <h2 className="text-2xl font-black mb-2 text-on-surface">Giỏ hàng trống</h2>
+                <p className="text-on-surface-variant font-medium text-xs mb-8">Bạn chưa chọn siêu phẩm nào vào bộ sưu
+                    tập.</p>
+                <Link to="/products"
+                      className="bg-primary text-white px-8 py-3 rounded-xl font-bold shadow-md hover:scale-[1.02] transition-transform uppercase tracking-wider text-xs">
+                    Khám phá cửa hàng
                 </Link>
             </main>
         );
     }
 
     return (
-        <main className="max-w-7xl mx-auto px-6 pt-32 pb-24">
-            {/* Header */}
-            <header className="mb-12">
-                <div className="flex items-center gap-2 text-primary font-bold text-sm mb-4">
-                    <Link to="/" className="hover:underline">Trang chủ</Link>
-                    <ChevronRight className="w-4 h-4" />
-                    <span className="text-on-surface-variant font-normal">Giỏ hàng của bạn</span>
-                </div>
-                <h1 className="text-4xl font-bold tracking-tight text-on-surface mb-2">Giỏ hàng</h1>
-                <p className="text-on-surface-variant">Bạn đang có <span className="font-bold text-primary">{itemCount} sản phẩm</span> trong giỏ hàng.</p>
+        <main className="max-w-screen-2xl mx-auto px-6 pt-24 pb-16 bg-surface">
+            <header className="mb-8 flex items-center gap-3">
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-on-surface uppercase">Giỏ hàng</h1>
+                <div className="w-[1px] h-6 bg-surface-container-highest"></div>
+                <span className="text-primary font-black text-sm">{itemCount} Siêu phẩm</span>
             </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-                {/* Product List Section */}
-                <div className="lg:col-span-8 space-y-6">
-                    {/* Free Shipping Alert */}
-                    {subtotal >= 2000000 && (
-                        <div className="bg-primary-container p-6 rounded-lg flex items-center gap-4 border border-primary/10">
-                            <div className="bg-primary p-2.5 rounded-full text-white">
-                                <Truck className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <p className="font-bold text-on-primary-container">Đơn hàng của bạn được Miễn Phí Vận Chuyển!</p>
-                                <p className="text-sm text-on-primary-container opacity-80">Ưu đãi áp dụng cho đơn hàng trên 2.000.000đ.</p>
-                            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+
+                {/* Form thông tin Checkout */}
+                <div className="lg:col-span-7 space-y-8">
+                    <section>
+                        <h2 className="text-base font-black mb-4 uppercase tracking-tight text-on-surface">Thông tin
+                            liên hệ</h2>
+                        <div className="space-y-3">
+                            <input type="text" placeholder="Họ và tên khách hàng"
+                                   className="w-full bg-surface-container-lowest border border-surface-container px-4 py-2.5 rounded-xl outline-none text-xs text-on-surface focus:ring-2 focus:ring-primary/20 font-medium"/>
+                            <input type="tel" placeholder="Số điện thoại di động"
+                                   className="w-full bg-surface-container-lowest border border-surface-container px-4 py-2.5 rounded-xl outline-none text-xs text-on-surface focus:ring-2 focus:ring-primary/20 font-medium"/>
                         </div>
-                    )}
+                    </section>
 
-                    {/* Cart Items */}
-                    {items.map(({ product, quantity }) => (
-                        <div key={product.id} className="bg-white p-6 rounded-xl flex gap-6 items-center border border-outline-variant/30 shadow-sm hover:shadow-md transition-all duration-300">
-                            <div className="w-24 h-24 md:w-32 md:h-32 rounded-lg overflow-hidden bg-surface-container flex-shrink-0 p-2">
-                                <img className="w-full h-full object-contain" src={product.imageUrl} alt={product.name} />
+                    <section>
+                        <h2 className="text-base font-black mb-4 uppercase tracking-tight text-on-surface">Thông tin vận
+                            chuyển</h2>
+                        <div className="space-y-3">
+                            <input type="text" placeholder="Địa chỉ giao hàng chi tiết (Số nhà, tên đường...)"
+                                   className="w-full bg-surface-container-lowest border border-surface-container px-4 py-2.5 rounded-xl outline-none text-xs text-on-surface focus:ring-2 focus:ring-primary/20 font-medium"/>
+                            <div className="grid grid-cols-2 gap-3">
+                                <input type="text" placeholder="Tỉnh / Thành phố"
+                                       className="w-full bg-surface-container-lowest border border-surface-container px-4 py-2.5 rounded-xl outline-none text-xs text-on-surface focus:ring-2 focus:ring-primary/20 font-medium"/>
+                                <input type="text" placeholder="Quận / Huyện"
+                                       className="w-full bg-surface-container-lowest border border-surface-container px-4 py-2.5 rounded-xl outline-none text-xs text-on-surface focus:ring-2 focus:ring-primary/20 font-medium"/>
                             </div>
-
-                            <div className="flex-grow flex flex-col h-full justify-between">
-                                <div>
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h3 className="font-bold text-base md:text-lg text-on-surface line-clamp-2 md:line-clamp-1 pr-4">{product.name}</h3>
-                                        <button
-                                            onClick={() => removeFromCart(product.id)}
-                                            className="text-on-surface-variant hover:text-error transition-colors p-1"
-                                        >
-                                            <Trash2 className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                    <p className="text-on-surface-variant text-[10px] md:text-sm mb-4">
-                                        {product.scale ? `Tỷ lệ: ${product.scale} | ` : ''}
-                                        {product.brand !== 'N/A' && `Thương hiệu: ${product.brand} | `}
-                                        Mã: {product.id}
-                                    </p>
-                                </div>
-
-                                <div className="flex justify-between items-end md:items-center mt-auto">
-                                    <div className="flex items-center bg-surface-container-low border border-outline-variant/30 rounded-lg px-2 py-1">
-                                        <button
-                                            onClick={() => updateQuantity(product.id, quantity - 1)}
-                                            className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-on-surface hover:text-primary disabled:opacity-50"
-                                            disabled={quantity <= 1}
-                                        >
-                                            <Minus className="w-3 h-3 md:w-4 md:h-4" />
-                                        </button>
-                                        <span className="font-bold text-sm min-w-[1.5rem] md:min-w-[2rem] text-center">{quantity}</span>
-                                        <button
-                                            onClick={() => updateQuantity(product.id, quantity + 1)}
-                                            className="w-6 h-6 md:w-8 md:h-8 flex items-center justify-center text-on-surface hover:text-primary"
-                                        >
-                                            <Plus className="w-3 h-3 md:w-4 md:h-4" />
-                                        </button>
-                                    </div>
-                                    <p className="text-lg md:text-xl font-black text-primary">
-                                        {formatCurrency(product.price * quantity)}
-                                    </p>
-                                </div>
-                            </div>
+                            <textarea placeholder="Ghi chú đóng gói hoặc lưu ý giao hàng cho SPX..."
+                                      className="w-full bg-surface-container-lowest border border-surface-container px-4 py-2.5 rounded-xl outline-none text-xs text-on-surface focus:ring-2 focus:ring-primary/20 font-medium min-h-[90px]"/>
                         </div>
-                    ))}
-
-                    <div className="pt-4">
-                        <Link to="/products" className="flex items-center gap-2 text-primary font-bold hover:underline w-fit">
-                            <ArrowLeft className="w-4 h-4" />
-                            Tiếp tục mua sắm
-                        </Link>
-                    </div>
+                    </section>
                 </div>
 
-                {/* Summary & Checkout Section */}
-                <aside className="lg:col-span-4 lg:sticky lg:top-28">
-                    <div className="bg-white p-8 rounded-xl border border-outline-variant/30 shadow-sm">
-                        <h2 className="text-xl font-bold mb-6 text-on-surface">Chi tiết đơn hàng</h2>
-
-                        <div className="space-y-4 mb-8">
-                            <div className="flex justify-between text-on-surface-variant text-sm border-b border-outline-variant/20 pb-4">
-                                <span>Tạm tính ({itemCount} sản phẩm)</span>
-                                <span className="font-semibold text-on-surface">{formatCurrency(subtotal)}</span>
-                            </div>
-                            <div className="flex justify-between text-on-surface-variant text-sm border-b border-outline-variant/20 pb-4">
-                                <span>Phí vận chuyển</span>
-                                {subtotal >= 2000000 ? (
-                                    <span className="text-primary font-bold uppercase text-[10px] tracking-wider">Miễn phí</span>
-                                ) : (
-                                    <span className="font-semibold text-on-surface">{formatCurrency(35000)}</span>
-                                )}
-                            </div>
-
-                            <div className="pt-4 flex flex-col gap-2">
-                                <div className="flex justify-between items-end">
-                                    <span className="font-bold text-on-surface">Tổng cộng</span>
-                                    <span className="text-2xl font-black text-primary">
-                    {formatCurrency(subtotal >= 2000000 ? subtotal : subtotal + 35000)}
-                  </span>
+                {/* Tóm tắt đơn hàng & Danh sách Item sửa đổi số lượng */}
+                <aside className="lg:col-span-5">
+                    <div
+                        className="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container/60 shadow-sm">
+                        <h3 className="text-sm font-black uppercase tracking-wider mb-4 pb-3 border-b border-surface-container-high">Đơn
+                            hàng của bạn</h3>
+                        <div className="space-y-4 mb-5 max-h-[320px] overflow-y-auto pr-1 scrollbar-hide">
+                            {items.map(({product, quantity}) => (
+                                <div key={product.id} className="flex gap-3.5 items-center">
+                                    <div
+                                        className="w-14 h-14 rounded-xl bg-surface-container-low p-1.5 flex-shrink-0 flex items-center justify-center">
+                                        <img src={product.imageUrl} alt={product.name}
+                                             className="w-full h-full object-contain"/>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-bold text-on-surface text-xs line-clamp-1 leading-tight">{product.name}</h4>
+                                        <div className="mt-1.5">
+                                            <QuantityController
+                                                quantity={quantity}
+                                                onIncrease={() => updateQuantity(product.id, quantity + 1)}
+                                                onDecrease={() => updateQuantity(product.id, Math.max(1, quantity - 1))}
+                                                onChange={(num) => updateQuantity(product.id, num)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="text-right shrink-0 flex flex-col items-end justify-between h-12">
+                                        <p className="font-black text-primary text-xs">{formatCurrency(product.price * quantity)}</p>
+                                        <button onClick={() => removeFromCart(product.id)}
+                                                className="text-[10px] text-error uppercase font-black hover:underline p-0.5 flex items-center gap-1">
+                                            <Trash2 className="w-3 h-3"/> Xóa
+                                        </button>
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-right text-on-surface-variant">(Đã bao gồm VAT 10%)</p>
+                            ))}
+                        </div>
+                        <div className="space-y-2.5 pt-4 border-t border-surface-container-high text-xs font-bold">
+                            <div className="flex justify-between text-on-surface-variant">
+                                <span>Tạm tính</span>
+                                <span>{formatCurrency(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-on-surface-variant">
+                                <span>Phí giao hàng (Ước tính)</span>
+                                <span className="text-primary uppercase text-[10px] tracking-wider">Miễn phí</span>
+                            </div>
+                            <div
+                                className="flex justify-between items-end pt-3 border-t border-dashed border-surface-container-high mt-2">
+                                <span className="text-sm font-black uppercase">Tổng thanh toán</span>
+                                <span
+                                    className="text-2xl font-black text-primary tracking-tight">{formatCurrency(subtotal)}</span>
                             </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <button className="w-full py-4 px-8 rounded-lg bg-primary text-white font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all duration-300 flex justify-center items-center gap-3 active:scale-95">
-                                <span>Thanh toán ngay</span>
-                                <CreditCard className="w-5 h-5" />
-                            </button>
+                        <button
+                            className="w-full mt-6 py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-md shadow-primary/10 hover:scale-[1.01] transition-transform">
+                            Xác nhận đặt hàng
+                        </button>
 
-                            <p className="text-[10px] text-on-surface-variant text-center px-4 leading-relaxed">
-                                Bằng việc nhấn Thanh toán, bạn đồng ý với <Link to="#" className="underline hover:text-primary">Điều khoản</Link> & <Link to="#" className="underline hover:text-primary">Chính sách bảo mật</Link> của SOBU.
-                            </p>
+                        <div className="mt-3 text-center">
+                            <Link to="/products"
+                                  className="text-xs font-bold text-outline hover:text-primary transition-colors underline">
+                                Tiếp tục mua mô hình khác
+                            </Link>
                         </div>
                     </div>
                 </aside>
