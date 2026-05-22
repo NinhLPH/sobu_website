@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # ---- Build Stage ----
 FROM eclipse-temurin:17-jdk-alpine AS builder
 
@@ -9,11 +11,11 @@ COPY mvnw pom.xml ./
 RUN chmod +x mvnw
 
 # Download dependencies (cached unless pom.xml changes)
-RUN ./mvnw dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2 ./mvnw dependency:go-offline -B
 
 # Copy source and build
 COPY src/ src/
-RUN ./mvnw clean package -DskipTests -B
+RUN --mount=type=cache,target=/root/.m2 ./mvnw package -DskipTests -B
 
 # Extract layered jar
 RUN java -Djarmode=layertools -jar target/*.jar extract --destination target/extracted
@@ -39,6 +41,6 @@ USER appuser
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-  CMD wget -qO- http://localhost:8081/api/auth/health || exit 1
+  CMD wget -qO- http://127.0.0.1:8081/actuator/health || exit 1
 
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

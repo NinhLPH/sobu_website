@@ -1,5 +1,21 @@
 # Backend
 
+## Docker quick start
+
+Docker is set up for a fresh laptop now with a dedicated `docker` Spring profile. That profile bootstraps the schema and sample data against the bundled MySQL container, so the backend can come up from a clean clone without pre-creating the database.
+
+1. Copy [`.env.example`](D:\Code\sobu_website\.env.example) to `.env` in the repo root if you want to override ports or secrets.
+2. Run `docker compose up --build`.
+3. Backend API: `http://localhost:8081`
+4. MySQL host port: `3307`
+5. Reset seeded data completely: `docker compose down -v`
+
+Notes:
+- Docker uses `SPRING_PROFILES_ACTIVE=docker` by default.
+- Uploaded files persist in the `uploads_data` named volume.
+- MySQL data persists in the `mysql_data` named volume.
+- Real SMTP and Nhanh credentials are optional for local Docker startup; placeholder defaults keep the app bootable.
+
 ## Quick Start: login nhanh, cấp quyền, sync categories và product
 
 Mục này dành cho môi trường local/dev với cấu hình mặc định trong [application-dev.properties](D:\Code\sobu_website\backend\src\main\resources\application-dev.properties): MySQL `sodu`, user `root`, password `1234`.
