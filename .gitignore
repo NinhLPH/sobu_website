@@ -4,7 +4,20 @@
 .env
 /backend/.codex
 *.md
-.claude
-.agent
-.opencode.json
+/.agent
+/.gitnexus
+/.claude
+*.json
+backend/Introduction.md
+# Added by code-review-graph
+.code-review-graph/
+.claude/skills/debug-issue.md
+.claude/skills/explore-codebase.md
+.claude/skills/refactor-safely.md
+.claude/skills/review-changes.md
+.kiro/steering/code-review-graph.md
+GEMINI.md
+AGENTS.md
 .mcp.json
+.opencode.json
+.claude/settings.json
