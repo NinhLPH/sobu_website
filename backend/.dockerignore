@@ -1,0 +1,10 @@
+target/
+!target/*.jar
+.idea/
+.vscode/
+.git/
+.gitignore
+*.md
+.codex/
+.notebook/
+.mvn/wrapper/maven-wrapper.jar

@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@100;300;400;500;600;700;800;900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@theme {
+  --font-sans: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+
+  --color-primary: #00618e;
+  --color-on-primary: #eaf4ff;
+  --color-primary-container: #4bbafe;
+  --color-on-primary-container: #00344e;
+
+  --color-secondary: #005f9c;
+  --color-on-secondary: #ecf3ff;
+  --color-secondary-container: #b1d5ff;
+  --color-on-secondary-container: #004a7b;
+
+  --color-tertiary: #5a4bb4;
+  --color-on-tertiary: #f6f0ff;
+  --color-tertiary-container: #b1a6ff;
+  --color-on-tertiary-container: #2e1887;
+
+  --color-error: #b31b25;
+  --color-on-error: #ffefee;
+  --color-error-container: #fb5151;
+  --color-on-error-container: #570008;
+
+  --color-background: #f3f6ff;
+  --color-on-background: #0e304e;
+
+  --color-surface: #f3f6ff;
+  --color-on-surface: #0e304e;
+  --color-surface-variant: #c6dfff;
+  --color-on-surface-variant: #405e7e;
+
+  --color-outline: #5b799b;
+  --color-outline-variant: #92b0d4;
+
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #e9f1ff;
+  --color-surface-container: #dae9ff;
+  --color-surface-container-high: #d0e4ff;
+  --color-surface-container-highest: #c6dfff;
+
+  --color-inverse-surface: #000f1f;
+  --color-inverse-on-surface: #829fc3;
+  --color-inverse-primary: #4bbafe;
+
+  /* Custom Scrollbar for inner lists */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-surface-container-high);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-outline-variant);
+  }
+}
