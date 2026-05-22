@@ -1,5 +1,4 @@
 target/
-!target/*.jar
 .idea/
 .vscode/
 .git/
@@ -7,4 +6,6 @@ target/
 *.md
 .codex/
 .notebook/
-.mvn/wrapper/maven-wrapper.jar
+.env
+.env.*
+src/main/resources/.env

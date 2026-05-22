@@ -37,35 +37,32 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      # Profile
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      # Docker-local profile with schema + sample data bootstrap
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
 
       # Database (points to the mysql service)
-      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-sodu}
+      DB_URL: ${DB_URL:-jdbc:mysql://mysql:3306/sodu?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh}
       DB_USERNAME: ${MYSQL_USER:-sobu_user}
       DB_PASSWORD: ${MYSQL_PASSWORD:-sobu_pass}
 
-      # JWT
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
+      # App secrets (safe local defaults for Docker-only development)
+      JWT_SECRET: ${JWT_SECRET:-3f9a8c1d7e5b4a2f9c6e8d1b7a3c5f2e9d4b6a1c8e7f5d3b2a9c1e6f8d4b7a2}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-7b2c9d4e6f1a3c5e8d0b2a7f9c4e6d1a}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-9a7c5e3f1b2d4a6c8e0f3b5d7a9c1e2f}
+      API_KEY: ${API_KEY:-docker-api-key-8f3d2c1b7a6e5f4d}
 
-      # Encryption
-      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-}
-      API_KEY: ${API_KEY:-}
+      # Frontend integration
+      SERVER_BASE_URL: ${SERVER_BASE_URL:-http://localhost:8081}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:4173,http://localhost:8081}
 
-      # Mail
-      SPRING_MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
-      SPRING_MAIL_PORT: ${MAIL_PORT:-587}
-      SPRING_MAIL_USERNAME: ${MAIL_USERNAME:-}
-      SPRING_MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-
-      # Nhanh Integration
-      NHANH_CLIENT_ID: ${NHANH_CLIENT_ID:-}
-      NHANH_CLIENT_SECRET: ${NHANH_CLIENT_SECRET:-}
-      NHANH_REDIRECT_URI: ${NHANH_REDIRECT_URI:-}
+      # Nhanh integration defaults keep the app bootable on a fresh laptop
+      NHANH_CLIENT_ID: ${NHANH_CLIENT_ID:-docker-nhanh-client-id}
+      NHANH_CLIENT_SECRET: ${NHANH_CLIENT_SECRET:-docker-nhanh-client-secret}
+      NHANH_REDIRECT_URI: ${NHANH_REDIRECT_URI:-http://localhost:8081/api/nhanh/oauth/callback}
+      NHANH_BUSINESS_ID: ${NHANH_BUSINESS_ID:-docker-local-business}
 
       # JVM tuning
-      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx512m}
     ports:
       - "${BACKEND_PORT:-8081}:8081"
     volumes:
