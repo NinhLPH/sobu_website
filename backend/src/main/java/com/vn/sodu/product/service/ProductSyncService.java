@@ -14,14 +14,13 @@ import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.product.repo.ProductUnitRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.*;
-import org.springframework.scheduling.annotation.Scheduled;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.scheduling.annotation.Scheduled;
+import com.vn.sodu.nhanh.service.NhanhClient;
 
 import java.util.HashMap;
 import java.util.List;
@@ -40,18 +39,9 @@ public class ProductSyncService {
     private final ProductMapper productMapper;
     private final NhanhService nhanhService;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final NhanhClient nhanhClient;
 
     private static final String PRODUCT_LIST_PATH = "/v3.0/product/list";
-
-    @Value("${nhanh.base-url:}")
-    private String nhanhBaseUrl;
-
-    @Value("${nhanh.client-id:}")
-    private String clientId;
-
-    @Value("${nhanh.business-id:}")
-    private String businessId;
 
     @Scheduled(cron = "${nhanh.sync.cron:0 0 * * * *}")
     public void syncProducts() {
@@ -86,8 +76,12 @@ public class ProductSyncService {
 
         log.info("Nhanh sync done. total={}, success={}, failed={}",
                 products.size(), success, failed);
-        
-        // Update lastSyncTime after successful sync
+
+        if (failed > 0) {
+            throw new IllegalStateException("Nhanh product sync completed with " + failed + " failed item(s)");
+        }
+
+        // Update lastSyncTime only after every fetched product is persisted.
         nhanhService.updateLastSyncTime(currentSyncTime);
     }
 
@@ -174,75 +168,21 @@ public class ProductSyncService {
     // FETCH ALL (pagination)
     // =============================
     public List<NhanhProductDTO> fetchAllProducts(Long lastSyncTime) {
-
-        String url = buildProductListUrl();
-
         String accessToken = nhanhService.getValidAccessToken();
 
-
-        return fetchAllProductsWithFetcher(nextCursor -> {
-            Map<String, Object> body = buildProductListRequestBody(lastSyncTime, nextCursor);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", accessToken);
-            log.info(url);
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-
-            // Kiểu trả về phải là NhanhProductListResponse
-            Supplier<NhanhResponse<List<NhanhProductDTO>>> call = () -> {
-                ResponseEntity<String> raw = restTemplate.postForEntity(url, request, String.class);
-                log.info("Dữ liệu thô từ Nhanh: {}", raw.getBody());
-                ResponseEntity<NhanhResponse<List<NhanhProductDTO>>> response =
-                        restTemplate.exchange(
-                                url,
-                                HttpMethod.POST,
-                                request,
-                                new ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
-                        );
-                return response.getBody();
-            };
-
-            return withRetry(call, 3, 500);
-        });
-    }
-
-    String buildProductListUrl() {
-        if (nhanhBaseUrl == null || nhanhBaseUrl.isBlank()) {
-            throw new IllegalStateException("nhanh.base-url is not configured");
-        }
-        if (clientId == null || clientId.isBlank()) {
-            throw new IllegalStateException("nhanh.client-id is not configured");
-        }
-        if (businessId == null || businessId.isBlank()) {
-            throw new IllegalStateException("nhanh.business-id is not configured");
-        }
-
-        return UriComponentsBuilder.fromHttpUrl(nhanhBaseUrl)
-                .replacePath(PRODUCT_LIST_PATH)
-                .queryParam("appId", clientId)
-                .queryParam("businessId", businessId)
-                .toUriString();
-    }
-
-    Map<String, Object> buildProductListRequestBody(Long lastSyncTime, Object nextCursor) {
-        Map<String, Object> body = new HashMap<>();
+        Map<String, Object> baseFilters = null;
         Long normalizedLastSyncTime = normalizeLastSyncTime(lastSyncTime);
-
         if (normalizedLastSyncTime != null) {
-            Map<String, Object> filters = new HashMap<>();
-            filters.put("updatedAtFrom", normalizedLastSyncTime);
-            body.put("filters", filters);
+            baseFilters = new HashMap<>();
+            baseFilters.put("updatedAtFrom", normalizedLastSyncTime);
         }
 
-        Map<String, Object> paginator = new HashMap<>();
-        paginator.put("size", 50);
-        if (nextCursor != null) {
-            paginator.put("next", nextCursor);
-        }
-        body.put("paginator", paginator);
-
-        return body;
+        return nhanhClient.fetchAllPages(
+                PRODUCT_LIST_PATH,
+                accessToken,
+                baseFilters,
+                new org.springframework.core.ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
+        );
     }
 
     private Long normalizeLastSyncTime(Long lastSyncTime) {
@@ -250,79 +190,5 @@ public class ProductSyncService {
             return null;
         }
         return lastSyncTime;
-    }
-
-    // Package-private for testing: supply a fetcher function that returns NhanhProductListResponse for a page
-    List<NhanhProductDTO> fetchAllProductsWithFetcher(
-            java.util.function.Function<Object, NhanhResponse<List<NhanhProductDTO>>> fetcher) {
-
-        List<NhanhProductDTO> result = new java.util.ArrayList<>();
-        Object nextCursor = null;
-        int requestCount = 0;
-
-        while (true) {
-            requestCount++;
-            NhanhResponse<List<NhanhProductDTO>> resp;
-            try {
-                resp = fetcher.apply(nextCursor);
-            } catch (Exception ex) {
-                log.error("Failed to fetch products from Nhanh at request={}", requestCount, ex);
-                throw new RuntimeException("Nhanh API fetch failed", ex);
-            }
-
-            if (resp == null) {
-                log.error("Nhanh response is null at request={}", requestCount);
-                throw new RuntimeException("Invalid response: null");
-            }
-
-            if (resp.getCode() != 1) {
-                log.error("Nhanh API returned non-success code at request={}: {}", requestCount, resp.getCode());
-                throw new RuntimeException("Nhanh API error, code=" + resp.getCode());
-            }
-
-            if (resp.getData() == null) {
-                log.error("Nhanh response data is null at request={}", requestCount);
-                throw new RuntimeException("Invalid response: data is null");
-            }
-
-            List<NhanhProductDTO> products = resp.getData();
-            if (products.isEmpty()) {
-                break;
-            }
-
-            result.addAll(products);
-
-            if (resp.getPaginator() == null || resp.getPaginator().getNext() == null) {
-                break;
-            }
-
-            nextCursor = resp.getPaginator().getNext();
-        }
-        return result;
-    }
-
-    // Simple retry helper with exponential backoff
-    private <T> T withRetry(java.util.function.Supplier<T> supplier, int maxAttempts, long initialDelayMs) {
-        int attempt = 0;
-        long delay = initialDelayMs;
-        while (true) {
-            try {
-                attempt++;
-                return supplier.get();
-            } catch (Exception ex) {
-                if (attempt >= maxAttempts) {
-                    log.error("Operation failed after {} attempts", attempt, ex);
-                    throw ex;
-                }
-                log.warn("Operation failed on attempt {} - retrying after {}ms", attempt, delay);
-                try {
-                    Thread.sleep(delay);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Retry interrupted", ie);
-                }
-                delay *= 2;
-            }
-        }
     }
 }

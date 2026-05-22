@@ -2,10 +2,10 @@ package com.vn.sodu.nhanh.service;
 
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
+import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhTokenResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,18 +16,13 @@ public class NhanhService {
 
     private final NhanhClient nhanhClient;
     private final NhanhIntegrationRepo nhanhIntegrationRepo;
-
-    @Value("${nhanh.client-id}")
-    private String clientId;
-
-    @Value("${nhanh.redirect-uri}")
-    private String redirectUri;
+    private final NhanhProperties nhanhProperties;
 
     // 1. Generate login URL
     public String buildAuthUrl() {
         return "https://open.nhanh.vn/oauth/authorize?" +
-                "client_id=" + clientId +
-                "&redirect_uri=" + redirectUri +
+                "client_id=" + nhanhProperties.getClientId() +
+                "&redirect_uri=" + nhanhProperties.getRedirectUri() +
                 "&response_type=code";
     }
 
@@ -48,7 +43,7 @@ public class NhanhService {
                 .orElse(new NhanhIntegration());
 
         entity.setBusinessId(response.getBusinessId());
-        entity.setAppId(clientId);
+        entity.setAppId(nhanhProperties.getClientId());
         entity.setAccessToken(response.getAccessToken());
         entity.setExpiredAt(response.getExpiredAt());
 

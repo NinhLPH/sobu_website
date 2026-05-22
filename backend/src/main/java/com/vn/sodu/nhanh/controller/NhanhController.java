@@ -20,11 +20,7 @@ import java.nio.charset.StandardCharsets;
 public class NhanhController {
 
     private final NhanhService nhanhService;
-    @Value("${nhanh.redirect-uri}")
-    private String redirectUri;
-
-    @Value("${nhanh.client-id}")
-    private String clientId;
+    private final com.vn.sodu.nhanh.NhanhProperties nhanhProperties;
 
     @GetMapping("/oauth/callback")
     public ResponseEntity<String> callback(@RequestParam("accessCode") String accessCode) {
@@ -35,8 +31,8 @@ public class NhanhController {
     public ResponseEntity<String> login() {
         String url = "https://nhanh.vn/oauth?" +
                 "version=3.0" +
-                "&appId=" + clientId +
-                "&returnLink=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8);
+                "&appId=" + nhanhProperties.getClientId() +
+                "&returnLink=" + URLEncoder.encode(nhanhProperties.getRedirectUri(), StandardCharsets.UTF_8);
 
         return ResponseEntity.ok(url);
     }

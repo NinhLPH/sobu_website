@@ -1,6 +1,5 @@
 package com.vn.sodu.storage;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -24,8 +23,8 @@ public class LocalStorageServiceImpl implements StorageService {
 
     private final Path rootLocation;
 
-    public LocalStorageServiceImpl(@Value("${app.storage.local.dir:uploads}") String localDir) {
-        this.rootLocation = Paths.get(localDir);
+    public LocalStorageServiceImpl(StorageProperties storageProperties) {
+        this.rootLocation = Paths.get(storageProperties.getLocal().getDir());
         init();
     }
 

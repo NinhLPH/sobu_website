@@ -2,6 +2,7 @@ package com.vn.sodu.nhanh.service;
 
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
+import com.vn.sodu.nhanh.NhanhProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,11 +24,14 @@ public class NhanhServiceAuthTest {
     @Mock
     private NhanhClient nhanhClient;
 
+    @Mock
+    private NhanhProperties nhanhProperties;
+
     private NhanhService nhanhService;
 
     @BeforeEach
     public void setUp() {
-        nhanhService = new NhanhService(nhanhClient, nhanhIntegrationRepo);
+        nhanhService = new NhanhService(nhanhClient, nhanhIntegrationRepo, nhanhProperties);
     }
 
     @Test

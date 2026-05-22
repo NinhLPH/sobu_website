@@ -45,17 +45,11 @@ public class AuthController {
         content = @Content(schema = @Schema(implementation = LoginRequest.class))
     )
     public ResponseEntity<?> login(@org.springframework.web.bind.annotation.RequestBody LoginRequest loginRequest) {
-        try {
-            log.info("Login request for email: {}", loginRequest.getEmail());
-            LoginResponse response = authService.login(loginRequest);
-            return ResponseEntity.ok(
-                    ApiResponseDTO.success(response, "Login successful", HttpStatus.OK.value())
-            );
-        } catch (Exception e) {
-            log.error("Login error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponseDTO.error("Login failed", e.getMessage(), HttpStatus.UNAUTHORIZED.value()));
-        }
+        log.info("Login request for email: {}", loginRequest.getEmail());
+        LoginResponse response = authService.login(loginRequest);
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(response, "Login successful", HttpStatus.OK.value())
+        );
     }
 
     @PostMapping("/refresh-token")
@@ -75,17 +69,11 @@ public class AuthController {
         content = @Content(schema = @Schema(implementation = RefreshTokenRequest.class))
     )
     public ResponseEntity<?> refreshToken(@org.springframework.web.bind.annotation.RequestBody RefreshTokenRequest request) {
-        try {
-            log.info("Refresh token request");
-            LoginResponse response = authService.refreshToken(request);
-            return ResponseEntity.ok(
-                    ApiResponseDTO.success(response, "Token refreshed successfully", HttpStatus.OK.value())
-            );
-        } catch (Exception e) {
-            log.error("Refresh token error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponseDTO.error("Refresh token failed", e.getMessage(), HttpStatus.UNAUTHORIZED.value()));
-        }
+        log.info("Refresh token request");
+        LoginResponse response = authService.refreshToken(request);
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(response, "Token refreshed successfully", HttpStatus.OK.value())
+        );
     }
 
     @PostMapping("/register")
@@ -105,16 +93,10 @@ public class AuthController {
         content = @Content(schema = @Schema(implementation = RegisterRequest.class))
     )
     public ResponseEntity<?> register(@org.springframework.web.bind.annotation.RequestBody RegisterRequest registerRequest) {
-        try {
-            log.info("Register request for email: {}", registerRequest.getEmail());
-            RegisterResponse response = authService.register(registerRequest);
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(ApiResponseDTO.success(response, "Registration successful", HttpStatus.CREATED.value()));
-        } catch (Exception e) {
-            log.error("Registration error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Registration failed", e.getMessage(), HttpStatus.BAD_REQUEST.value()));
-        }
+        log.info("Register request for email: {}", registerRequest.getEmail());
+        RegisterResponse response = authService.register(registerRequest);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponseDTO.success(response, "Registration successful", HttpStatus.CREATED.value()));
     }
 
     @GetMapping("/activate")
@@ -131,15 +113,9 @@ public class AuthController {
     public ResponseEntity<?> activate(
         @Parameter(description = "Activation token from email", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
         @RequestParam("token") String token) {
-        try {
-            log.info("Activation request for token: {}", token);
-            RegisterResponse response = authService.activateAccount(token);
-            return ResponseEntity.ok(ApiResponseDTO.success(response, "Account activated", HttpStatus.OK.value()));
-        } catch (Exception e) {
-            log.error("Activation error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Activation failed", e.getMessage(), HttpStatus.BAD_REQUEST.value()));
-        }
+        log.info("Activation request for token: {}", token);
+        RegisterResponse response = authService.activateAccount(token);
+        return ResponseEntity.ok(ApiResponseDTO.success(response, "Account activated", HttpStatus.OK.value()));
     }
 
     @PostMapping("/logout")
@@ -156,24 +132,19 @@ public class AuthController {
     public ResponseEntity<?> logout(
         @Parameter(description = "JWT token in Bearer format", example = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
         @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        try {
-            log.info("Logout request");
-            
-            String token = null;
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-            }
-            
-            authService.logout(token);
-            
-            return ResponseEntity.ok(
-                    ApiResponseDTO.success(null, "Logout successful", HttpStatus.OK.value())
-            );
-        } catch (Exception e) {
-            log.error("Logout error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Logout failed", e.getMessage(), HttpStatus.BAD_REQUEST.value()));
+        
+        log.info("Logout request");
+        
+        String token = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
         }
+        
+        authService.logout(token);
+        
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(null, "Logout successful", HttpStatus.OK.value())
+        );
     }
 
     @GetMapping("/health")

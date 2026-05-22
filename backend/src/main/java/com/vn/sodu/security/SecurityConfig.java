@@ -30,27 +30,29 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    private static final String[] PUBLIC_ENDPOINTS = {
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/refresh-token",
+            "/api/auth/health",
+            "/api/auth/activate",
+            "/swagger-ui/**",
+            "/v3/api-docs/**",
+            "/swagger-ui.html",
+            "/actuator/health",
+            "/actuator/info",
+            "/actuator/nhanh-health",
+            "/api/public/**",
+            "/api/v1/public/**",
+            "/api/nhanh/**"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/auth/login",
-                                "/api/auth/register",
-                                "/api/auth/refresh-token",
-                                "/api/auth/health",
-                                "/api/auth/activate",
-                                "/swagger-ui/**",
-                        "/v3/api-docs/**",
-                        "/swagger-ui.html",
-                        "/actuator/health",
-                        "/actuator/info",
-                        "/actuator/nhanh-health",
-                        "/api/public/**",
-                        "/api/v1/public/**",
-                        "/api/nhanh/**"
-                ).permitAll()
+                        .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

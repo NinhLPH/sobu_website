@@ -8,10 +8,12 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "request_items")
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = "request")
 public class RequestItem {
 
     @Id
@@ -28,16 +30,15 @@ public class RequestItem {
     @Column(length = 255, nullable = false)
     private String name;
 
-    @Column(length = 255)
-    private String customName;
-
-    private BigDecimal price;
-
-    private Integer quantity;
+    @Column(length = 1000)
+    private String note;
 
     @Column(columnDefinition = "JSON")
-    private String specs;
+    private String metadataJson;
 
-    @Column(length = 500)
-    private String imageUrl;
+    @Column(precision = 19, scale = 2)
+    private BigDecimal price;
+
+    @Column(nullable = false)
+    private Integer quantity;
 }

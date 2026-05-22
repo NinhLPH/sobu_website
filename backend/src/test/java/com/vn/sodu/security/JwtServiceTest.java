@@ -8,23 +8,21 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.test.context.TestPropertySource;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Date;
 import java.util.HashSet;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
-@TestPropertySource(properties = {
-    "jwt.secret=ThisIsAVeryLongSecretKeyThatIsAtLeast256BitsForHS256Algorithm",
-    "jwt.access-token-expiration=3600000",
-    "jwt.refresh-token-expiration=86400000"
-})
+@ExtendWith(MockitoExtension.class)
 @DisplayName("JWT Service Tests")
 class JwtServiceTest {
 
-    @Autowired
+    @InjectMocks
     private JwtService jwtService;
 
     private UserDetails testUserDetails;
@@ -32,6 +30,10 @@ class JwtServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(jwtService, "secretKey", "ThisIsAVeryLongSecretKeyThatIsAtLeast256BitsForHS256Algorithm");
+        ReflectionTestUtils.setField(jwtService, "accessTokenExpiration", 3600000L);
+        ReflectionTestUtils.setField(jwtService, "refreshTokenExpiration", 86400000L);
+
         testUserDetails = new User("testuser@example.com", "password", new HashSet<>());
         anotherUserDetails = new User("anotheruser@example.com", "password", new HashSet<>());
     }

@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.SimpleMailMessage;
+import org.springframework.context.annotation.Profile;
 
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.Session;
@@ -15,6 +16,7 @@ import java.util.Properties;
 public class MailAutoConfiguration {
 
     @Bean
+    @Profile("!prod")
     @ConditionalOnMissingBean(JavaMailSender.class)
     public JavaMailSender javaMailSender() {
         return new JavaMailSenderImpl() {
