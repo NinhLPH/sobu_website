@@ -85,4 +85,23 @@ public class NhanhProductListResponseTest {
         assertEquals(1, response.getCode());
         assertEquals("cursor-2", response.getPaginator().getNext());
     }
+
+    @Test
+    public void testParseStringMessagesAsList() throws Exception {
+        String json = """
+                {
+                    "code": 0,
+                    "messages": "Invalid accessToken or accessToken has expired"
+                }
+                """;
+
+        ObjectMapper mapper = new ObjectMapper();
+        NhanhResponse<List<NhanhProductDTO>> response = mapper.readerFor(
+                mapper.getTypeFactory().constructParametricType(NhanhResponse.class,
+                        mapper.getTypeFactory().constructCollectionType(List.class, NhanhProductDTO.class))
+        ).readValue(json);
+
+        assertEquals(0, response.getCode());
+        assertEquals(List.of("Invalid accessToken or accessToken has expired"), response.getMessages());
+    }
 }

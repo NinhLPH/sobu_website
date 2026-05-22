@@ -1,6 +1,7 @@
 package com.vn.sodu.request.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vn.sodu.order.OrderService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.request.RequestAttachment;
@@ -52,6 +53,9 @@ class RequestWorkflowServiceTest {
         @Mock
         private RequestTimelineRepo requestTimelineRepo;
 
+        @Mock
+        private OrderService orderService;
+
         private RequestWorkflowService service;
 
         @BeforeEach
@@ -66,10 +70,10 @@ class RequestWorkflowServiceTest {
                                 requestSnapshotRepo,
                                 requestTimelineRepo,
                                 factory,
-                                new RequestNormalizer(),
-                                new RequestTransitionPolicy(),
-                                new RequestEditPolicy(),
-                                new ObjectMapper(), null);
+                                 new RequestNormalizer(),
+                                 new RequestTransitionPolicy(),
+                                 new RequestEditPolicy(),
+                                 new ObjectMapper(), orderService);
                 when(requestRepo.findByRequestCode(anyString())).thenReturn(Optional.empty());
                 when(requestRepo.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
         }
@@ -215,6 +219,36 @@ class RequestWorkflowServiceTest {
                                 "Need more detail");
 
                 assertThat(result.getStatus()).isEqualTo(RequestStatus.WAITING_CUSTOMER);
+                 verify(requestTimelineRepo).save(any());
+                 verify(requestSnapshotRepo).save(any());
+        }
+
+        @Test
+        void processRequestCreatesOrderWhenApproved() {
+                Request existing = Request.builder()
+                                .id(15L)
+                                .requestCode("SOBU-REQ-20260507210000-0006")
+                                .customerPhone("0123456789")
+                                .type(OrderType.NORMAL)
+                                .status(RequestStatus.REVIEWING)
+                                .items(new java.util.ArrayList<>(List.of(
+                                                RequestItem.builder()
+                                                                .nhanhProductId("P1")
+                                                                .name("Item A")
+                                                                .note("note")
+                                                                .price(new BigDecimal("100"))
+                                                                .quantity(1)
+                                                                .build())))
+                                .attachments(new java.util.ArrayList<>())
+                                .build();
+
+                attachBackReferences(existing);
+                when(requestRepo.findById(15L)).thenReturn(Optional.of(existing));
+
+                Request result = service.processRequest(15L, RequestStatus.APPROVED, "admin", "Approved");
+
+                assertThat(result.getStatus()).isEqualTo(RequestStatus.APPROVED);
+                verify(orderService).createFromApprovedRequest(result);
                 verify(requestTimelineRepo).save(any());
                 verify(requestSnapshotRepo).save(any());
         }

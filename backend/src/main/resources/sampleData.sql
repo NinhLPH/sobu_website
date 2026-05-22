@@ -355,16 +355,4 @@ is_public = VALUES(is_public),
 is_active = VALUES(is_active),
 updated_at = VALUES(updated_at);
 
--- ========================
--- NHANH INTEGRATION
--- ========================
-INSERT INTO nhanh_integration (
-id, business_id, app_id, access_token, expired_at, last_product_sync_time, created_at, updated_at
-) VALUES
-(1, 224003, '77323', 'sample-access-token', 1893456000, 1779454800, '2026-05-01 08:00:00', '2026-05-22 08:00:00')
-ON DUPLICATE KEY UPDATE
-app_id = VALUES(app_id),
-access_token = VALUES(access_token),
-expired_at = VALUES(expired_at),
-last_product_sync_time = VALUES(last_product_sync_time),
-updated_at = VALUES(updated_at);
+

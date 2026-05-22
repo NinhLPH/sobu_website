@@ -19,6 +19,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 
@@ -41,6 +42,7 @@ public class AuthService {
     /**
      * Authenticate user and generate JWT tokens
      */
+    @Transactional
     public LoginResponse login(LoginRequest request) {
         log.info("Login attempt for email: {}", request.getEmail());
         
@@ -119,6 +121,7 @@ public class AuthService {
     /**
      * Refresh access token using refresh token
      */
+    @Transactional(readOnly = true)
     public LoginResponse refreshToken(RefreshTokenRequest request) {
         log.info("Refresh token request");
         

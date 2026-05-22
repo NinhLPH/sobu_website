@@ -3,6 +3,7 @@ package com.vn.sodu.order;
 import com.vn.sodu.request.Request;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ public class OrderService {
     private final OrderConversionPolicy orderConversionPolicy;
     private final OrderCustomerResolver orderCustomerResolver;
     private final RequestToOrderMapper requestToOrderMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Order createFromApprovedRequest(Request request) {
@@ -38,6 +40,8 @@ public class OrderService {
         Order newOrder = requestToOrderMapper.mapToOrder(request, customer);
 
         // 5. Save order
-        return orderRepository.save(newOrder);
+        Order savedOrder = orderRepository.save(newOrder);
+        eventPublisher.publishEvent(new OrderCreatedEvent(savedOrder.getId(), request.getId()));
+        return savedOrder;
     }
 }

@@ -135,6 +135,7 @@ class NhanhClientTest {
     void testFetchAllPagesSanitizesErrorResponse() {
         NhanhResponse<List<NhanhProductDTO>> response =
                 new NhanhResponse<>(0, null, null);
+        response.setMessages(List.of("Invalid accessToken or accessToken has expired"));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), any(ParameterizedTypeReference.class)))
                 .thenReturn(ResponseEntity.ok(response));
 
@@ -145,7 +146,7 @@ class NhanhClientTest {
                 new ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
         ));
 
-        assertEquals("Nhanh API returned a non-success response", ex.getMessage());
+        assertEquals("Invalid accessToken or accessToken has expired", ex.getMessage());
         assertFalse(ex.getMessage().contains("code=0"));
     }
 }

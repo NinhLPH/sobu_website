@@ -144,8 +144,9 @@ public class NhanhClient {
             }
 
             if (resp.getCode() != 1) {
+                String message = errorMessage(resp);
                 log.error("Nhanh API returned non-success code at request={}: {}", requestCount, resp.getCode());
-                throw new ExternalServiceException("Nhanh API returned a non-success response");
+                throw new ExternalServiceException(message);
             }
 
             if (resp.getData() == null) {
@@ -167,6 +168,50 @@ public class NhanhClient {
             nextCursor = resp.getPaginator().getNext();
         }
         return result;
+    }
+
+    private String errorMessage(NhanhResponse<?> response) {
+        if (response.getMessages() == null || response.getMessages().isEmpty()) {
+            return "Nhanh API returned a non-success response";
+        }
+        return String.join("; ", response.getMessages());
+    }
+
+    public <REQ, RESP> RESP post(
+            String apiPath,
+            String accessToken,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
+
+        String url = UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
+                .replacePath(apiPath)
+                .queryParam("appId", nhanhProperties.getClientId())
+                .queryParam("businessId", nhanhProperties.getBusinessId())
+                .toUriString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", accessToken);
+
+        HttpEntity<REQ> request = new HttpEntity<>(body, headers);
+
+        Supplier<RESP> call = () -> {
+            ResponseEntity<RESP> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.POST,
+                            request,
+                            responseType
+                    );
+            return response.getBody();
+        };
+
+        try {
+            return withRetry(call, 3, 500);
+        } catch (Exception ex) {
+            log.error("Failed to post data to Nhanh {}", apiPath, ex);
+            throw new ExternalServiceException("Nhanh API post failed", ex);
+        }
     }
 
     private <T> T withRetry(Supplier<T> supplier, int maxAttempts, long initialDelayMs) {
