@@ -1,81 +1,28 @@
 services:
-  # ========================
-  # MySQL Database
-  # ========================
   mysql:
     image: mysql:8.0
     container_name: sobu-mysql
-    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-sodu}
-      MYSQL_USER: ${MYSQL_USER:-sobu_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-sobu_pass}
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_DATABASE: sobu
+      MYSQL_USER: user1
+      MYSQL_PASSWORD: 1234
     ports:
-      - "${MYSQL_PORT:-3307}:3306"
+      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    networks:
-      - sobu-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
-  # ========================
-  # Spring Boot Backend
-  # ========================
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: quanngo205/sobu-backend:1.0.2
     container_name: sobu-backend
-    restart: unless-stopped
     depends_on:
-      mysql:
-        condition: service_healthy
+      - mysql
     environment:
-      # Docker-local profile with schema + sample data bootstrap
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
-
-      # Database (points to the mysql service)
-      DB_URL: ${DB_URL:-jdbc:mysql://mysql:3306/sodu?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh}
-      DB_USERNAME: ${MYSQL_USER:-sobu_user}
-      DB_PASSWORD: ${MYSQL_PASSWORD:-sobu_pass}
-
-      # App secrets (safe local defaults for Docker-only development)
-      JWT_SECRET: ${JWT_SECRET:-3f9a8c1d7e5b4a2f9c6e8d1b7a3c5f2e9d4b6a1c8e7f5d3b2a9c1e6f8d4b7a2}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-7b2c9d4e6f1a3c5e8d0b2a7f9c4e6d1a}
-      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-9a7c5e3f1b2d4a6c8e0f3b5d7a9c1e2f}
-      API_KEY: ${API_KEY:-docker-api-key-8f3d2c1b7a6e5f4d}
-
-      # Frontend integration
-      SERVER_BASE_URL: ${SERVER_BASE_URL:-http://localhost:8081}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:4173,http://localhost:8081}
-
-      # Nhanh integration defaults keep the app bootable on a fresh laptop
-      NHANH_CLIENT_ID: ${NHANH_CLIENT_ID:-docker-nhanh-client-id}
-      NHANH_CLIENT_SECRET: ${NHANH_CLIENT_SECRET:-docker-nhanh-client-secret}
-      NHANH_REDIRECT_URI: ${NHANH_REDIRECT_URI:-http://localhost:8081/api/nhanh/oauth/callback}
-      NHANH_BUSINESS_ID: ${NHANH_BUSINESS_ID:-docker-local-business}
-
-      # JVM tuning
-      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms256m -Xmx512m}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/sobu
+      SPRING_DATASOURCE_USERNAME: user1
+      SPRING_DATASOURCE_PASSWORD: 1234
     ports:
-      - "${BACKEND_PORT:-8081}:8081"
-    volumes:
-      - uploads_data:/app/uploads
-    networks:
-      - sobu-network
+      - "8081:8081"
 
 volumes:
   mysql_data:
-    driver: local
-  uploads_data:
-    driver: local
-
-networks:
-  sobu-network:
-    driver: bridge

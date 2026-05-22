@@ -28,13 +28,13 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 
 # Copy extracted layers
-COPY --from=builder /app/target/extracted/dependencies/ ./
-COPY --from=builder /app/target/extracted/spring-boot-loader/ ./
-COPY --from=builder /app/target/extracted/snapshot-dependencies/ ./
-COPY --from=builder /app/target/extracted/application/ ./
+COPY --chown=appuser:appgroup --from=builder /app/target/extracted/dependencies/ ./
+COPY --chown=appuser:appgroup --from=builder /app/target/extracted/spring-boot-loader/ ./
+COPY --chown=appuser:appgroup --from=builder /app/target/extracted/snapshot-dependencies/ ./
+COPY --chown=appuser:appgroup --from=builder /app/target/extracted/application/ ./
 
-# Create uploads directory
-RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app
+# Chỉ chown uploads, không chown toàn bộ /app
+RUN mkdir -p /app/uploads && chown appuser:appgroup /app/uploads
 
 USER appuser
 
