@@ -1,0 +1,151 @@
+package com.vn.sodu.nhanh.service;
+
+import com.vn.sodu.global.exception.ExternalServiceException;
+import com.vn.sodu.nhanh.NhanhProperties;
+import com.vn.sodu.product.dto.NhanhProductDTO;
+import com.vn.sodu.product.dto.NhanhResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+class NhanhClientTest {
+
+    private RestTemplate restTemplate;
+    private NhanhClient nhanhClient;
+
+    @BeforeEach
+    void setUp() {
+        restTemplate = mock(RestTemplate.class);
+
+        NhanhProperties properties = new NhanhProperties();
+        properties.setBaseUrl("https://pos.open.nhanh.vn/api");
+        properties.setClientId("77323");
+        properties.setClientSecret("secret");
+        properties.setRedirectUri("http://localhost/callback");
+        properties.setBusinessId("224003");
+
+        nhanhClient = new NhanhClient(restTemplate, properties);
+    }
+
+    @Test
+    @DisplayName("Should build list request with app, business, filters, and paginator")
+    void testFetchAllPagesRequestShape() {
+        NhanhProductDTO dto = new NhanhProductDTO();
+        dto.setId(1L);
+        NhanhResponse<List<NhanhProductDTO>> response =
+                new NhanhResponse<>(1, List.of(dto), null);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        List<NhanhProductDTO> result = nhanhClient.fetchAllPages(
+                "/v3.0/product/list",
+                "token",
+                Map.of("updatedAtFrom", 1704067200L),
+                new ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
+        );
+
+        assertEquals(1, result.size());
+
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<HttpEntity> requestCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).exchange(urlCaptor.capture(), eq(HttpMethod.POST), requestCaptor.capture(), any(ParameterizedTypeReference.class));
+
+        assertEquals("https://pos.open.nhanh.vn/v3.0/product/list?appId=77323&businessId=224003", urlCaptor.getValue());
+        assertEquals("token", requestCaptor.getValue().getHeaders().getFirst("Authorization"));
+
+        Map<?, ?> body = (Map<?, ?>) requestCaptor.getValue().getBody();
+        assertEquals(Map.of("updatedAtFrom", 1704067200L), body.get("filters"));
+        Map<?, ?> paginator = (Map<?, ?>) body.get("paginator");
+        assertEquals(50, paginator.get("size"));
+        assertFalse(paginator.containsKey("next"));
+    }
+
+    @Test
+    @DisplayName("Should follow next cursor across pages")
+    void testFetchAllPagesUsesNextCursor() {
+        NhanhProductDTO first = new NhanhProductDTO();
+        first.setId(1L);
+        NhanhProductDTO second = new NhanhProductDTO();
+        second.setId(2L);
+
+        NhanhResponse<List<NhanhProductDTO>> page1 =
+                new NhanhResponse<>(1, List.of(first), new NhanhResponse.Paginator("cursor-2"));
+        NhanhResponse<List<NhanhProductDTO>> page2 =
+                new NhanhResponse<>(1, List.of(second), null);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(page1))
+                .thenReturn(ResponseEntity.ok(page2));
+
+        List<NhanhProductDTO> result = nhanhClient.fetchAllPages(
+                "/v3.0/product/list",
+                "token",
+                null,
+                new ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
+        );
+
+        assertEquals(2, result.size());
+
+        ArgumentCaptor<HttpEntity> requestCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate, times(2)).exchange(anyString(), eq(HttpMethod.POST), requestCaptor.capture(), any(ParameterizedTypeReference.class));
+        Map<?, ?> secondBody = (Map<?, ?>) requestCaptor.getAllValues().get(1).getBody();
+        Map<?, ?> secondPaginator = (Map<?, ?>) secondBody.get("paginator");
+        assertEquals("cursor-2", secondPaginator.get("next"));
+    }
+
+    @Test
+    @DisplayName("Should retry transient failures")
+    void testFetchAllPagesRetries() {
+        NhanhProductDTO dto = new NhanhProductDTO();
+        dto.setId(1L);
+        NhanhResponse<List<NhanhProductDTO>> response =
+                new NhanhResponse<>(1, List.of(dto), null);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), any(ParameterizedTypeReference.class)))
+                .thenThrow(new RuntimeException("temporary"))
+                .thenReturn(ResponseEntity.ok(response));
+
+        List<NhanhProductDTO> result = nhanhClient.fetchAllPages(
+                "/v3.0/product/list",
+                "token",
+                null,
+                new ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
+        );
+
+        assertEquals(1, result.size());
+        verify(restTemplate, times(2)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), any(ParameterizedTypeReference.class));
+    }
+
+    @Test
+    @DisplayName("Should throw sanitized error for upstream failure response")
+    void testFetchAllPagesSanitizesErrorResponse() {
+        NhanhResponse<List<NhanhProductDTO>> response =
+                new NhanhResponse<>(0, null, null);
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        ExternalServiceException ex = assertThrows(ExternalServiceException.class, () -> nhanhClient.fetchAllPages(
+                "/v3.0/product/list",
+                "token",
+                null,
+                new ParameterizedTypeReference<NhanhResponse<List<NhanhProductDTO>>>() {}
+        ));
+
+        assertEquals("Nhanh API returned a non-success response", ex.getMessage());
+        assertFalse(ex.getMessage().contains("code=0"));
+    }
+}

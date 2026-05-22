@@ -52,6 +52,9 @@ class AuthServiceTest {
     private PasswordEncrypt passwordEncrypt;
 
     @Mock
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+    @Mock
     private ActivationTokenRepo activationTokenRepo;
 
     @Mock
@@ -98,6 +101,7 @@ class AuthServiceTest {
     void testLoginSuccess() {
         when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
         when(passwordEncrypt.decrypt("encryptedPassword")).thenReturn("password123");
+        when(passwordEncoder.encode("password123")).thenReturn("$2a$10$hashed");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
         when(jwtService.generateAccessToken(testUserDetails)).thenReturn("accessToken");
         when(jwtService.generateRefreshToken(testUserDetails)).thenReturn("refreshToken");
@@ -265,7 +269,7 @@ class AuthServiceTest {
         RegisterResponse registerResponse = new RegisterResponse();
         
         when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.empty());
-        when(passwordEncrypt.encrypt("newpassword123")).thenReturn("encryptedNewPassword");
+        when(passwordEncoder.encode("newpassword123")).thenReturn("encryptedNewPassword");
         when(accountMapper.toEntity(registerRequest)).thenReturn(newAccount);
         when(accountRepo.save(any(Account.class))).thenReturn(newAccount);
         when(activationTokenRepo.save(any(ActivationToken.class))).thenReturn(new ActivationToken());
@@ -275,7 +279,7 @@ class AuthServiceTest {
 
         assertNotNull(response);
         verify(accountRepo).findByEmail("newuser@example.com");
-        verify(passwordEncrypt).encrypt("newpassword123");
+        verify(passwordEncoder).encode("newpassword123");
         verify(accountRepo).save(any(Account.class));
         verify(emailService).sendActivationEmail(any(Account.class), anyString());
     }
@@ -295,7 +299,7 @@ class AuthServiceTest {
         when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.empty());
         Account newAccount = new Account();
         when(accountMapper.toEntity(registerRequest)).thenReturn(newAccount);
-        when(passwordEncrypt.encrypt("newpassword123")).thenReturn("encrypted");
+        when(passwordEncoder.encode("newpassword123")).thenReturn("encrypted");
         when(accountRepo.save(any(Account.class))).thenReturn(newAccount);
         when(activationTokenRepo.save(any(ActivationToken.class))).thenReturn(new ActivationToken());
 
@@ -310,7 +314,7 @@ class AuthServiceTest {
         when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.empty());
         Account newAccount = new Account();
         when(accountMapper.toEntity(registerRequest)).thenReturn(newAccount);
-        when(passwordEncrypt.encrypt("newpassword123")).thenReturn("encrypted");
+        when(passwordEncoder.encode("newpassword123")).thenReturn("encrypted");
         when(accountRepo.save(any(Account.class))).thenReturn(newAccount);
         when(activationTokenRepo.save(any(ActivationToken.class))).thenReturn(new ActivationToken());
 

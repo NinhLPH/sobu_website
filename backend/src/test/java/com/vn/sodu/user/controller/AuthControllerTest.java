@@ -5,6 +5,7 @@ import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.user.dto.LoginRequest;
 import com.vn.sodu.user.dto.LoginResponse;
 import com.vn.sodu.user.dto.RefreshTokenRequest;
+import com.vn.sodu.global.exception.UnauthorizedException;
 import com.vn.sodu.user.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -72,7 +73,7 @@ class AuthControllerTest {
         req.setEmail("bad@example.com");
         req.setPassword("bad");
 
-        Mockito.when(authService.login(any(LoginRequest.class))).thenThrow(new RuntimeException("Invalid email or password"));
+        Mockito.when(authService.login(any(LoginRequest.class))).thenThrow(new UnauthorizedException("Invalid email or password"));
 
         mockMvc.perform(post("/api/auth/login").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -110,7 +111,7 @@ class AuthControllerTest {
         RefreshTokenRequest req = new RefreshTokenRequest();
         req.setRefreshToken("invalid");
 
-        Mockito.when(authService.refreshToken(any(RefreshTokenRequest.class))).thenThrow(new RuntimeException("Invalid or expired refresh token"));
+        Mockito.when(authService.refreshToken(any(RefreshTokenRequest.class))).thenThrow(new UnauthorizedException("Invalid or expired refresh token"));
 
         mockMvc.perform(post("/api/auth/refresh-token").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
                 .contentType(MediaType.APPLICATION_JSON)

@@ -8,16 +8,10 @@ import com.vn.sodu.product.category.mapper.CategoryMapper;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.*;
+import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
-
-import java.util.*;
-import java.util.function.Supplier;
+import com.vn.sodu.nhanh.service.NhanhClient;
 
 @Service
 @RequiredArgsConstructor
@@ -27,18 +21,9 @@ public class CategorySyncService {
     private final CategoryRepo categoryRepo;
     private final CategoryMapper categoryMapper;
     private final NhanhService nhanhService;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final NhanhClient nhanhClient;
 
     private static final String CATEGORY_LIST_PATH = "/v3.0/product/category";
-
-    @Value("${nhanh.base-url:}")
-    private String nhanhBaseUrl;
-
-    @Value("${nhanh.client-id:}")
-    private String clientId;
-
-    @Value("${nhanh.business-id:}")
-    private String businessId;
 
     /**
      * Khởi chạy tiến trình đồng bộ danh mục
@@ -142,66 +127,13 @@ public class CategorySyncService {
      * Lấy toàn bộ danh mục từ API Nhanh.vn
      */
     public List<NhanhCategoryDTO> fetchAllCategories() {
-        String url = buildCategoryListUrl();
         String accessToken = nhanhService.getValidAccessToken();
 
-        return fetchAllCategoriesWithFetcher(nextCursor -> {
-            Map<String, Object> body = buildCategoryListRequestBody(nextCursor);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Authorization", accessToken);
-
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-
-            Supplier<NhanhResponse<List<NhanhCategoryDTO>>> call = () -> {
-                ResponseEntity<NhanhResponse<List<NhanhCategoryDTO>>> response =
-                        restTemplate.exchange(url, HttpMethod.POST, request,
-                                new ParameterizedTypeReference<NhanhResponse<List<NhanhCategoryDTO>>>() {});
-                return response.getBody();
-            };
-
-            return withRetry(call, 3, 500);
-        });
-    }
-
-    // --- Các hàm hỗ trợ build URL/Request (Giữ nguyên logic của bạn) ---
-    private String buildCategoryListUrl() {
-        return UriComponentsBuilder.fromHttpUrl(nhanhBaseUrl).replacePath(CATEGORY_LIST_PATH)
-                .queryParam("appId", clientId).queryParam("businessId", businessId).toUriString();
-    }
-
-    private Map<String, Object> buildCategoryListRequestBody(Object nextCursor) {
-        Map<String, Object> body = new HashMap<>();
-        Map<String, Object> paginator = new HashMap<>();
-        paginator.put("size", 50);
-        if (nextCursor != null) paginator.put("next", nextCursor);
-        body.put("paginator", paginator);
-        return body;
-    }
-
-    private List<NhanhCategoryDTO> fetchAllCategoriesWithFetcher(java.util.function.Function<Object, NhanhResponse<List<NhanhCategoryDTO>>> fetcher) {
-        List<NhanhCategoryDTO> result = new ArrayList<>();
-        Object nextCursor = null;
-
-        while (true) {
-            NhanhResponse<List<NhanhCategoryDTO>> resp = fetcher.apply(nextCursor);
-            if (resp == null || resp.getCode() != 1 || resp.getData() == null) break;
-
-            result.addAll(resp.getData());
-            if (resp.getPaginator() == null || resp.getPaginator().getNext() == null) break;
-            nextCursor = resp.getPaginator().getNext();
-        }
-        return result;
-    }
-
-    private <T> T withRetry(Supplier<T> supplier, int maxAttempts, long initialDelayMs) {
-        int attempt = 0; long delay = initialDelayMs;
-        while (true) {
-            try { return supplier.get(); } catch (Exception ex) {
-                if (++attempt >= maxAttempts) throw ex;
-                try { Thread.sleep(delay); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new RuntimeException(ie); }
-                delay *= 2;
-            }
-        }
+        return nhanhClient.fetchAllPages(
+                CATEGORY_LIST_PATH,
+                accessToken,
+                null,
+                new org.springframework.core.ParameterizedTypeReference<NhanhResponse<List<NhanhCategoryDTO>>>() {}
+        );
     }
 }

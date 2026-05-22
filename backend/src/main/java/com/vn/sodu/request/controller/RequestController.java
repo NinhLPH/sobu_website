@@ -92,17 +92,10 @@ public class RequestController {
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection
     ) {
-        try {
-            PageResponse<RequestResponseDto> response = PageResponse.from(
-                    requestQueryService.listRequests(authentication, page, size, sortBy, sortDirection)
-            );
-            return ResponseEntity.ok(ApiResponseDTO.success(response, "My requests retrieved", HttpStatus.OK.value()));
-        } catch (RuntimeException ex) {
-            HttpStatus status = resolveStatus(ex);
-            log.warn("My request list error: {}", ex.getMessage());
-            return ResponseEntity.status(status)
-                    .body(ApiResponseDTO.error("Request retrieval failed", ex.getMessage(), status.value()));
-        }
+        PageResponse<RequestResponseDto> response = PageResponse.from(
+                requestQueryService.listRequests(authentication, page, size, sortBy, sortDirection)
+        );
+        return ResponseEntity.ok(ApiResponseDTO.success(response, "My requests retrieved", HttpStatus.OK.value()));
     }
 
     @GetMapping("/me/{requestId}")
@@ -129,15 +122,8 @@ public class RequestController {
             @PathVariable Long requestId,
             Authentication authentication
     ) {
-        try {
-            RequestResponseDto response = requestQueryService.getRequestDetail(requestId, authentication);
-            return ResponseEntity.ok(ApiResponseDTO.success(response, "Request retrieved", HttpStatus.OK.value()));
-        } catch (RuntimeException ex) {
-            HttpStatus status = resolveStatus(ex);
-            log.warn("My request detail error: {}", ex.getMessage());
-            return ResponseEntity.status(status)
-                    .body(ApiResponseDTO.error("Request retrieval failed", ex.getMessage(), status.value()));
-        }
+        RequestResponseDto response = requestQueryService.getRequestDetail(requestId, authentication);
+        return ResponseEntity.ok(ApiResponseDTO.success(response, "Request retrieved", HttpStatus.OK.value()));
     }
 
     @PostMapping
@@ -157,8 +143,9 @@ public class RequestController {
                             schema = @Schema(implementation = ApiResponseDTO.class)))
     })
     public ResponseEntity<?> createRequest(@Valid @RequestBody CreateRequestDto dto) {
-        return execute(HttpStatus.CREATED, "Request created", "Request creation failed",
-                () -> requestWorkflowService.createRequest(dto));
+        Request request = requestWorkflowService.createRequest(dto);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request created", HttpStatus.CREATED.value()));
     }
 
     @PutMapping("/{requestId}")
@@ -185,35 +172,8 @@ public class RequestController {
             @PathVariable Long requestId,
             @Valid @RequestBody UpdateRequestDto dto
     ) {
-        return execute(HttpStatus.OK, "Request updated", "Request update failed",
-                () -> requestWorkflowService.updateRequest(requestId, dto));
-    }
-
-    private ResponseEntity<?> execute(HttpStatus successStatus, String successMessage, String failureMessage,
-                                      java.util.function.Supplier<Request> action) {
-        try {
-            Request request = action.get();
-            return ResponseEntity.status(successStatus)
-                    .body(ApiResponseDTO.success(requestResponseMapper.toDto(request), successMessage, successStatus.value()));
-        } catch (RuntimeException ex) {
-            HttpStatus status = resolveStatus(ex);
-            log.warn("Request workflow error: {}", ex.getMessage());
-            return ResponseEntity.status(status)
-                    .body(ApiResponseDTO.error(failureMessage, ex.getMessage(), status.value()));
-        }
-    }
-
-    private HttpStatus resolveStatus(RuntimeException ex) {
-        if (ex instanceof IllegalStateException) {
-            return HttpStatus.CONFLICT;
-        }
-        if (ex instanceof org.springframework.security.access.AccessDeniedException) {
-            return HttpStatus.FORBIDDEN;
-        }
-        String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(java.util.Locale.ROOT);
-        if (message.contains("not found")) {
-            return HttpStatus.NOT_FOUND;
-        }
-        return HttpStatus.BAD_REQUEST;
+        Request request = requestWorkflowService.updateRequest(requestId, dto);
+        return ResponseEntity.status(HttpStatus.OK)
+                .body(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request updated", HttpStatus.OK.value()));
     }
 }

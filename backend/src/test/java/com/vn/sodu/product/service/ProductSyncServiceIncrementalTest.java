@@ -1,7 +1,9 @@
 package com.vn.sodu.product.service;
 
 import com.vn.sodu.nhanh.NhanhIntegration;
+import com.vn.sodu.nhanh.service.NhanhClient;
 import com.vn.sodu.nhanh.service.NhanhService;
+import com.vn.sodu.product.dto.NhanhProductDTO;
 import com.vn.sodu.product.repo.ProductAttributeRepo;
 import com.vn.sodu.product.repo.ProductImageRepo;
 import com.vn.sodu.product.repo.ProductRepo;
@@ -41,16 +43,13 @@ class ProductSyncServiceIncrementalTest {
     private ProductMapper productMapper;
     @Mock
     private NhanhService nhanhService;
+    @Mock
+    private NhanhClient nhanhClient;
 
     @InjectMocks
     private ProductSyncService productSyncService;
 
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(productSyncService, "nhanhBaseUrl", "https://pos.open.nhanh.vn/api");
-        ReflectionTestUtils.setField(productSyncService, "clientId", "77323");
-        ReflectionTestUtils.setField(productSyncService, "businessId", "224003");
-    }
+
 
     @Test
     @DisplayName("Should use lastSyncTime from integration and update it after sync")
@@ -89,46 +88,17 @@ class ProductSyncServiceIncrementalTest {
     }
 
     @Test
-    @DisplayName("Should build incremental request body using filters and paginator")
-    void testIncrementalRequestBodyShape() {
-        Long timestamp = 1704067200L;
+    @DisplayName("Should not advance last sync time when any product fails")
+    void testDoesNotAdvanceCursorWhenProductFails() {
+        NhanhProductDTO dto = new NhanhProductDTO();
+        dto.setId(123L);
+        when(nhanhService.getIntegration()).thenReturn(Optional.empty());
 
-        Map<String, Object> body = ReflectionTestUtils.invokeMethod(
-                productSyncService, "buildProductListRequestBody", timestamp, null);
+        ProductSyncService spyService = spy(productSyncService);
+        doReturn(Collections.singletonList(dto)).when(spyService).fetchAllProducts(null);
 
-        assertNotNull(body);
-        assertTrue(body.containsKey("filters"));
-        assertTrue(body.containsKey("paginator"));
-        assertFalse(body.containsKey("page"));
-        assertFalse(body.containsKey("pageSize"));
-
-        Map<String, Object> filters = (Map<String, Object>) body.get("filters");
-        Map<String, Object> paginator = (Map<String, Object>) body.get("paginator");
-        assertEquals(timestamp, filters.get("updatedAtFrom"));
-        assertEquals(50, paginator.get("size"));
-        assertFalse(paginator.containsKey("next"));
+        assertThrows(IllegalStateException.class, spyService::syncProducts);
+        verify(nhanhService, never()).updateLastSyncTime(anyLong());
     }
 
-    @Test
-    @DisplayName("Should build product URL from base URL, client id, and business id")
-    void testBuildProductListUrl() {
-        String url = ReflectionTestUtils.invokeMethod(productSyncService, "buildProductListUrl");
-
-        assertEquals("https://pos.open.nhanh.vn/v3.0/product/list?appId=77323&businessId=224003", url);
-    }
-
-    @Test
-    @DisplayName("Should omit updatedAtFrom when last sync time is zero")
-    void testFullSyncRequestBodyWhenLastSyncIsZero() {
-        Map<String, Object> body = ReflectionTestUtils.invokeMethod(
-                productSyncService, "buildProductListRequestBody", 0L, null);
-
-        assertNotNull(body);
-        assertFalse(body.containsKey("filters"));
-        assertTrue(body.containsKey("paginator"));
-
-        Map<String, Object> paginator = (Map<String, Object>) body.get("paginator");
-        assertEquals(50, paginator.get("size"));
-        assertFalse(paginator.containsKey("next"));
-    }
 }

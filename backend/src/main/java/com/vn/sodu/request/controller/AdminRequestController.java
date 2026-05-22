@@ -73,18 +73,11 @@ public class AdminRequestController {
             @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
             @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection
     ) {
-        try {
-            requireStaff(authentication);
-            PageResponse<RequestResponseDto> response = PageResponse.from(
-                    requestQueryService.listRequests(authentication, page, size, sortBy, sortDirection)
-            );
-            return ResponseEntity.ok(ApiResponseDTO.success(response, "Requests retrieved", HttpStatus.OK.value()));
-        } catch (RuntimeException ex) {
-            HttpStatus status = resolveStatus(ex);
-            log.warn("Admin request list error: {}", ex.getMessage());
-            return ResponseEntity.status(status)
-                    .body(ApiResponseDTO.error("Request retrieval failed", ex.getMessage(), status.value()));
-        }
+        requireStaff(authentication);
+        PageResponse<RequestResponseDto> response = PageResponse.from(
+                requestQueryService.listRequests(authentication, page, size, sortBy, sortDirection)
+        );
+        return ResponseEntity.ok(ApiResponseDTO.success(response, "Requests retrieved", HttpStatus.OK.value()));
     }
 
     @GetMapping("/{requestId}")
@@ -111,16 +104,9 @@ public class AdminRequestController {
             @PathVariable Long requestId,
             Authentication authentication
     ) {
-        try {
-            requireStaff(authentication);
-            RequestResponseDto response = requestQueryService.getRequestDetail(requestId, authentication);
-            return ResponseEntity.ok(ApiResponseDTO.success(response, "Request retrieved", HttpStatus.OK.value()));
-        } catch (RuntimeException ex) {
-            HttpStatus status = resolveStatus(ex);
-            log.warn("Admin request detail error: {}", ex.getMessage());
-            return ResponseEntity.status(status)
-                    .body(ApiResponseDTO.error("Request retrieval failed", ex.getMessage(), status.value()));
-        }
+        requireStaff(authentication);
+        RequestResponseDto response = requestQueryService.getRequestDetail(requestId, authentication);
+        return ResponseEntity.ok(ApiResponseDTO.success(response, "Request retrieved", HttpStatus.OK.value()));
     }
 
     @PutMapping("/{requestId}")
@@ -151,8 +137,9 @@ public class AdminRequestController {
             @Valid @RequestBody UpdateRequestDto dto,
             Authentication authentication
     ) {
-        return executeStaff(authentication, "Request updated", "Request update failed",
-                () -> requestWorkflowService.updateRequest(requestId, dto));
+        requireStaff(authentication);
+        Request request = requestWorkflowService.updateRequest(requestId, dto);
+        return ResponseEntity.ok(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request updated", HttpStatus.OK.value()));
     }
 
     @PostMapping("/{requestId}/process")
@@ -183,22 +170,9 @@ public class AdminRequestController {
             @Valid @RequestBody ProcessRequestDto dto,
             Authentication authentication
     ) {
-        return executeStaff(authentication, "Request processed", "Request processing failed",
-                () -> requestWorkflowService.processRequest(requestId, dto.getTargetStatus(), authentication.getName(), dto.getNote()));
-    }
-
-    private ResponseEntity<?> executeStaff(Authentication authentication, String successMessage, String failureMessage,
-                                           Supplier<Request> action) {
-        try {
-            requireStaff(authentication);
-            Request request = action.get();
-            return ResponseEntity.ok(ApiResponseDTO.success(requestResponseMapper.toDto(request), successMessage, HttpStatus.OK.value()));
-        } catch (RuntimeException ex) {
-            HttpStatus status = resolveStatus(ex);
-            log.warn("Admin request workflow error: {}", ex.getMessage());
-            return ResponseEntity.status(status)
-                    .body(ApiResponseDTO.error(failureMessage, ex.getMessage(), status.value()));
-        }
+        requireStaff(authentication);
+        Request request = requestWorkflowService.processRequest(requestId, dto.getTargetStatus(), authentication.getName(), dto.getNote());
+        return ResponseEntity.ok(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request processed", HttpStatus.OK.value()));
     }
 
     private void requireStaff(Authentication authentication) {
@@ -221,19 +195,5 @@ public class AdminRequestController {
             }
         }
         return false;
-    }
-
-    private HttpStatus resolveStatus(RuntimeException ex) {
-        if (ex instanceof IllegalStateException) {
-            return HttpStatus.CONFLICT;
-        }
-        if (ex instanceof AccessDeniedException) {
-            return HttpStatus.FORBIDDEN;
-        }
-        String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(Locale.ROOT);
-        if (message.contains("not found")) {
-            return HttpStatus.NOT_FOUND;
-        }
-        return HttpStatus.BAD_REQUEST;
     }
 }
