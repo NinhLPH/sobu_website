@@ -16,12 +16,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
@@ -33,6 +35,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -424,6 +427,39 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("Should map price sort alias to retailPrice")
+    void testGetPublicProductsSortByPriceAlias() {
+        ProductFilterRequest request = new ProductFilterRequest();
+        request.setSortBy("price");
+        request.setSortDirection("ASC");
+        stubPublicProductPage();
+
+        productService.getPublicProducts(request);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(productRepo).findAll(any(Specification.class), pageableCaptor.capture());
+        Sort.Order order = pageableCaptor.getValue().getSort().getOrderFor("retailPrice");
+        assertNotNull(order);
+        assertEquals(Sort.Direction.ASC, order.getDirection());
+    }
+
+    @Test
+    @DisplayName("Should fall back to id sort when sort field is unsupported")
+    void testGetPublicProductsInvalidSortByFallsBackToId() {
+        ProductFilterRequest request = new ProductFilterRequest();
+        request.setSortBy("unknownField");
+        stubPublicProductPage();
+
+        productService.getPublicProducts(request);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(productRepo).findAll(any(Specification.class), pageableCaptor.capture());
+        Sort.Order order = pageableCaptor.getValue().getSort().getOrderFor("id");
+        assertNotNull(order);
+        assertEquals(Sort.Direction.DESC, order.getDirection());
+    }
+
+    @Test
     @DisplayName("Should handle multiple filters combined")
     void testGetPublicProductsMultipleFilters() {
         ProductFilterRequest request = new ProductFilterRequest();
@@ -464,5 +500,16 @@ class ProductServiceTest {
         dto.setId(id);
         dto.setName("Test Product " + id);
         return dto;
+    }
+
+    private void stubPublicProductPage() {
+        reset(productRepo, productMapper);
+        List<Product> products = Arrays.asList(testProduct);
+        Page<Product> page = new PageImpl<>(products);
+
+        when(productRepo.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(page);
+        when(productMapper.toListItem(any(Product.class)))
+                .thenReturn(testListItemDTO);
     }
 }
