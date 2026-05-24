@@ -25,10 +25,26 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class ProductService {
+    private static final Map<String, String> SORT_FIELD_MAPPING = Map.ofEntries(
+            Map.entry("id", "id"),
+            Map.entry("name", "name"),
+            Map.entry("code", "code"),
+            Map.entry("price", "retailPrice"),
+            Map.entry("retailprice", "retailPrice"),
+            Map.entry("status", "status"),
+            Map.entry("brandname", "brandName"),
+            Map.entry("categoryname", "categoryName"),
+            Map.entry("stockavailable", "stockAvailable"),
+            Map.entry("createdat", "createdAt"),
+            Map.entry("updatedat", "updatedAt")
+    );
+
     private final ProductRepo productRepo;
     private final ProductImageRepo productImageRepo;
     private final ProductAttributeRepo productAttributeRepo;
@@ -71,7 +87,7 @@ public class ProductService {
     }
 
     private Pageable toPageable(ProductFilterRequest request) {
-        String sortBy = (request.getSortBy() == null || request.getSortBy().isBlank()) ? "id" : request.getSortBy();
+        String sortBy = resolveSortBy(request.getSortBy());
         Sort.Direction direction;
         try {
             direction = Sort.Direction.fromString(
@@ -84,6 +100,14 @@ public class ProductService {
         int page = Math.max(request.getPage(), 0);
         int pageSize = request.getPageSize() > 0 ? Math.min(request.getPageSize(), 100) : 20;
         return PageRequest.of(page, pageSize, Sort.by(direction, sortBy));
+    }
+
+    private String resolveSortBy(String sortBy) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return "id";
+        }
+
+        return SORT_FIELD_MAPPING.getOrDefault(sortBy.trim().toLowerCase(Locale.ROOT), "id");
     }
 
     private Specification<Product> buildSpecification(ProductFilterRequest request) {

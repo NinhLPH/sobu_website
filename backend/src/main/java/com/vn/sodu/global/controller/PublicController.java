@@ -20,6 +20,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,9 +48,11 @@ public class PublicController {
                             schema = @Schema(implementation = PageResponse.class)))
     })
     public ResponseEntity<PageResponse<ProductListItemDTO>> getAllProducts(
+            @Parameter(description = "Search text", example = "shirt")
+            @RequestParam(name = "q", required = false) String query,
             @ParameterObject ProductFilterRequest request
     ) {
-        Page<ProductListItemDTO> result = productService.getPublicProducts(request);
+        Page<ProductListItemDTO> result = productService.getPublicProducts(applySearchFallback(request, query));
         return ResponseEntity.ok(PageResponse.from(result));
     }
 
@@ -96,7 +100,24 @@ public class PublicController {
             @RequestParam("q") String query,
             @ParameterObject ProductFilterRequest request
     ) {
-        Page<ProductListItemDTO> result = productService.searchProducts(query, request);
+        Page<ProductListItemDTO> result = productService.getPublicProducts(applySearchFallback(request, query));
+        return ResponseEntity.ok(PageResponse.from(result));
+    }
+
+    @PostMapping("/products/search")
+    @Operation(
+            summary = "Search public products with request body",
+            description = "Searches the public product catalogue with a JSON filter body to avoid long query strings."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Search completed successfully",
+                    content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = PageResponse.class)))
+    })
+    public ResponseEntity<PageResponse<ProductListItemDTO>> searchProducts(
+            @RequestBody(required = false) ProductFilterRequest request
+    ) {
+        Page<ProductListItemDTO> result = productService.getPublicProducts(request);
         return ResponseEntity.ok(PageResponse.from(result));
     }
 
@@ -112,5 +133,15 @@ public class PublicController {
     })
     public ResponseEntity<List<CategoryListItemDTO>> getAllCategories() {
         return ResponseEntity.ok(categoryService.getAll());
+    }
+
+    private ProductFilterRequest applySearchFallback(ProductFilterRequest request, String query) {
+        ProductFilterRequest safeRequest = request == null ? new ProductFilterRequest() : request;
+        if ((safeRequest.getSearch() == null || safeRequest.getSearch().isBlank())
+                && query != null
+                && !query.isBlank()) {
+            safeRequest.setSearch(query);
+        }
+        return safeRequest;
     }
 }

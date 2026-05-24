@@ -1,5 +1,6 @@
 package com.vn.sodu.product.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,6 +16,7 @@ public class ProductFilterRequest {
 
     private int page = 0;
     private int pageSize = 20;
+    @JsonAlias("q")
     private String search;
     private String sortBy = "id";
     private String sortDirection = "DESC";
