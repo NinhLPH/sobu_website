@@ -2,6 +2,8 @@ package com.vn.sodu.global.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.global.dto.PageResponse;
+import com.vn.sodu.product.brand.dto.BrandListItemDTO;
+import com.vn.sodu.product.brand.service.BrandService;
 import com.vn.sodu.product.category.service.CategoryService;
 import com.vn.sodu.product.dto.ProductFilterRequest;
 import com.vn.sodu.product.dto.ProductListItemDTO;
@@ -32,6 +34,9 @@ class PublicControllerTest {
 
     @Mock
     private ProductService productService;
+
+    @Mock
+    private BrandService brandService;
 
     @Mock
     private CategoryService categoryService;
@@ -87,5 +92,23 @@ class PublicControllerTest {
         assertThat(request.getSearch()).isEqualTo("mat na");
         assertThat(request.getSortBy()).isEqualTo("price");
         assertThat(request.getSortDirection()).isEqualTo("ASC");
+    }
+
+    @Test
+    void getAllBrandsReturnsBrandList() {
+        BrandListItemDTO dto = BrandListItemDTO.builder()
+                .id(10L)
+                .code("sobu")
+                .name("SoBu")
+                .status(1)
+                .build();
+        when(brandService.getAll()).thenReturn(List.of(dto));
+
+        ResponseEntity<List<BrandListItemDTO>> response = publicController.getAllBrands();
+
+        verify(brandService).getAll();
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody()).extracting(BrandListItemDTO::getName).containsExactly("SoBu");
     }
 }

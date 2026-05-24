@@ -3,6 +3,8 @@ package com.vn.sodu.global.controller;
 import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.product.dto.ProductDetailDTO;
 import com.vn.sodu.product.dto.ProductFilterRequest;
+import com.vn.sodu.product.brand.dto.BrandListItemDTO;
+import com.vn.sodu.product.brand.service.BrandService;
 import com.vn.sodu.product.category.dto.CategoryListItemDTO;
 import com.vn.sodu.product.category.service.CategoryService;
 import com.vn.sodu.product.dto.ProductListItemDTO;
@@ -35,6 +37,7 @@ import java.util.List;
 @Tag(name = "Public Catalog", description = "Guest-facing product catalogue endpoints")
 public class PublicController {
     private final ProductService productService;
+    private final BrandService brandService;
     private final CategoryService categoryService;
 
     @GetMapping("/products")
@@ -133,6 +136,20 @@ public class PublicController {
     })
     public ResponseEntity<List<CategoryListItemDTO>> getAllCategories() {
         return ResponseEntity.ok(categoryService.getAll());
+    }
+
+    @GetMapping("/brands")
+    @Operation(
+            summary = "Get all public brands",
+            description = "Returns the list of all brands for guest users."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Brands retrieved successfully",
+                    content = @Content(mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = BrandListItemDTO.class))))
+    })
+    public ResponseEntity<List<BrandListItemDTO>> getAllBrands() {
+        return ResponseEntity.ok(brandService.getAll());
     }
 
     private ProductFilterRequest applySearchFallback(ProductFilterRequest request, String query) {
