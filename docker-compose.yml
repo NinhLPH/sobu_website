@@ -13,7 +13,7 @@ services:
       - mysql_data:/var/lib/mysql
 
   backend:
-    image: quanngo205/sobu-backend:1.0.2
+    image: quanngo205/sobu-backend:1.0.3
     container_name: sobu-backend
     depends_on:
       - mysql
