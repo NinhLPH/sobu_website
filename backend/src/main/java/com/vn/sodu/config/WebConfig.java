@@ -1,5 +1,6 @@
 package com.vn.sodu.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -7,27 +8,21 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins:http://localhost:5173,http://localhost:5174,http://localhost:8081}")
+    @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:5174,http://localhost:8081,http://localhost:3000}")
     private String[] allowedOrigins;
+
+    @Value("${cors.max-age:3600}")
+    private long maxAge;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**") // Cho phép tất cả các endpoint bắt đầu bằng /api/
+        // All API endpoints: strict origin + credentials
+        registry.addMapping("/api/**")
                 .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .allowCredentials(true);
-        registry.addMapping("/api/public/**")
-                .allowedOrigins("*")
-                .allowedMethods("GET")
-                .allowCredentials(false);
-        registry.addMapping("/api/v1/public/**")
-                .allowedOrigins("*")
-                .allowedMethods("GET")
-                .allowCredentials(false);
-        registry.addMapping("/api/auth/**")
-                .allowedOrigins("*")
-                .allowedMethods("GET","POST","PUT")
-                .allowCredentials(false);
+                .exposedHeaders("Authorization")
+                .allowCredentials(true)
+                .maxAge(maxAge);
     }
 }
