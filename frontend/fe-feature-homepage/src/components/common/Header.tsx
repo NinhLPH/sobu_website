@@ -2,13 +2,15 @@ import {useState, useEffect, useRef} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {
     ShoppingCart, User, Search, Shield, ChevronDown, ChevronRight,
-    Car, Box, Wrench, Diamond, Layers, Trash2
+    Car, Box, Wrench, Diamond, Layers, Trash2, LogOut
 } from 'lucide-react';
 import {useCartStore} from "../../store/useCartStore";
 import {useAdminStore} from "../../store/useAdminStore";
 import {formatCurrency} from "../../util/format";
 import {megaMenuBrands} from "../../data/mockData";
 import {PublicCatalogService} from "../../service/public-catalog.service";
+import {useAuthStore} from "../../store/useAuthStore";
+import AuthModal from "./AuthModal";
 
 
 const getCategoryIcon = (catId: string) => {
@@ -39,10 +41,19 @@ export default function Header() {
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
     const cartRef = useRef<HTMLDivElement>(null);
 
+    // Auth States & Refs
+    const { isAuthenticated, user, logoutAction } = useAuthStore();
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (cartRef.current && !cartRef.current.contains(event.target as Node)) {
                 setIsMiniCartOpen(false);
+            }
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+                setIsUserMenuOpen(false);
             }
         }
 
@@ -266,15 +277,89 @@ export default function Header() {
                             )}
                         </div>
 
-                        <button className="flex items-center gap-2 pl-2">
-                            <div
-                                className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
-                                <User className="w-5 h-5"/>
-                            </div>
-                        </button>
+                        {/* USER PROFILE / AUTH BUTTON */}
+                        <div className="relative" ref={userMenuRef}>
+                            <button 
+                                onClick={() => {
+                                    if (isAuthenticated) {
+                                        setIsUserMenuOpen(!isUserMenuOpen);
+                                    } else {
+                                        setIsAuthModalOpen(true);
+                                    }
+                                }}
+                                className="flex items-center gap-2 pl-2 cursor-pointer transition-transform hover:scale-105 active:scale-95 outline-none"
+                                title={isAuthenticated ? "Tài khoản của bạn" : "Đăng nhập / Đăng ký"}
+                            >
+                                <div
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                        isAuthenticated 
+                                            ? 'bg-primary text-white shadow-md shadow-primary/20 font-black text-sm uppercase' 
+                                            : 'bg-surface-container-high text-primary hover:bg-surface-container-highest hover:scale-105'
+                                    }`}
+                                >
+                                    {isAuthenticated && user?.fullName ? (
+                                        <span>
+                                            {user.fullName.charAt(0)}
+                                        </span>
+                                    ) : (
+                                        <User className="w-5 h-5"/>
+                                    )}
+                                </div>
+                            </button>
+
+                            {/* USER PROFILE DROPDOWN */}
+                            {isAuthenticated && isUserMenuOpen && (
+                                <div
+                                    className="absolute top-full right-0 mt-2 w-[260px] bg-surface-container-lowest rounded-2xl shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] border border-surface-container/60 p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200"
+                                >
+                                    <div className="pb-3 border-b border-surface-container-high/60 mb-3">
+                                        <p className="text-xs font-black text-on-surface truncate">
+                                            {user?.fullName}
+                                        </p>
+                                        <p className="text-[10px] text-outline truncate mt-0.5">
+                                            {user?.email}
+                                        </p>
+                                        {user?.role && (
+                                            <span className="inline-block mt-2 text-[9px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                                {user.role.name === 'ROLE_ADMIN' ? 'Quản trị viên' : 'Thành viên'}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        {user?.role?.name === 'ROLE_ADMIN' && (
+                                            <Link
+                                                to="/admin"
+                                                onClick={() => setIsUserMenuOpen(false)}
+                                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                            >
+                                                <Shield className="w-4 h-4 text-primary" />
+                                                <span>Trang quản trị (Admin)</span>
+                                            </Link>
+                                        )}
+                                        <button
+                                            onClick={async () => {
+                                                setIsUserMenuOpen(false);
+                                                await logoutAction();
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-error hover:bg-error/10 transition-colors text-left cursor-pointer outline-none"
+                                        >
+                                            <LogOut className="w-4 h-4" />
+                                            <span>Đăng xuất</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* AUTHENTICATION MODAL */}
+            <AuthModal 
+                isOpen={isAuthModalOpen} 
+                onClose={() => setIsAuthModalOpen(false)} 
+            />
         </header>
     );
 }
