@@ -1,9 +1,10 @@
-import {useState, useMemo} from 'react';
+import {useState, useMemo, useEffect} from 'react';
 import {Link} from 'react-router-dom';
 import {ChevronRight, SlidersHorizontal, X} from 'lucide-react';
 
-import {mockProducts} from '../data/mockData';
 import ProductCard from "../components/common/ProductCard";
+import {useProductStore} from '../store/useProductStore';
+import {mapListItemToProductModel} from '../interface/product.model';
 
 export default function ProductList() {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -12,16 +13,34 @@ export default function ProductList() {
     const [inStockOnly, setInStockOnly] = useState<boolean>(false);
     const [priceRange, setPriceRange] = useState<number>(10000000);
 
-    const categories = Array.from(new Set(mockProducts.map(p => p.category).filter(Boolean))) as string[];
-    const brands = Array.from(new Set(mockProducts.map(p => p.brand).filter(b => b && b !== 'N/A'))) as string[];
-    const scales = Array.from(new Set(mockProducts.map(p => p.scale).filter(Boolean))) as string[];
+    const { products, fetchProducts } = useProductStore();
+
+    useEffect(() => {
+        fetchProducts();
+    }, [fetchProducts]);
+
+    const mappedProducts = useMemo(() => {
+        return products.map(mapListItemToProductModel);
+    }, [products]);
+
+    const categories = useMemo(() => {
+        return Array.from(new Set(mappedProducts.map(p => p.category).filter(Boolean))) as string[];
+    }, [mappedProducts]);
+
+    const brands = useMemo(() => {
+        return Array.from(new Set(mappedProducts.map(p => p.brand).filter(b => b && b !== 'N/A'))) as string[];
+    }, [mappedProducts]);
+
+    const scales = useMemo(() => {
+        return Array.from(new Set(mappedProducts.map(p => p.scale).filter(Boolean))) as string[];
+    }, [mappedProducts]);
 
     const toggleFilter = (item: string, list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>) => {
         setList(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
     };
 
     const filteredProducts = useMemo(() => {
-        return mockProducts.filter(p => {
+        return mappedProducts.filter(p => {
             const catMatch = selectedCategories.length === 0 || (p.category && selectedCategories.includes(p.category));
             const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(p.brand);
             const scaleMatch = selectedScales.length === 0 || (p.scale && selectedScales.includes(p.scale));
@@ -30,7 +49,7 @@ export default function ProductList() {
 
             return catMatch && brandMatch && scaleMatch && stockMatch && priceMatch;
         });
-    }, [selectedCategories, selectedBrands, selectedScales, inStockOnly, priceRange]);
+    }, [mappedProducts, selectedCategories, selectedBrands, selectedScales, inStockOnly, priceRange]);
 
     const clearFilters = () => {
         setSelectedCategories([]);

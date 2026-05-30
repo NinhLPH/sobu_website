@@ -72,3 +72,43 @@ export interface ProductDetailDTO {
     images: ProductImageDTO[];
     updatedAt: string;
 }
+
+export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel => {
+    return {
+        id: String(dto.id),
+        name: dto.name,
+        price: dto.price,
+        originalPrice: dto.oldPrice,
+        category: dto.categoryName || '',
+        brand: dto.brandName || '',
+        imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
+        description: '',
+        stock: dto.stockAvailable || 0,
+        isNew: dto.status === 'NEW',
+        isHot: dto.status === 'HOT',
+        rating: 4.8,
+        reviewsCount: 10,
+        thumbnailUrls: dto.avatarImage ? [dto.avatarImage] : []
+    };
+};
+
+export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => {
+    return {
+        id: String(dto.id),
+        name: dto.name,
+        price: dto.price,
+        originalPrice: dto.oldPrice,
+        category: dto.categoryName || '',
+        brand: dto.brandName || '',
+        imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
+        description: dto.description || dto.content || '',
+        stock: dto.stockAvailable || dto.stockRemain || 0,
+        isNew: false,
+        isHot: false,
+        rating: 4.8,
+        reviewsCount: 15,
+        thumbnailUrls: dto.images && dto.images.length > 0 
+            ? dto.images.map(img => img.url) 
+            : [dto.avatarImage || 'https://placehold.co/400x300?text=SOBU']
+    };
+};
