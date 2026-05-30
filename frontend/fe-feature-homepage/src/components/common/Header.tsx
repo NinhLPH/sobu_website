@@ -8,6 +8,8 @@ import {useCartStore} from "../../store/useCartStore";
 import {useAdminStore} from "../../store/useAdminStore";
 import {formatCurrency} from "../../util/format";
 import {megaMenuBrands} from "../../data/mockData";
+import {PublicCatalogService} from "../../service/public-catalog.service";
+
 
 const getCategoryIcon = (catId: string) => {
     switch (catId) {
@@ -53,6 +55,12 @@ export default function Header() {
             setActiveParentId(categories[0].id);
         }
     }, [categories, activeParentId]);
+
+    useEffect(() => {
+        if (isMiniCartOpen) {
+            console.log(PublicCatalogService.getBrands());
+        }
+    })
 
     const activeParentCategory = categories?.find(cat => cat.id === activeParentId) || categories?.[0];
 

@@ -1,9 +1,9 @@
 import { useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Product } from '../../interface/product';
+import { ProductModel } from '../../interface/product.model';
 import ProductCard from './ProductCard';
 
-export default function ProductSlider({ products }: { products: Product[] }) {
+export default function ProductSlider({ products }: { products: ProductModel[] }) {
     const sliderRef = useRef<HTMLDivElement>(null);
 
     const scroll = (direction: 'left' | 'right') => {

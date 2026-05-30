@@ -1,9 +1,9 @@
-import {Product} from "../interface/product";
-import {Category} from "../interface/category";
+import {ProductModel} from "../interface/product.model";
+import {CategoryModel} from "../interface/category.model";
 import {Order, OrderItem} from "../interface/order";
 import {ServiceRequest} from "../interface/service-request";
 
-export const mockCategories: Category[] = [
+export const mockCategories: CategoryModel[] = [
     {
         id: 'CAT_VEHICLE',
         name: 'Mô hình xe',
@@ -51,7 +51,7 @@ export const mockCategories: Category[] = [
     }
 ];
 
-export const mockProducts: Product[] = [
+export const mockProducts: ProductModel[] = [
     {
         id: 'SB-FER-082',
         name: 'Mẫu Xe Ferrari F8 Tributo Red',

@@ -2,9 +2,9 @@ import {useState} from 'react';
 import {Plus, Edit, Trash2, ChevronRight, ChevronDown, X} from 'lucide-react';
 
 import {useAdminStore} from '../../store/useAdminStore';
-import {Category, CategoryNodeProps} from "../../interface/category";
+import {CategoryModel, CategoryNodeProps} from "../../interface/category.model";
 
-function CategoryNode({category, level = 0, onEdit, onAddChild}: { category: Category, level?: number, onEdit: (category?: Category, parentId?: string) => void, onAddChild: (parentId: string) => void }) {
+function CategoryNode({category, level = 0, onEdit, onAddChild}: { category: CategoryModel, level?: number, onEdit: (category?: CategoryModel, parentId?: string) => void, onAddChild: (parentId: string) => void }) {
     const [expanded, setExpanded] = useState(true);
     const {deleteCategory} = useAdminStore();
 
@@ -75,12 +75,12 @@ export default function AdminCategories() {
     const {categories, addCategory, updateCategory} = useAdminStore();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingCategory, setEditingCategory] = useState<Partial<Category> | null>(null);
+    const [editingCategory, setEditingCategory] = useState<Partial<CategoryModel> | null>(null);
     const [isEditing, setIsEditing] = useState(false); // Thêm state này để xác định đúng chế độ
 
     // Flatten for parent dropdown
     const flatCategories: { id: string; name: string }[] = [];
-    const flatten = (cats: Category[], prefix = '') => {
+    const flatten = (cats: CategoryModel[], prefix = '') => {
         cats.forEach(c => {
             flatCategories.push({id: c.id, name: `${prefix}${c.name}`});
             if (c.children) flatten(c.children, `${prefix}${c.name} > `);
@@ -88,7 +88,7 @@ export default function AdminCategories() {
     };
     flatten(categories);
 
-    const handleOpenModal = (category?: Category, parentId?: string) => {
+    const handleOpenModal = (category?: CategoryModel, parentId?: string) => {
         if (category) {
             // Cập nhật: Lược bỏ children ra khỏi payload để tránh ghi đè mất danh mục con khi save
             const { children, ...rest } = category;
@@ -125,7 +125,7 @@ export default function AdminCategories() {
                 alert('Mã danh mục đã tồn tại, vui lòng chọn mã khác!');
                 return;
             }
-            addCategory(editingCategory as Category);
+            addCategory(editingCategory as CategoryModel);
         }
         handleCloseModal();
     };
@@ -159,7 +159,7 @@ export default function AdminCategories() {
                 )}
             </div>
 
-            {/* Category Modal */}
+            {/* CategoryModel Modal */}
             {isModalOpen && editingCategory && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
