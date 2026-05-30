@@ -3,6 +3,8 @@ package com.vn.sodu.order;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.order.nhanh.NhanhOrderGateway;
+import com.vn.sodu.order.repo.OrderRepository;
+import com.vn.sodu.order.services.OrderSyncService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.request.RequestStatus;
@@ -19,7 +21,6 @@ import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;

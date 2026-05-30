@@ -1,5 +1,6 @@
-package com.vn.sodu.order;
+package com.vn.sodu.order.dtos;
 
+import com.vn.sodu.order.OrderItem;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,7 +31,7 @@ public class OrderItemResponseDto {
     @Schema(description = "Item quantity")
     private Integer quantity;
 
-    static OrderItemResponseDto from(OrderItem item) {
+    public static OrderItemResponseDto from(OrderItem item) {
         if (item == null) {
             return null;
         }
