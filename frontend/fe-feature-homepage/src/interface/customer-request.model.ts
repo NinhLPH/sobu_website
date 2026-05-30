@@ -48,6 +48,7 @@ export interface CreateRequestDto {
         price?: number;
         note?: string;
     }[];
+    attachments?: string[];
 }
 
 export interface ProcessRequestDto {

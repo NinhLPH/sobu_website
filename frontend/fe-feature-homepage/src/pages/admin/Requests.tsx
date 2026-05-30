@@ -1,215 +1,436 @@
-import {useState} from 'react';
-import {Search, CheckCircle, XCircle} from 'lucide-react';
-
-import {useAdminStore} from '../../store/useAdminStore';
-import {formatCurrency} from "../../util/format";
-import {ServiceRequest} from "../../interface/service-request";
+import { useEffect, useState } from 'react';
+import { Search, ShieldAlert, CheckCircle, XCircle, SlidersHorizontal, Loader2, FileText, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { useRequestStore } from '../../store/useRequestStore';
+import { formatCurrency } from '../../util/format';
+import { RequestStatus, RequestType } from '../../enum/union-types';
 
 export default function AdminRequests() {
-    const {requests, updateRequest} = useAdminStore();
+    const { 
+        adminRequests, 
+        currentRequestDetail, 
+        fetchAdminRequests, 
+        getRequestDetail, 
+        processRequestAction, 
+        isLoading, 
+        isSubmitting, 
+        error, 
+        clearError 
+    } = useRequestStore();
+
+    // Filters
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedReq, setSelectedReq] = useState<ServiceRequest | null>(null);
+    const [statusFilter, setStatusFilter] = useState<string>('ALL');
+    const [typeFilter, setTypeFilter] = useState<string>('ALL');
 
-    const [editNotes, setEditNotes] = useState('');
-    const [editBudget, setEditBudget] = useState('');
+    // Process Form states (inside Modal)
+    const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
+    const [processAction, setProcessAction] = useState<RequestStatus>('REVIEWING');
+    const [processNote, setProcessNote] = useState('');
+    const [processDeposit, setProcessDeposit] = useState('');
+    const [processError, setProcessError] = useState<string | null>(null);
 
-    const filteredRequests = requests.filter(r =>
-        r.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    useEffect(() => {
+        fetchAdminRequests();
+    }, [fetchAdminRequests]);
+
+    // Handle selecting request detail
+    const handleSelectRequest = (id: string | number) => {
+        clearError();
+        setProcessError(null);
+        getRequestDetail(id, 'admin');
+    };
+
+    // Filter requests
+    const filteredRequests = adminRequests.filter(r => {
+        const matchesSearch = 
+            String(r.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (r.customerPhone && r.customerPhone.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (r.requestCode && r.requestCode.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
+        
+        // Exclude NORMAL request type from the requests flow entirely, as it goes to standard orders
+        const matchesType = typeFilter === 'ALL' ? r.type !== 'NORMAL' : r.type === typeFilter;
+
+        return matchesSearch && matchesStatus && matchesType;
+    });
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'PENDING':
-                return 'bg-amber-100 text-amber-800 border-amber-200';
-            case 'ACCEPTED':
-                return 'bg-blue-100 text-blue-800 border-blue-200';
-            case 'COMPLETED':
-                return 'bg-green-100 text-green-800 border-green-200';
-            case 'REJECTED':
-                return 'bg-red-100 text-red-800 border-red-200';
-            default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
+            case 'PENDING': return 'bg-amber-50 text-amber-700 border-amber-200';
+            case 'REVIEWING': return 'bg-blue-50 text-blue-700 border-blue-200';
+            case 'SOURCING': return 'bg-purple-50 text-purple-700 border-purple-200';
+            case 'WAITING_CUSTOMER': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+            case 'APPROVED': return 'bg-green-50 text-green-700 border-green-200';
+            case 'REJECTED': return 'bg-red-50 text-red-700 border-red-200';
+            case 'CANCELLED': return 'bg-gray-50 text-gray-700 border-gray-200';
+            default: return 'bg-gray-50 text-gray-700 border-gray-200';
         }
     };
 
-    const handleSelect = (req: ServiceRequest) => {
-        setSelectedReq(req);
-        setEditNotes(req.adminNotes || '');
-        setEditBudget(req.budget ? req.budget.toString() : '');
+    const getStatusText = (status: string) => {
+        switch (status) {
+            case 'PENDING': return 'Chờ Duyệt';
+            case 'REVIEWING': return 'Đang Xem Xét';
+            case 'SOURCING': return 'Đang Tìm Nguồn';
+            case 'WAITING_CUSTOMER': return 'Chờ Khách';
+            case 'APPROVED': return 'Đã Duyệt';
+            case 'REJECTED': return 'Từ Chối';
+            case 'CANCELLED': return 'Đã Hủy';
+            default: return status;
+        }
     };
 
-    const handleSave = () => {
-        if (!selectedReq) return;
-        updateRequest(selectedReq.id, {
-            adminNotes: editNotes,
-            budget: editBudget ? parseInt(editBudget) : undefined,
-        });
-        setSelectedReq({
-            ...selectedReq,
-            adminNotes: editNotes,
-            budget: editBudget ? parseInt(editBudget) : undefined,
-        });
+    const getTypeLabel = (type: string) => {
+        switch (type) {
+            case 'NORMAL': return 'Thông thường';
+            case 'PREORDER': return 'Pre-order';
+            case 'FINDING': return 'Tìm hàng';
+            case 'CUSTOM': return 'Độ ráp custom';
+            default: return type;
+        }
     };
 
-    const handleStatusChange = (status: ServiceRequest['status']) => {
-        if (!selectedReq) return;
-        updateRequest(selectedReq.id, {status});
-        setSelectedReq({...selectedReq, status});
+    const handleOpenProcessModal = () => {
+        if (!currentRequestDetail) return;
+        setProcessAction(currentRequestDetail.status);
+        setProcessNote('');
+        setProcessDeposit(currentRequestDetail.depositAmount > 0 ? currentRequestDetail.depositAmount.toString() : '');
+        setProcessError(null);
+        setIsProcessModalOpen(true);
+    };
+
+    const handleProcessSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!currentRequestDetail) return;
+
+        setProcessError(null);
+        clearError();
+
+        const depositVal = processDeposit ? parseFloat(processDeposit) : undefined;
+
+        try {
+            await processRequestAction(currentRequestDetail.id, {
+                action: processAction,
+                note: processNote,
+                depositAmount: depositVal
+            });
+            setIsProcessModalOpen(false);
+            // Refresh list
+            fetchAdminRequests();
+        } catch (err: any) {
+            setProcessError(err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi xử lý yêu cầu!');
+        }
     };
 
     return (
-        <div className="pt-6 space-y-6 flex flex-col md:flex-row gap-6">
-
-            {/* Left side: List */}
+        <div className="pt-6 space-y-6 flex flex-col md:flex-row gap-6 relative">
+            
+            {/* Left side: List with Filters */}
             <div className="flex-1 space-y-4">
                 <div className="flex justify-between items-center">
-                    <h1 className="text-2xl font-bold text-on-surface">Yêu cầu Dịch vụ</h1>
+                    <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">Yêu Cầu Từ Khách Hàng</h1>
                 </div>
 
-                <div
-                    className="bg-white p-4 rounded-xl border border-outline-variant/30 flex items-center gap-3 shadow-sm">
-                    <Search className="text-outline w-5 h-5"/>
-                    <input
-                        type="text"
-                        placeholder="Tìm mã hoặc tên khách..."
-                        className="bg-transparent border-none outline-none w-full text-sm"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                    />
-                </div>
-
-                <div className="space-y-3">
-                    {filteredRequests.map(req => (
-                        <div
-                            key={req.id}
-                            onClick={() => handleSelect(req)}
-                            className={`bg-white p-4 rounded-xl border cursor-pointer transition-colors ${
-                                selectedReq?.id === req.id ? 'border-primary shadow-md' : 'border-outline-variant/30 hover:border-primary/50'
-                            }`}
+                {/* Filter Toolbar */}
+                <div className="bg-white p-4 rounded-2xl border border-outline-variant/30 shadow-sm space-y-3">
+                    <div className="flex items-center gap-3 bg-surface-container rounded-xl px-4 py-2.5">
+                        <Search className="text-outline w-4 h-4"/>
+                        <input
+                            type="text"
+                            placeholder="Tìm kiếm mã, SĐT, hoặc ID yêu cầu..."
+                            className="bg-transparent border-none outline-none w-full text-xs font-semibold"
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-3">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-outline">
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            <span>Trạng thái:</span>
+                        </div>
+                        <select
+                            value={statusFilter}
+                            onChange={e => setStatusFilter(e.target.value)}
+                            className="bg-surface-container rounded-lg px-3 py-1.5 text-xs font-bold text-on-surface cursor-pointer outline-none border-none"
                         >
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                  <span
-                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-sm ${req.type === 'PRE_ORDER' ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>
-                    {req.type === 'PRE_ORDER' ? 'Pre-Order' : 'Custom Model'}
-                  </span>
-                                    <h3 className="font-bold text-on-surface mt-1">{req.customerName}</h3>
-                                </div>
-                                <span
-                                    className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full border ${getStatusColor(req.status)}`}>
-                  {req.status}
-                </span>
-                            </div>
-                            <p className="text-sm text-on-surface-variant line-clamp-1">{req.description}</p>
-                            <div className="text-xs text-outline mt-2 flex justify-between">
-                                <span>Mã: {req.id}</span>
-                                <span>{new Date(req.createdAt).toLocaleDateString('vi-VN')}</span>
-                            </div>
+                            <option value="ALL">Tất cả trạng thái</option>
+                            <option value="PENDING">Chờ duyệt (PENDING)</option>
+                            <option value="REVIEWING">Đang xem xét (REVIEWING)</option>
+                            <option value="SOURCING">Đang tìm nguồn (SOURCING)</option>
+                            <option value="WAITING_CUSTOMER">Chờ khách (WAITING_CUSTOMER)</option>
+                            <option value="APPROVED">Đã duyệt (APPROVED)</option>
+                            <option value="REJECTED">Từ chối (REJECTED)</option>
+                            <option value="CANCELLED">Đã hủy (CANCELLED)</option>
+                        </select>
+
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-outline ml-2">
+                            <span>Phân loại:</span>
                         </div>
-                    ))}
-                    {filteredRequests.length === 0 && (
-                        <div
-                            className="p-8 text-center text-on-surface-variant bg-white rounded-xl border border-outline-variant/30">
-                            Không có yêu cầu nào.
-                        </div>
-                    )}
+                        <select
+                            value={typeFilter}
+                            onChange={e => setTypeFilter(e.target.value)}
+                            className="bg-surface-container rounded-lg px-3 py-1.5 text-xs font-bold text-on-surface cursor-pointer outline-none border-none"
+                        >
+                            <option value="ALL">Tất cả loại</option>
+                            <option value="PREORDER">Pre-order (PREORDER)</option>
+                            <option value="FINDING">Tìm hàng (FINDING)</option>
+                            <option value="CUSTOM">Ráp độ custom (CUSTOM)</option>
+                        </select>
+                    </div>
                 </div>
+
+                {/* List contents */}
+                {isLoading && !currentRequestDetail ? (
+                    <div className="py-24 flex flex-col items-center justify-center bg-white rounded-2xl border border-outline-variant/30 shadow-sm">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+                        <p className="text-outline text-xs font-bold">Đang tải danh sách yêu cầu...</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {filteredRequests.map(req => (
+                            <div
+                                key={req.id}
+                                onClick={() => handleSelectRequest(req.id)}
+                                className={`bg-white p-5 rounded-2xl border cursor-pointer transition-all ${
+                                    currentRequestDetail?.id === req.id 
+                                        ? 'border-primary shadow-md scale-[1.01]' 
+                                        : 'border-outline-variant/30 hover:border-primary/50 hover:shadow-sm'
+                                }`}
+                            >
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <span className="text-[9px] bg-primary/10 text-primary font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                            #{req.requestCode || req.id}
+                                        </span>
+                                        <h3 className="font-black text-on-surface text-sm mt-2">{req.customerPhone}</h3>
+                                    </div>
+                                    <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${getStatusColor(req.status)}`}>
+                                        {getStatusText(req.status)}
+                                    </span>
+                                </div>
+                                
+                                <p className="text-xs text-outline/80 line-clamp-1 mb-3">
+                                    Loại: <span className="font-bold text-on-surface">{getTypeLabel(req.type)}</span> &bull; Sản phẩm: <span className="font-bold text-on-surface">{req.items?.map(i => i.name).join(', ') || 'N/A'}</span>
+                                </p>
+
+                                <div className="text-[10px] text-outline/60 flex justify-between border-t border-surface-container pt-3">
+                                    <span>Tổng: <strong className="text-primary font-black">{req.totalAmount > 0 ? formatCurrency(req.totalAmount) : 'Chờ báo giá'}</strong></span>
+                                    <span>{new Date(req.createdAt).toLocaleString('vi-VN')}</span>
+                                </div>
+                            </div>
+                        ))}
+
+                        {filteredRequests.length === 0 && (
+                            <div className="p-16 text-center text-outline bg-white rounded-2xl border border-outline-variant/30 shadow-sm flex flex-col items-center justify-center">
+                                <FileText className="w-10 h-10 text-outline/30 mb-3" />
+                                <h3 className="font-black text-on-surface text-base uppercase mb-1">Không tìm thấy yêu cầu</h3>
+                                <p className="text-xs text-outline/80">Vui lòng thử thay đổi từ khóa hoặc bộ lọc trạng thái.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
-            {/* Right side: Detail Form */}
-            {selectedReq && (
-                <div className="w-full md:w-96 flex-shrink-0">
-                    <div className="bg-white p-6 rounded-xl border border-outline-variant/30 shadow-sm sticky top-32">
-                        <h2 className="text-lg font-bold text-on-surface border-b border-outline-variant/30 pb-4 mb-4">
-                            Chi tiết Yêu cầu
-                        </h2>
+            {/* Right side: Detail & Process Request */}
+            <div className="w-full md:w-96 flex-shrink-0">
+                {currentRequestDetail ? (
+                    <div className="bg-white p-6 rounded-2xl border border-outline-variant/30 shadow-md sticky top-28 space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="flex justify-between items-center border-b border-surface-container pb-4">
+                            <h2 className="text-base font-black text-on-surface uppercase tracking-tight">Chi Tiết Yêu Cầu</h2>
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${getStatusColor(currentRequestDetail.status)}`}>
+                                {getStatusText(currentRequestDetail.status)}
+                            </span>
+                        </div>
 
-                        <div className="space-y-4 text-sm">
+                        <div className="space-y-4 text-xs">
                             <div>
-                                <p className="text-xs text-outline font-bold uppercase mb-1">Khách hàng</p>
-                                <p className="font-medium text-on-surface">{selectedReq.customerName}</p>
-                                <p className="text-on-surface-variant">{selectedReq.customerPhone} &bull; {selectedReq.customerEmail}</p>
+                                <p className="text-[10px] text-outline font-black uppercase mb-1">Khách hàng liên hệ</p>
+                                <p className="font-black text-on-surface text-sm">{currentRequestDetail.customerPhone}</p>
+                                <p className="text-[10px] text-outline/70 font-semibold mt-0.5">Phân loại: {getTypeLabel(currentRequestDetail.type)}</p>
                             </div>
 
-                            {selectedReq.type === 'PRE_ORDER' && selectedReq.productName && (
+                            <div>
+                                <p className="text-[10px] text-outline font-black uppercase mb-2">Danh sách mô hình yêu cầu</p>
+                                <div className="space-y-2">
+                                    {currentRequestDetail.items?.map((item, idx) => (
+                                        <div key={idx} className="p-3 bg-surface-container rounded-xl font-bold flex justify-between items-center gap-2">
+                                            <div>
+                                                <p className="text-on-surface line-clamp-2 leading-tight">{item.name}</p>
+                                                {item.note && <p className="text-[9px] text-outline font-medium mt-0.5">Ghi chú: {item.note}</p>}
+                                            </div>
+                                            <span className="shrink-0 text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-black">
+                                                x{item.quantity}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {currentRequestDetail.customRequirements?.note && (
                                 <div>
-                                    <p className="text-xs text-outline font-bold uppercase mb-1">Sản phẩm yêu cầu</p>
-                                    <p className="font-bold text-primary">{selectedReq.productName}</p>
+                                    <p className="text-[10px] text-outline font-black uppercase mb-1">Yêu cầu chi tiết từ khách</p>
+                                    <p className="p-3 bg-surface-container rounded-xl text-on-surface-variant leading-relaxed">
+                                        {currentRequestDetail.customRequirements.note}
+                                    </p>
                                 </div>
                             )}
 
-                            <div>
-                                <p className="text-xs text-outline font-bold uppercase mb-1">Nội dung / Mô tả</p>
-                                <p className="p-3 bg-surface-container-low rounded-lg text-on-surface">
-                                    {selectedReq.description}
-                                </p>
-                            </div>
-
-                            <div className="border-t border-outline-variant/30 pt-4 mt-4 space-y-4">
-                                <h3 className="font-bold text-on-surface">Nội bộ Admin (Khách không thấy)</h3>
-
-                                {selectedReq.type === 'CUSTOM' && (
-                                    <div>
-                                        <label className="text-xs text-outline font-bold uppercase mb-1 block">Chi phí
-                                            dự kiến (VND)</label>
-                                        <input
-                                            type="number"
-                                            className="w-full border border-outline-variant rounded bg-surface p-2 text-sm focus:ring-1 focus:ring-primary outline-none"
-                                            value={editBudget}
-                                            onChange={(e) => setEditBudget(e.target.value)}
-                                            placeholder="VD: 3000000"
-                                        />
-                                    </div>
-                                )}
-
+                            {/* Attachments list */}
+                            {currentRequestDetail.attachments && currentRequestDetail.attachments.length > 0 && (
                                 <div>
-                                    <label className="text-xs text-outline font-bold uppercase mb-1 block">Ghi chú xử
-                                        lý</label>
-                                    <textarea
-                                        className="w-full border border-outline-variant rounded bg-surface p-2 text-sm min-h-[80px] focus:ring-1 focus:ring-primary outline-none"
-                                        value={editNotes}
-                                        onChange={(e) => setEditNotes(e.target.value)}
-                                        placeholder="Ghi chú thêm trong quá trình làm việc với khách..."
-                                    />
+                                    <p className="text-[10px] text-outline font-black uppercase mb-2">Tệp ảnh đính kèm minh họa</p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {currentRequestDetail.attachments.map((att, idx) => (
+                                            <a 
+                                                key={idx} 
+                                                href={att.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="aspect-square bg-surface-container rounded-lg overflow-hidden border border-outline-variant/20 p-0.5 flex items-center justify-center hover:scale-105 transition-transform"
+                                                title="Mở ảnh gốc"
+                                            >
+                                                <img src={att.url} alt={`Attach ${idx}`} className="w-full h-full object-contain rounded-md" />
+                                            </a>
+                                        ))}
+                                    </div>
                                 </div>
+                            )}
 
-                                <button
-                                    onClick={handleSave}
-                                    className="w-full bg-surface-variant text-on-surface font-bold py-2 rounded border border-outline-variant hover:bg-surface transition-colors"
-                                >
-                                    Lưu thay đổi nội dung
-                                </button>
+                            {/* Quotation / Price details */}
+                            <div className="border-t border-surface-container pt-4 space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-outline font-bold">Giá cọc tối thiểu:</span>
+                                    <span className="text-on-surface font-black">
+                                        {currentRequestDetail.depositAmount > 0 ? formatCurrency(currentRequestDetail.depositAmount) : 'Chưa định giá'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-outline font-bold">Tổng chi phí dự kiến:</span>
+                                    <span className="text-primary font-black text-sm">
+                                        {currentRequestDetail.totalAmount > 0 ? formatCurrency(currentRequestDetail.totalAmount) : 'Chưa tính cọc'}
+                                    </span>
+                                </div>
                             </div>
 
-                            <div className="border-t border-outline-variant/30 pt-4 mt-4">
-                                <p className="text-xs text-outline font-bold uppercase mb-3 text-center">Phê duyệt yêu
-                                    cầu</p>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => handleStatusChange('ACCEPTED')}
-                                        className="flex-1 flex items-center justify-center gap-2 bg-green-100 text-green-700 hover:bg-green-200 py-2 rounded font-bold transition-colors"
-                                    >
-                                        <CheckCircle className="w-4 h-4"/> Tiếp nhận
-                                    </button>
-                                    <button
-                                        onClick={() => handleStatusChange('REJECTED')}
-                                        className="flex-1 flex items-center justify-center gap-2 bg-red-100 text-red-700 hover:bg-red-200 py-2 rounded font-bold transition-colors"
-                                    >
-                                        <XCircle className="w-4 h-4"/> Từ chối
-                                    </button>
-                                </div>
-                                {selectedReq.status === 'ACCEPTED' && (
-                                    <button
-                                        onClick={() => handleStatusChange('COMPLETED')}
-                                        className="w-full mt-2 bg-blue-600 text-white hover:bg-blue-700 py-2 rounded font-bold transition-colors shadow-sm"
-                                    >
-                                        Đánh dấu Hoàn thành
-                                    </button>
-                                )}
-                            </div>
+                            {/* Process Action Trigger */}
+                            <button
+                                onClick={handleOpenProcessModal}
+                                className="w-full py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-2xl text-xs font-black uppercase tracking-widest text-center shadow-md hover:scale-102 transition-transform mt-2 cursor-pointer flex items-center justify-center gap-1.5"
+                            >
+                                <CheckCircle2 className="w-4 h-4" /> Duyệt & xử lý đơn
+                            </button>
                         </div>
                     </div>
+                ) : (
+                    <div className="bg-white p-8 rounded-2xl border border-outline-variant/30 shadow-sm text-center py-20 sticky top-28 flex flex-col items-center justify-center">
+                        <ShieldAlert className="w-10 h-10 text-outline/30 mb-3" />
+                        <h3 className="font-black text-on-surface text-sm uppercase mb-1">Chưa chọn yêu cầu</h3>
+                        <p className="text-xs text-outline/80 leading-relaxed max-w-[200px] mx-auto">Chọn một yêu cầu bên trái để xem nội dung chi tiết và phê duyệt.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* --- PROCESS REQUEST MODAL OVERLAY --- */}
+            {isProcessModalOpen && currentRequestDetail && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-black/40 backdrop-blur-xs cursor-pointer"
+                        onClick={() => setIsProcessModalOpen(false)}
+                    />
+                    
+                    {/* Modal body */}
+                    <form 
+                        onSubmit={handleProcessSubmit}
+                        className="relative w-full max-w-md bg-white rounded-3xl shadow-xl border border-outline-variant/30 overflow-hidden z-10 animate-in fade-in zoom-in-95 p-6 space-y-4"
+                    >
+                        <div className="flex justify-between items-center border-b border-surface-container pb-3">
+                            <h3 className="text-sm font-black text-on-surface uppercase tracking-tight">Duyệt Yêu Cầu #{currentRequestDetail.requestCode || currentRequestDetail.id}</h3>
+                            <button 
+                                type="button" 
+                                onClick={() => setIsProcessModalOpen(false)}
+                                className="text-outline hover:text-error transition-colors font-bold text-xs"
+                            >
+                                Đóng
+                            </button>
+                        </div>
+
+                        {processError && (
+                            <div className="p-3.5 rounded-xl bg-error/10 border border-error/20 text-error text-xs font-bold">
+                                {processError}
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-[10px] font-black text-outline uppercase tracking-wider mb-2">Chuyển trạng thái yêu cầu</label>
+                            <select
+                                value={processAction}
+                                onChange={(e) => setProcessAction(e.target.value as RequestStatus)}
+                                className="w-full bg-surface-container rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent text-on-surface cursor-pointer"
+                            >
+                                <option value="PENDING">Chờ duyệt (PENDING)</option>
+                                <option value="REVIEWING">Đang xem xét (REVIEWING)</option>
+                                <option value="SOURCING">Đang tìm nguồn (SOURCING)</option>
+                                <option value="WAITING_CUSTOMER">Chờ khách hàng (WAITING_CUSTOMER)</option>
+                                <option value="APPROVED">Duyệt & Đồng ý (APPROVED)</option>
+                                <option value="REJECTED">Từ chối (REJECTED)</option>
+                                <option value="CANCELLED">Hủy yêu cầu (CANCELLED)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-outline tracking-wider mb-2 uppercase">Số tiền cọc đề xuất (VND)</label>
+                            <input
+                                type="number"
+                                value={processDeposit}
+                                onChange={(e) => setProcessDeposit(e.target.value)}
+                                placeholder="Ví dụ: 500000"
+                                className="w-full bg-surface-container rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent text-on-surface placeholder:text-outline/40"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-outline tracking-wider mb-2 uppercase">Ghi chú xử lý / Phản hồi khách</label>
+                            <textarea
+                                value={processNote}
+                                onChange={(e) => setProcessNote(e.target.value)}
+                                placeholder="Nhập tin nhắn phản hồi báo giá, mô tả sản phẩm tìm được..."
+                                className="w-full bg-surface-container rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent text-on-surface placeholder:text-outline/40 min-h-[90px]"
+                            />
+                        </div>
+
+                        {/* Actions buttons */}
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsProcessModalOpen(false)}
+                                className="flex-1 py-3 bg-surface-container text-on-surface rounded-xl text-xs font-black uppercase tracking-wider text-center hover:bg-surface-container-high transition-colors"
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="flex-1 py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl text-xs font-black uppercase tracking-wider text-center shadow-md hover:scale-[1.01] transition-transform flex items-center justify-center gap-1.5"
+                            >
+                                {isSubmitting ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <CheckCircle className="w-4 h-4" />
+                                )}
+                                <span>Phê Duyệt</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    {/* Loading overlay during submits */}
+                    {isSubmitting && (
+                        <div className="absolute inset-0 bg-white/40 backdrop-blur-xs flex items-center justify-center z-25">
+                            <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                        </div>
+                    )}
                 </div>
             )}
         </div>
