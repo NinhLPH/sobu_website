@@ -4,103 +4,205 @@ on:
   push:
     branches: [ "main", "dev" ]
     paths:
-      - 'backend/**'
-      - '.github/workflows/ci.yml'
+      - "backend/**"
+      - "frontend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [ "main", "dev" ]
     paths:
-      - 'backend/**'
-      - '.github/workflows/ci.yml'
+      - "backend/**"
+      - "frontend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE_NAME: sobu-backend
+  FRONTEND_IMAGE_NAME: sobu-frontend
 
 jobs:
-  backend-build:
+  frontend-test:
+    name: React tests
     runs-on: ubuntu-22.04
-    
+
+    defaults:
+      run:
+        working-directory: frontend/fe-feature-homepage
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4.1.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4.0.2
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/fe-feature-homepage/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run React tests
+        run: npm test -- --watchAll=false --passWithNoTests
+
+  backend-test:
+    name: Spring Boot tests
+    runs-on: ubuntu-22.04
+
     env:
-      SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/sodu
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
-      NHANH_CLIENT_ID: ${{ secrets.NHANH_CLIENT_ID }}
-      NHANH_CLIENT_SECRET: ${{ secrets.NHANH_CLIENT_SECRET }}
-      NHANH_REDIRECT_URI: ${{ secrets.NHANH_REDIRECT_URI }}
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:mysql://127.0.0.1:3306/sobu?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      DB_USERNAME: root
+      DB_PASSWORD: 1234
+      JWT_SECRET: 3f9a8c1d7e5b4a2f9c6e8d1b7a3c5f2e9d4b6a1c8e7f5d3b2a9c1e6f8d4b7a2
+      JWT_ACCESS_TOKEN_EXPIRATION: "900000"
+      JWT_REFRESH_TOKEN_EXPIRATION: "604800000"
+      ENCRYPTION_SECRET_KEY: 9a7c5e3f1b2d4a6c8e0f3b5d7a9c1e2f
+      API_KEY: ci-api-key-8f3d2c1b7a6e5f4d
+      SERVER_BASE_URL: http://localhost:8081
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8081
+      CORS_MAX_AGE: "3600"
+      APP_STORAGE_TYPE: local
+      APP_STORAGE_LOCAL_DIR: uploads
+      NHANH_CLIENT_ID: ci-nhanh-client-id
+      NHANH_CLIENT_SECRET: ci-nhanh-client-secret
+      NHANH_REDIRECT_URI: http://localhost:8081/api/nhanh/oauth/callback
+      NHANH_BUSINESS_ID: "0"
+      NHANH_BASE_URL: https://pos.open.nhanh.vn/api
+      NHANH_SYNC_CRON: "0 0 * * * *"
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: "587"
+      MAIL_USERNAME: ci@example.com
+      MAIL_PASSWORD: ci-mail-password
 
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: root
+          MYSQL_ROOT_PASSWORD: 1234
           MYSQL_DATABASE: sodu
         ports:
           - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -p1234"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     defaults:
       run:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4.1.2
+      - name: Check out repository
+        uses: actions/checkout@v4.1.2
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4.2.1
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: temurin
           cache: maven
+
+      - name: Make Maven wrapper executable
+        run: chmod +x ./mvnw
 
       - name: Wait for MySQL readiness
         run: |
           for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root -proot --silent; then
+            if (echo > /dev/tcp/127.0.0.1/3306) >/dev/null 2>&1; then
               echo "MySQL is ready"
-              break
+              exit 0
             fi
             echo "Waiting for MySQL..."
             sleep 2
           done
+          echo "MySQL did not become ready in time"
+          exit 1
 
-      - name: Build and Test with Maven
-        run: ./mvnw clean verify
+      - name: Run unit tests
+        run: ./mvnw -B test
 
-      - name: Upload Artifact
+      - name: Build Maven package
+        run: ./mvnw -B -DskipTests package
+
+      - name: Upload backend jar
         uses: actions/upload-artifact@v4.3.1
         with:
           name: backend-jar-${{ github.sha }}
           path: backend/target/*.jar
 
-  deploy:
-    needs: backend-build
-    if: github.ref == 'refs/heads/main'
+  docker-package:
+    name: Docker build, scan, and push
     runs-on: ubuntu-22.04
-    
-    defaults:
-      run:
-        working-directory: backend
-        
+    needs: [ frontend-test, backend-test ]
+
     steps:
-      - uses: actions/checkout@v4.1.2
-      
-      - name: Download Artifact
-        uses: actions/download-artifact@v4.1.7
+      - name: Check out repository
+        uses: actions/checkout@v4.1.2
+
+      - name: Prepare image names
+        run: |
+          echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"
+
+      - name: Build backend Docker image
+        run: |
+          docker build \
+            -t "${BACKEND_IMAGE_NAME}:${GITHUB_SHA}" \
+            -t "${REGISTRY}/${IMAGE_NAMESPACE}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}" \
+            -t "${REGISTRY}/${IMAGE_NAMESPACE}/${BACKEND_IMAGE_NAME}:${GITHUB_SHA}" \
+            backend
+
+      - name: Build frontend Docker image
+        run: |
+          docker build \
+            -t "${FRONTEND_IMAGE_NAME}:${GITHUB_SHA}" \
+            -t "${REGISTRY}/${IMAGE_NAMESPACE}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}" \
+            -t "${REGISTRY}/${IMAGE_NAMESPACE}/${FRONTEND_IMAGE_NAME}:${GITHUB_SHA}" \
+            frontend/fe-feature-homepage
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
         with:
-          name: backend-jar-${{ github.sha }}
-          path: backend/target/
-          
-      - name: Build Docker Image
-        run: docker build -t backend-app:${{ github.sha }} .
-        
-      - name: Export Docker Image
-        run: docker save backend-app:${{ github.sha }} -o backend-app-${{ github.sha }}.tar
-        
-      - name: Upload Docker Image Artifact
-        uses: actions/upload-artifact@v4.3.1
+          image-ref: ${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
         with:
-          name: backend-image-${{ github.sha }}
-          path: backend/backend-app-${{ github.sha }}.tar
-        
-      - name: Deploy to Production
-        run: echo "Deploy logic goes here"
+          image-ref: ${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push backend Docker image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push "${REGISTRY}/${IMAGE_NAMESPACE}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
+          docker push "${REGISTRY}/${IMAGE_NAMESPACE}/${BACKEND_IMAGE_NAME}:${GITHUB_SHA}"
+
+      - name: Push frontend Docker image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push "${REGISTRY}/${IMAGE_NAMESPACE}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+          docker push "${REGISTRY}/${IMAGE_NAMESPACE}/${FRONTEND_IMAGE_NAME}:${GITHUB_SHA}"
