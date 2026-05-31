@@ -1,28 +1,68 @@
 services:
   mysql:
-    image: mysql:8.0
-    container_name: sobu-mysql
+    image: ${MYSQL_IMAGE}
+    container_name: ${MYSQL_CONTAINER_NAME}
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: 1234
-      MYSQL_DATABASE: sobu
-      MYSQL_USER: user1
-      MYSQL_PASSWORD: 1234
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   backend:
-    image: quanngo205/sobu-backend:1.0.3
-    container_name: sobu-backend
+    image: ${BACKEND_IMAGE}
+    container_name: ${BACKEND_CONTAINER_NAME}
+    restart: unless-stopped
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/sobu
-      SPRING_DATASOURCE_USERNAME: user1
-      SPRING_DATASOURCE_PASSWORD: 1234
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS}
+      SERVER_PORT: ${SERVER_PORT}
+      SERVER_BASE_URL: ${SERVER_BASE_URL}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      CORS_MAX_AGE: ${CORS_MAX_AGE}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      API_KEY: ${API_KEY}
+      APP_STORAGE_TYPE: ${APP_STORAGE_TYPE}
+      APP_STORAGE_LOCAL_DIR: ${APP_STORAGE_LOCAL_DIR}
+      NHANH_CLIENT_ID: ${NHANH_CLIENT_ID}
+      NHANH_CLIENT_SECRET: ${NHANH_CLIENT_SECRET}
+      NHANH_REDIRECT_URI: ${NHANH_REDIRECT_URI}
+      NHANH_BUSINESS_ID: ${NHANH_BUSINESS_ID}
+      NHANH_BASE_URL: ${NHANH_BASE_URL}
+      NHANH_SYNC_CRON: ${NHANH_SYNC_CRON}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
     ports:
-      - "8081:8081"
+      - "${BACKEND_PORT}:${SERVER_PORT}"
+    volumes:
+      - backend_uploads:/app/uploads
 
 volumes:
   mysql_data:
+  backend_uploads:
