@@ -1,8 +1,20 @@
 import {useState} from 'react';
+import {useNavigate} from 'react-router-dom';
 import {Paintbrush, PackageSearch, RefreshCcw} from 'lucide-react';
+import {useAuthStore} from '../store/useAuthStore';
 
 export default function ServicesPage() {
     const [activeTab, setActiveTab] = useState<'custom' | 'preorder' | 'tradein'>('custom');
+    const navigate = useNavigate();
+    const {isAuthenticated} = useAuthStore();
+
+    const handleServiceSubmit = (type: 'CUSTOM' | 'PREORDER' | 'FINDING') => {
+        if (!isAuthenticated) {
+            navigate('/login');
+        } else {
+            navigate(`/requests/new?type=${type}`);
+        }
+    };
 
     return (
         <main className="pt-32 pb-24 bg-surface px-6 min-h-screen">
@@ -49,6 +61,7 @@ export default function ServicesPage() {
                                 + Tải lên hình ảnh tham khảo (Tùy chọn)
                             </div>
                             <button
+                                onClick={() => handleServiceSubmit('CUSTOM')}
                                 className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-black uppercase tracking-widest hover:shadow-lg transition-all mt-4">Gửi
                                 Yêu Cầu
                             </button>
@@ -71,6 +84,7 @@ export default function ServicesPage() {
                             <textarea placeholder="Ghi chú thêm (Phiên bản, màu sắc...)"
                                       className="w-full bg-surface-container-low px-6 py-4 rounded-xl outline-none focus:ring-2 focus:ring-primary/40 font-medium placeholder:text-outline min-h-[100px]"/>
                             <button
+                                onClick={() => handleServiceSubmit('PREORDER')}
                                 className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-black uppercase tracking-widest hover:shadow-lg transition-all mt-4">Tạo
                                 đơn Pre-order
                             </button>
@@ -101,6 +115,7 @@ export default function ServicesPage() {
                                 + Tải lên hình ảnh thực tế (Bắt buộc)
                             </div>
                             <button
+                                onClick={() => handleServiceSubmit('FINDING')}
                                 className="w-full py-4 bg-gradient-to-r from-primary to-primary-container text-white rounded-full font-black uppercase tracking-widest hover:shadow-lg transition-all mt-4">Gửi
                                 Yêu Cầu Thẩm Định
                             </button>

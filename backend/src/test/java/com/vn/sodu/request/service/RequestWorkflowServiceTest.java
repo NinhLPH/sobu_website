@@ -82,7 +82,7 @@ class RequestWorkflowServiceTest {
         void createRequestNormalizesAndPersistsData() {
                 CreateRequestDto dto = CreateRequestDto.builder()
                                 .customerPhone(" 0123456789 ")
-                                .type(OrderType.NORMAL)
+                                .type(OrderType.PREORDER)
                                 .customRequirements("  <p>Need fast delivery</p> ")
                                 .uploadedImageUrls(List.of(" https://img/1 ", "https://img/1", "https://img/2"))
                                 .items(List.of(
@@ -104,15 +104,34 @@ class RequestWorkflowServiceTest {
 
                 Request result = service.createRequest(dto);
 
-                assertThat(result.getStatus()).isEqualTo(RequestStatus.REVIEWING);
+                assertThat(result.getStatus()).isEqualTo(RequestStatus.SOURCING);
                 assertThat(result.getCustomerPhone()).isEqualTo("0123456789");
                 assertThat(result.getCustomRequirements()).isEqualTo("Need fast delivery");
                 assertThat(result.getTotalAmount()).isEqualByComparingTo("200.00");
-                assertThat(result.getDepositAmount()).isEqualByComparingTo("0.00");
+                assertThat(result.getDepositAmount()).isEqualByComparingTo("60.00");
                 assertThat(result.getItems()).hasSize(1);
                 assertThat(result.getAttachments()).hasSize(2);
                 verify(requestSnapshotRepo).save(any());
                 verify(requestTimelineRepo).save(any());
+        }
+
+        @Test
+        void createRequestRejectsNormalRequestType() {
+                CreateRequestDto dto = CreateRequestDto.builder()
+                                .customerPhone("0123456789")
+                                .type(OrderType.NORMAL)
+                                .items(List.of(RequestItemDto.builder()
+                                                .nhanhProductId("P1")
+                                                .name("Item A")
+                                                .price(new BigDecimal("100"))
+                                                .quantity(1)
+                                                .build()))
+                                .build();
+
+                IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                                () -> service.createRequest(dto));
+
+                assertThat(ex.getMessage()).contains("NORMAL requests are no longer created");
         }
 
         @Test

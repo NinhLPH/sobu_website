@@ -28,7 +28,7 @@ public class Order {
     private String orderCode;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "request_id", unique = true, nullable = false)
+    @JoinColumn(name = "request_id", unique = true)
     private Request request;
 
     @Enumerated(EnumType.STRING)

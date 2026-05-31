@@ -34,10 +34,17 @@ public class NhanhProperties {
     private String businessId;
 
     private Sync sync = new Sync();
+    private Webhooks webhooks = new Webhooks();
 
     @Getter
     @Setter
     public static class Sync {
         private String cron = "0 0 * * * *";
+    }
+
+    @Getter
+    @Setter
+    public static class Webhooks {
+        private String verifyToken;
     }
 }

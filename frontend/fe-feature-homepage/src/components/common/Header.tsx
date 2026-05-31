@@ -1,24 +1,30 @@
-import {useState, useEffect, useRef} from 'react';
+import {useState, useEffect, useRef, useMemo} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {
     ShoppingCart, User, Search, Shield, ChevronDown, ChevronRight,
-    Car, Box, Wrench, Diamond, Layers, Trash2
+    Car, Box, Wrench, Diamond, Layers, Trash2, LogOut, FileText
 } from 'lucide-react';
 import {useCartStore} from "../../store/useCartStore";
-import {useAdminStore} from "../../store/useAdminStore";
+import {useProductStore} from "../../store/useProductStore";
+import {useAuthStore} from "../../store/useAuthStore";
 import {formatCurrency} from "../../util/format";
-import {megaMenuBrands} from "../../data/mockData";
 
-const getCategoryIcon = (catId: string) => {
-    switch (catId) {
+
+const getCategoryIcon = (catCode: string) => {
+    switch (catCode?.toUpperCase()) {
+        case 'VEHICLE':
         case 'CAT_VEHICLE':
             return Car;
+        case 'MECHA':
         case 'CAT_MECHA':
             return Box;
+        case 'FIGURE':
         case 'CAT_FIGURE':
             return User;
+        case 'ACCESSORY':
         case 'CAT_ACCESSORY':
             return Wrench;
+        case 'LEGO':
         case 'CAT_LEGO':
             return Layers;
         default:
@@ -32,15 +38,27 @@ export default function Header() {
     const {items, removeFromCart, getTotals} = useCartStore();
     const {subtotal} = getTotals();
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-    const categories = useAdminStore(state => state.categories);
-    const [activeParentId, setActiveParentId] = useState<string | null>(null);
+    
+    // Fetch categories and brands from useProductStore to avoid mockData
+    const { categories, brands, fetchCategories, fetchBrands } = useProductStore();
+    
+    const [activeParentId, setActiveParentId] = useState<number | null>(null);
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const cartRef = useRef<HTMLDivElement>(null);
+
+    // Auth States & Refs
+    const {isAuthenticated, user, logoutAction} = useAuthStore();
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (cartRef.current && !cartRef.current.contains(event.target as Node)) {
                 setIsMiniCartOpen(false);
+            }
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+                setIsUserMenuOpen(false);
             }
         }
 
@@ -49,12 +67,48 @@ export default function Header() {
     }, []);
 
     useEffect(() => {
-        if (categories && categories.length > 0 && !activeParentId) {
-            setActiveParentId(categories[0].id);
+        if (!categories || categories.length === 0) {
+            fetchCategories();
         }
+        if (!brands || brands.length === 0) {
+            fetchBrands();
+        }
+    }, [categories, brands, fetchCategories, fetchBrands]);
+
+    const mainCategories = useMemo(() => {
+        return categories?.filter(cat => {
+            const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
+            return pId === null || pId === undefined;
+        }) || [];
+    }, [categories]);
+
+    const activeChildren = useMemo(() => {
+        if (activeParentId === null) return [];
+        
+        // Find matching subcategories by parent ID (check both parentId and parentID)
+        const subCats = categories.filter(cat => {
+            const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
+            return pId !== null && pId !== undefined && String(pId) === String(activeParentId);
+        });
+
+        if (subCats.length > 0) {
+            return subCats;
+        }
+
+        // Fallback to .children array if it exists inside the parent object
+        const parent = categories.find(cat => String(cat.id) === String(activeParentId));
+        if (parent && parent.children && parent.children.length > 0) {
+            return parent.children;
+        }
+
+        return [];
     }, [categories, activeParentId]);
 
-    const activeParentCategory = categories?.find(cat => cat.id === activeParentId) || categories?.[0];
+    useEffect(() => {
+        if (mainCategories && mainCategories.length > 0 && activeParentId === null) {
+            setActiveParentId(mainCategories[0].id);
+        }
+    }, [mainCategories, activeParentId]);
 
     return (
         <header className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
@@ -81,9 +135,14 @@ export default function Header() {
                                         className="col-span-4 border-r border-surface-container pr-4 flex flex-col gap-1.5">
                                         <span
                                             className="text-[11px] font-black uppercase tracking-wider text-outline mb-2 block px-2">Danh mục chính</span>
-                                        {categories?.map((parent) => {
-                                            const IconComponent = getCategoryIcon(parent.id);
+                                        {mainCategories?.map((parent) => {
+                                            const IconComponent = getCategoryIcon(parent.code);
                                             const isActive = activeParentId === parent.id;
+                                            const hasChildren = (parent.children && parent.children.length > 0) ||
+                                                categories.some(c => {
+                                                    const pId = c.parentId !== undefined ? c.parentId : (c as any).parentID;
+                                                    return pId !== null && pId !== undefined && String(pId) === String(parent.id);
+                                                });
                                             return (
                                                 <div
                                                     key={parent.id}
@@ -96,7 +155,7 @@ export default function Header() {
                                                         <IconComponent className="w-5 h-5"/>
                                                         <span className="font-bold text-sm">{parent.name}</span>
                                                     </div>
-                                                    {parent.children && parent.children.length > 0 && (
+                                                    {hasChildren && (
                                                         <ChevronRight
                                                             className={`w-4 h-4 ${isActive ? 'text-white' : 'text-outline/60'}`}/>
                                                     )}
@@ -108,9 +167,9 @@ export default function Header() {
                                     <div className="col-span-8 pl-4 flex flex-col">
                                         <span
                                             className="text-[11px] font-black uppercase tracking-wider text-outline mb-4 block">Dòng sản phẩm chi tiết</span>
-                                        {activeParentCategory && activeParentCategory.children && activeParentCategory.children.length > 0 ? (
+                                        {activeChildren && activeChildren.length > 0 ? (
                                             <div className="grid grid-cols-2 gap-3">
-                                                {activeParentCategory.children.map((child) => (
+                                                {activeChildren.map((child) => (
                                                     <Link key={child.id} to={`/products?category=${child.id}`}
                                                           className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-surface-container-low hover:bg-primary-container/20 border border-transparent hover:border-primary/20 transition-all group/child">
                                                         <span
@@ -134,17 +193,17 @@ export default function Header() {
                                 <div className="border-t border-surface-container pt-4">
                                     <span
                                         className="text-[11px] font-black uppercase tracking-wider text-outline mb-3 block">Thương hiệu phân phối</span>
-                                    <div className="grid grid-cols-6 gap-x-4 gap-y-2">
-                                        {megaMenuBrands.map((brand, idx) => (
-                                            <Link key={idx} to={`/products?brand=${brand}`}
-                                                  className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors truncate">• {brand}</Link>
+                                    <div className="grid grid-cols-6 gap-x-4 gap-y-2 font-semibold">
+                                        {brands?.map((brand) => (
+                                            <Link key={brand.id} to={`/products?brand=${brand.id}`}
+                                                  className="text-xs text-on-surface-variant hover:text-primary transition-colors truncate">• {brand.name}</Link>
                                         ))}
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <Link to="/services" className="hover:text-primary transition-colors">Dịch vụ</Link>
+                        <Link to="/requests" className="hover:text-primary transition-colors">Dịch vụ</Link>
                         <Link to="/membership" className="hover:text-primary transition-colors">Thẻ thành viên</Link>
                         <Link to="/blog" className="hover:text-primary transition-colors">Tin tức</Link>
                     </nav>
@@ -152,12 +211,21 @@ export default function Header() {
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-6">
-                    <div className="relative hidden md:block w-64">
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (searchQuery.trim()) {
+                            navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+                        } else {
+                            navigate('/products');
+                        }
+                    }} className="relative hidden md:block w-64">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline w-4 h-4"/>
                         <input
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-surface-container rounded-full pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/40 transition-all outline-none border-none placeholder:text-outline/70 font-medium"
                             placeholder="Tìm kiếm mô hình..." type="text"/>
-                    </div>
+                    </form>
 
                     <div className="flex items-center gap-3">
                         <Link to="/admin"
@@ -245,9 +313,13 @@ export default function Header() {
                                                 <button
                                                     onClick={() => {
                                                         setIsMiniCartOpen(false);
-                                                        navigate('/cart');
+                                                        if (!isAuthenticated) {
+                                                            navigate('/login');
+                                                        } else {
+                                                            navigate('/cart');
+                                                        }
                                                     }}
-                                                    className="w-full py-2.5 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl text-xs font-black uppercase tracking-widest text-center shadow-md shadow-primary/10 hover:scale-[1.01] transition-transform"
+                                                    className="w-full py-2.5 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl text-xs font-black uppercase tracking-widest text-center shadow-md shadow-primary/10 hover:scale-[1.01] transition-transform cursor-pointer"
                                                 >
                                                     Đi đến thanh toán
                                                 </button>
@@ -258,12 +330,97 @@ export default function Header() {
                             )}
                         </div>
 
-                        <button className="flex items-center gap-2 pl-2">
-                            <div
-                                className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
-                                <User className="w-5 h-5"/>
-                            </div>
-                        </button>
+                        {/* USER PROFILE / AUTH BUTTON */}
+                        <div className="relative" ref={userMenuRef}>
+                            <button
+                                onClick={() => {
+                                    if (isAuthenticated) {
+                                        setIsUserMenuOpen(!isUserMenuOpen);
+                                    } else {
+                                        navigate('/login');
+                                    }
+                                }}
+                                className="flex items-center gap-2 pl-2 cursor-pointer transition-transform hover:scale-105 active:scale-95 outline-none"
+                                title={isAuthenticated ? "Tài khoản của bạn" : "Đăng nhập / Đăng ký"}
+                            >
+                                <div
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                                        isAuthenticated
+                                            ? 'bg-primary text-white shadow-md shadow-primary/20 font-black text-sm uppercase'
+                                            : 'bg-surface-container-high text-primary hover:bg-surface-container-highest hover:scale-105'
+                                    }`}
+                                >
+                                    {isAuthenticated && user?.fullName ? (
+                                        <span>
+                                            {user.fullName.charAt(0)}
+                                        </span>
+                                    ) : (
+                                        <User className="w-5 h-5"/>
+                                    )}
+                                </div>
+                            </button>
+
+                            {/* USER PROFILE DROPDOWN */}
+                            {isAuthenticated && isUserMenuOpen && (
+                                <div
+                                    className="absolute top-full right-0 mt-2 w-[260px] bg-surface-container-lowest rounded-2xl shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] border border-surface-container/60 p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200"
+                                >
+                                    <div className="pb-3 border-b border-surface-container-high/60 mb-3">
+                                        <p className="text-xs font-black text-on-surface truncate">
+                                            {user?.fullName}
+                                        </p>
+                                        <p className="text-[10px] text-outline truncate mt-0.5">
+                                            {user?.email}
+                                        </p>
+                                        {user?.role && (
+                                            <span
+                                                className="inline-block mt-2 text-[9px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                                {user.role.name === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        {user?.role?.name === 'ADMIN' && (
+                                            <Link
+                                                to="/admin"
+                                                onClick={() => setIsUserMenuOpen(false)}
+                                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                            >
+                                                <Shield className="w-4 h-4 text-primary"/>
+                                                <span>Trang quản trị (Admin)</span>
+                                            </Link>
+                                        )}
+                                        <Link
+                                            to="/requests"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                        >
+                                            <FileText className="w-4 h-4 text-primary"/>
+                                            <span>Yêu cầu của tôi</span>
+                                        </Link>
+                                        <Link
+                                            to="/tracking"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                        >
+                                            <Search className="w-4 h-4 text-primary"/>
+                                            <span>Tra cứu đơn hàng</span>
+                                        </Link>
+                                        <button
+                                            onClick={async () => {
+                                                setIsUserMenuOpen(false);
+                                                await logoutAction();
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-error hover:bg-error/10 transition-colors text-left cursor-pointer outline-none"
+                                        >
+                                            <LogOut className="w-4 h-4"/>
+                                            <span>Đăng xuất</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,31 +1,76 @@
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useMemo} from 'react';
 import {useParams, Link} from 'react-router-dom';
 import {ChevronRight, Star, ShoppingBag, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
 
-import {mockProducts} from '../data/mockData';
 import {useCartStore} from '../store/useCartStore';
 import {formatCurrency} from "../util/format";
 import ProductSlider from "../components/common/ProductSlider";
+import {useProductStore} from '../store/useProductStore';
+import {PublicCatalogService} from '../service/public-catalog.service';
+import {mapListItemToProductModel, mapDetailToProductModel, ProductModel} from '../interface/product.model';
 
 export default function ProductDetail() {
     const {id} = useParams();
-    const product = mockProducts.find(p => p.id === id) || mockProducts[0];
+    const [product, setProduct] = useState<ProductModel | null>(null);
     const [quantity, setQuantity] = useState(1);
     const addToCart = useCartStore(state => state.addToCart);
-    const [mainImage, setMainImage] = useState(product.imageUrl);
+    const [mainImage, setMainImage] = useState('');
+    const [loadingDetail, setLoadingDetail] = useState(true);
+
+    const { products, fetchProducts } = useProductStore();
 
     useEffect(() => {
-        setMainImage(product.imageUrl);
-        setQuantity(1);
+        if (!products || products.length === 0) {
+            fetchProducts();
+        }
+    }, [products, fetchProducts]);
+
+    useEffect(() => {
+        if (!id) return;
+        setLoadingDetail(true);
+        PublicCatalogService.getProductDetail(id)
+            .then(dto => {
+                const mapped = mapDetailToProductModel(dto);
+                setProduct(mapped);
+                setMainImage(mapped.imageUrl);
+            })
+            .catch(err => {
+                console.error("Error loading product detail from API:", err);
+            })
+            .finally(() => {
+                setLoadingDetail(false);
+            });
+    }, [id]);
+
+    useEffect(() => {
+        if (product) {
+            setQuantity(1);
+        }
     }, [id, product]);
 
-    const relatedProducts = mockProducts.filter(p => p.id !== id);
+    const relatedProducts = useMemo(() => {
+        return products
+            .filter(p => String(p.id) !== id)
+            .map(mapListItemToProductModel);
+    }, [products, id]);
+
     const decreaseQuantity = () => setQuantity(prev => Math.max(1, prev - 1));
     const increaseQuantity = () => setQuantity(prev => prev + 1);
 
     const handleAddToCart = () => {
-        addToCart(product, quantity);
+        if (product) {
+            addToCart(product, quantity);
+        }
     };
+
+    if (loadingDetail || !product) {
+        return (
+            <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh]">
+                <div className="animate-spin text-primary w-10 h-10 border-4 border-current border-t-transparent rounded-full" />
+                <p className="text-outline text-xs font-bold mt-4">Đang tải chi tiết sản phẩm...</p>
+            </main>
+        );
+    }
 
     return (
         <main className="max-w-screen-2xl mx-auto px-6 pt-24 pb-16 bg-surface">
@@ -39,6 +84,7 @@ export default function ProductDetail() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
                 <div className="lg:col-span-7 space-y-4">
+                    {/* KHUNG ẢNH CHÍNH */}
                     <div
                         className="relative rounded-2xl overflow-hidden bg-surface-container-lowest shadow-[0_20px_50px_-15px_rgba(14,48,78,0.06)] aspect-[4/3] flex items-center justify-center p-8">
                         <img className="w-full h-full object-contain" src={mainImage} alt={product.name}/>
@@ -51,8 +97,9 @@ export default function ProductDetail() {
                             )}
                         </div>
                     </div>
+
                     <div className="grid grid-cols-4 gap-4">
-                        {product.thumbnailUrls?.map((url, index) => (
+                        {Array.from(new Set([product.imageUrl, ...(product.thumbnailUrls || [])])).map((url, index) => (
                             <div
                                 key={index}
                                 onClick={() => setMainImage(url)}

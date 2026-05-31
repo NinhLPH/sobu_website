@@ -3,11 +3,11 @@ import {ShoppingCart} from 'lucide-react';
 import {useNavigate} from 'react-router-dom';
 
 import {useCartStore} from "../../store/useCartStore";
-import {Product} from "../../interface/product";
+import {ProductModel} from "../../interface/product.model";
 import {formatCurrency} from "../../util/format";
 
 interface ProductCardProps {
-    product: Product;
+    product: ProductModel;
     key?: React.Key;
 }
 
