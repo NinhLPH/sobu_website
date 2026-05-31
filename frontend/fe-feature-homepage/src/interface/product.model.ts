@@ -14,7 +14,7 @@ export interface ProductModel {
     isHot?: boolean;
     rating?: number;
     reviewsCount?: number;
-    thumbnailUrls?: string[];
+    thumbnailUrls?: string[] | undefined;
 }
 
 export interface CartItem {
@@ -34,11 +34,6 @@ export interface ProductUnitDTO {
     price: number;
     wholesalePrice?: number;
     quantity: number;
-}
-
-export interface ProductImageDTO {
-    id?: number;
-    url: string;
 }
 
 export interface ProductListItemDTO {
@@ -69,7 +64,7 @@ export interface ProductDetailDTO {
     stockRemain: number;
     units: ProductUnitDTO[];
     attributes: ProductAttributeDTO[];
-    images: ProductImageDTO[];
+    images: string[];
     updatedAt: string;
 }
 
@@ -108,7 +103,7 @@ export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => 
         rating: 4.8,
         reviewsCount: 15,
         thumbnailUrls: dto.images && dto.images.length > 0 
-            ? dto.images.map(img => img.url) 
-            : [dto.avatarImage || 'https://placehold.co/400x300?text=SOBU']
+            ? dto.images
+            : ['https://placehold.co/400x300?text=SOBU']
     };
 };

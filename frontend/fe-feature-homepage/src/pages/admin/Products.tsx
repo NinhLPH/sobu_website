@@ -1,17 +1,37 @@
-import {useState} from 'react';
+import {useState, useEffect, useMemo} from 'react';
 import {Plus, Edit, Trash2, Search, X} from 'lucide-react';
 
-import {ProductModel} from "../../interface/product.model";
-import {CategoryModel} from "../../interface/category.model";
-import {useAdminStore} from '../../store/useAdminStore';
+import {ProductModel, mapListItemToProductModel} from "../../interface/product.model";
+import {CategoryModel, mapCategoryDtoToModel} from "../../interface/category.model";
+import {useProductStore} from '../../store/useProductStore';
 import {formatCurrency} from "../../util/format";
 
 export default function AdminProducts() {
-    const {products, categories, addProduct, updateProduct, deleteProduct} = useAdminStore();
+    const { products: dbProducts, categories: dbCategories, fetchProducts, fetchCategories } = useProductStore();
+    
+    const [localProducts, setLocalProducts] = useState<ProductModel[]>([]);
+    const [localCategories, setLocalCategories] = useState<CategoryModel[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Partial<ProductModel> | null>(null);
+
+    useEffect(() => {
+        fetchProducts();
+        fetchCategories();
+    }, [fetchProducts, fetchCategories]);
+
+    useEffect(() => {
+        if (dbProducts && dbProducts.length > 0) {
+            setLocalProducts(dbProducts.map(mapListItemToProductModel));
+        }
+    }, [dbProducts]);
+
+    useEffect(() => {
+        if (dbCategories && dbCategories.length > 0) {
+            setLocalCategories(dbCategories.map(mapCategoryDtoToModel));
+        }
+    }, [dbCategories]);
 
     // Flatten categories for dropdown
     const flatCategories: { id: string; name: string }[] = [];
@@ -21,9 +41,9 @@ export default function AdminProducts() {
             if (c.children) flatten(c.children, `${prefix}${c.name} > `);
         });
     };
-    flatten(categories);
+    flatten(localCategories);
 
-    const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredProducts = localProducts.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const handleOpenModal = (product?: ProductModel) => {
         if (product) {
@@ -57,17 +77,17 @@ export default function AdminProducts() {
         const cat = flatCategories.find(c => c.id === editingProduct.categoryId);
         const productToSave = { ...editingProduct, category: cat ? cat.name : editingProduct.category } as ProductModel;
 
-        if (products.some(p => p.id === productToSave.id)) {
-            updateProduct(productToSave.id, productToSave);
+        if (localProducts.some(p => p.id === productToSave.id)) {
+            setLocalProducts(prev => prev.map(p => p.id === productToSave.id ? productToSave : p));
         } else {
-            addProduct(productToSave);
+            setLocalProducts(prev => [...prev, productToSave]);
         }
         handleCloseModal();
     };
 
     const handleDelete = (id: string) => {
-        if (window.confirm('B\u1ea1n c\u00f3 ch\u1eafc ch\u1eafn mu\u1ed1n x\u00f3a s\u1ea3n ph\u1ea9m n\u00e0y?')) {
-            deleteProduct(id);
+        if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
+            setLocalProducts(prev => prev.filter(p => p.id !== id));
         }
     };
 
@@ -127,7 +147,7 @@ export default function AdminProducts() {
                                                 className="text-secondary hover:text-primary transition-colors">
                                             <Edit className="w-4 h-4"/>
                                         </button>
-                                        <button onClick={() => deleteProduct(product.id)}
+                                        <button onClick={() => handleDelete(product.id)}
                                                 className="text-error-dim hover:text-error transition-colors">
                                             <Trash2 className="w-4 h-4"/>
                                         </button>
@@ -152,7 +172,7 @@ export default function AdminProducts() {
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center p-6 border-b border-outline-variant/30 sticky top-0 bg-white">
                             <h2 className="text-xl font-bold text-on-surface">
-                                {products.some(p => p.id === editingProduct.id) ? 'Cập nhật sản phẩm' : 'Thêm sản phẩm mới'}
+                                {localProducts.some(p => p.id === editingProduct.id) ? 'Cập nhật sản phẩm' : 'Thêm sản phẩm mới'}
                             </h2>
                             <button onClick={handleCloseModal} className="text-outline hover:text-error transition-colors">
                                 <X className="w-6 h-6" />
@@ -168,7 +188,7 @@ export default function AdminProducts() {
                                         required
                                         value={editingProduct.id || ''}
                                         onChange={e => setEditingProduct({...editingProduct, id: e.target.value})}
-                                        disabled={products.some(p => p.id === editingProduct.id)}
+                                        disabled={localProducts.some(p => p.id === editingProduct.id)}
                                         className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant"
                                     />
                                 </div>

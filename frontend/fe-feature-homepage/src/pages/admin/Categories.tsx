@@ -1,19 +1,18 @@
-import {useState} from 'react';
+import {useState, useEffect, useMemo} from 'react';
 import {Plus, Edit, Trash2, ChevronRight, ChevronDown, X} from 'lucide-react';
 
-import {useAdminStore} from '../../store/useAdminStore';
-import {CategoryModel, CategoryNodeProps} from "../../interface/category.model";
+import {useProductStore} from '../../store/useProductStore';
+import {CategoryModel, mapCategoryDtoToModel} from "../../interface/category.model";
 
-function CategoryNode({category, level = 0, onEdit, onAddChild}: { category: CategoryModel, level?: number, onEdit: (category?: CategoryModel, parentId?: string) => void, onAddChild: (parentId: string) => void }) {
+function CategoryNode({category, level = 0, onEdit, onAddChild, onDelete}: { category: CategoryModel, level?: number, onEdit: (category?: CategoryModel, parentId?: string) => void, onAddChild: (parentId: string) => void, onDelete: (id: string) => void }) {
     const [expanded, setExpanded] = useState(true);
-    const {deleteCategory} = useAdminStore();
 
     const hasChildren = category.children && category.children.length > 0;
 
     const handleDelete = () => {
         if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?\n' +
             'Các danh mục con cũng sẽ bị xóa và sản phẩm có thể bị ảnh hưởng.')) {
-            deleteCategory(category.id);
+            onDelete(category.id);
         }
     }
 
@@ -26,7 +25,7 @@ function CategoryNode({category, level = 0, onEdit, onAddChild}: { category: Cat
                 <div className="flex items-center gap-2">
                     {hasChildren ? (
                         <button onClick={() => setExpanded(!expanded)}
-                                className="p-1 hover:bg-surface-container rounded">
+                                className="p-1 hover:bg-surface-container rounded cursor-pointer">
                             {expanded ? <ChevronDown className="w-4 h-4 text-outline"/> :
                                 <ChevronRight className="w-4 h-4 text-outline"/>}
                         </button>
@@ -40,15 +39,15 @@ function CategoryNode({category, level = 0, onEdit, onAddChild}: { category: Cat
 
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => onAddChild(category.id)}
-                            className="p-1.5 text-secondary hover:bg-surface-container rounded transition-colors text-xs font-semibold flex items-center gap-1">
+                            className="p-1.5 text-secondary hover:bg-surface-container rounded transition-colors text-xs font-semibold flex items-center gap-1 cursor-pointer">
                         <Plus className="w-3 h-3"/> Thêm nhánh con
                     </button>
                     <button onClick={() => onEdit(category)}
-                            className="p-1.5 text-secondary hover:bg-surface-container rounded transition-colors">
+                            className="p-1.5 text-secondary hover:bg-surface-container rounded transition-colors cursor-pointer">
                         <Edit className="w-4 h-4"/>
                     </button>
                     <button onClick={handleDelete}
-                            className="p-1.5 text-error-dim hover:bg-error-container hover:text-error rounded transition-colors">
+                            className="p-1.5 text-error-dim hover:bg-error-container hover:text-error rounded transition-colors cursor-pointer">
                         <Trash2 className="w-4 h-4"/>
                     </button>
                 </div>
@@ -63,6 +62,7 @@ function CategoryNode({category, level = 0, onEdit, onAddChild}: { category: Cat
                             level={level + 1}
                             onEdit={onEdit}
                             onAddChild={onAddChild}
+                            onDelete={onDelete}
                         />
                     ))}
                 </div>
@@ -72,30 +72,91 @@ function CategoryNode({category, level = 0, onEdit, onAddChild}: { category: Cat
 }
 
 export default function AdminCategories() {
-    const {categories, addCategory, updateCategory} = useAdminStore();
+    const { categories: dbCategories, fetchCategories } = useProductStore();
+
+    const [localCategories, setLocalCategories] = useState<CategoryModel[]>([]);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Partial<CategoryModel> | null>(null);
-    const [isEditing, setIsEditing] = useState(false); // Thêm state này để xác định đúng chế độ
+    const [isEditing, setIsEditing] = useState(false);
 
-    // Flatten for parent dropdown
-    const flatCategories: { id: string; name: string }[] = [];
-    const flatten = (cats: CategoryModel[], prefix = '') => {
-        cats.forEach(c => {
-            flatCategories.push({id: c.id, name: `${prefix}${c.name}`});
-            if (c.children) flatten(c.children, `${prefix}${c.name} > `);
+    useEffect(() => {
+        fetchCategories();
+    }, [fetchCategories]);
+
+    useEffect(() => {
+        if (dbCategories && dbCategories.length > 0) {
+            const flatList: CategoryModel[] = [];
+
+            const extractToFlat = (cats: any[]) => {
+                cats.forEach(cat => {
+                    const model = mapCategoryDtoToModel(cat);
+                    const { children, ...flatModel } = model;
+                    flatList.push(flatModel);
+
+                    if (cat.children && cat.children.length > 0) {
+                        extractToFlat(cat.children);
+                    }
+                });
+            };
+
+            extractToFlat(dbCategories);
+            setLocalCategories(flatList);
+        }
+    }, [dbCategories]);
+
+    const hierarchicalCategories = useMemo(() => {
+        const map = new Map<string, CategoryModel>();
+        const roots: CategoryModel[] = [];
+
+        localCategories.forEach(cat => {
+            map.set(cat.id, { ...cat, children: [] });
         });
+
+        localCategories.forEach(cat => {
+            if (cat.parentId && map.has(cat.parentId)) {
+                map.get(cat.parentId)!.children!.push(map.get(cat.id)!);
+            } else {
+                roots.push(map.get(cat.id)!);
+            }
+        });
+
+        return roots;
+    }, [localCategories]);
+   const flatCategoriesForDropdown = useMemo(() => {
+        const getFullName = (cat: CategoryModel): string => {
+            if (!cat.parentId) return cat.name;
+            const parent = localCategories.find(c => c.id === cat.parentId);
+            return parent ? `${getFullName(parent)} > ${cat.name}` : cat.name;
+        };
+
+        return localCategories.map(cat => ({
+            id: cat.id,
+            name: getFullName(cat)
+        })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [localCategories]);
+    const getInvalidParentIds = () => {
+        if (!editingCategory?.id) return [];
+        const ids = new Set<string>([editingCategory.id]);
+        let changed = true;
+        while (changed) {
+            changed = false;
+            localCategories.forEach(c => {
+                if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) {
+                    ids.add(c.id);
+                    changed = true;
+                }
+            });
+        }
+        return Array.from(ids);
     };
-    flatten(categories);
 
     const handleOpenModal = (category?: CategoryModel, parentId?: string) => {
         if (category) {
-            // Cập nhật: Lược bỏ children ra khỏi payload để tránh ghi đè mất danh mục con khi save
             const { children, ...rest } = category;
             setIsEditing(true);
             setEditingCategory(rest);
         } else {
-            // Tạo mới
             setIsEditing(false);
             setEditingCategory({
                 id: `CAT_${Math.floor(Math.random() * 10000)}`,
@@ -117,59 +178,79 @@ export default function AdminCategories() {
         if (!editingCategory) return;
 
         if (isEditing) {
-            // Chỉ truyền lên những field cần cập nhật (ví dụ: name)
-            updateCategory(editingCategory.id!, { name: editingCategory.name });
+            setLocalCategories(prev => prev.map(c =>
+                c.id === editingCategory.id ? { ...c, name: editingCategory.name! } : c
+            ));
         } else {
-            // Validate nếu user tự nhập ID bị trùng
-            if (flatCategories.some(c => c.id === editingCategory.id)) {
+            if (localCategories.some(c => c.id === editingCategory.id)) {
                 alert('Mã danh mục đã tồn tại, vui lòng chọn mã khác!');
                 return;
             }
-            addCategory(editingCategory as CategoryModel);
+            const newCat = editingCategory as CategoryModel;
+            setLocalCategories(prev => [...prev, newCat]);
         }
         handleCloseModal();
     };
 
+    const handleDeleteCategory = (id: string) => {
+        const idsToDelete = new Set<string>([id]);
+        let changed = true;
+
+        while (changed) {
+            changed = false;
+            localCategories.forEach(c => {
+                if (c.parentId && idsToDelete.has(c.parentId) && !idsToDelete.has(c.id)) {
+                    idsToDelete.add(c.id);
+                    changed = true;
+                }
+            });
+        }
+
+         setLocalCategories(prev => prev.filter(c => !idsToDelete.has(c.id)));
+    };
+
+    const invalidParentIds = getInvalidParentIds();
+
     return (
         <div className="pt-6 space-y-6">
-            {/* Các phần Title và CategoryNode giữ nguyên */}
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-on-surface">Quản lý Danh mục</h1>
                 <button
                     onClick={() => handleOpenModal()}
-                    className="bg-primary text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:brightness-110"
+                    className="bg-primary text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:brightness-110 cursor-pointer"
                 >
                     <Plus className="w-5 h-5"/> Thêm danh mục gốc
                 </button>
             </div>
 
             <div className="bg-white rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm">
-                {categories.map(category => (
+                {/* Dùng hierarchicalCategories để render dạng cây */}
+                {hierarchicalCategories.map(category => (
                     <CategoryNode
                         key={category.id}
                         category={category}
                         onEdit={handleOpenModal}
                         onAddChild={(parentId) => handleOpenModal(undefined, parentId)}
+                        onDelete={handleDeleteCategory}
                     />
                 ))}
-                {categories.length === 0 && (
+                {hierarchicalCategories.length === 0 && (
                     <div className="p-8 text-center text-on-surface-variant">
                         Chưa có danh mục nào.
                     </div>
                 )}
             </div>
 
-            {/* CategoryModel Modal */}
+            {/* Modal */}
             {isModalOpen && editingCategory && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
                         <div className="flex justify-between items-center p-6 border-b border-outline-variant/30">
                             <h2 className="text-xl font-bold text-on-surface">
-                                {/* Sử dụng isEditing để render Title chính xác */}
                                 {isEditing ? 'Cập nhật Danh mục' : 'Thêm Danh mục mới'}
                             </h2>
                             <button onClick={handleCloseModal}
-                                    className="text-outline hover:text-error transition-colors">
+                                    className="text-outline hover:text-error transition-colors cursor-pointer">
                                 <X className="w-6 h-6"/>
                             </button>
                         </div>
@@ -182,7 +263,7 @@ export default function AdminCategories() {
                                     required
                                     value={editingCategory.id || ''}
                                     onChange={e => setEditingCategory({...editingCategory, id: e.target.value})}
-                                    disabled={isEditing} // Sử dụng isEditing
+                                    disabled={isEditing}
                                     className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant"
                                 />
                             </div>
@@ -205,12 +286,12 @@ export default function AdminCategories() {
                                         ...editingCategory,
                                         parentId: e.target.value || null
                                     })}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant"
-                                    disabled={isEditing} // Sử dụng isEditing
+                                    className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant cursor-pointer"
+                                    disabled={isEditing}
                                 >
                                     <option value="">-- Là danh mục gốc --</option>
-                                    {flatCategories
-                                        .filter(c => c.id !== editingCategory.id)
+                                    {flatCategoriesForDropdown
+                                        .filter(c => !invalidParentIds.includes(c.id)) // Ẩn các danh mục con để tránh bị loop logic
                                         .map(cat => (
                                             <option key={cat.id} value={cat.id}>{cat.name}</option>
                                         ))}
@@ -220,11 +301,11 @@ export default function AdminCategories() {
 
                             <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/30 mt-6">
                                 <button type="button" onClick={handleCloseModal}
-                                        className="px-4 py-2 font-bold text-on-surface-variant hover:text-on-surface">
+                                        className="px-4 py-2 font-bold text-on-surface-variant hover:text-on-surface cursor-pointer">
                                     Hủy bỏ
                                 </button>
                                 <button type="submit"
-                                        className="px-6 py-2 bg-primary text-white font-bold rounded hover:brightness-110">
+                                        className="px-6 py-2 bg-primary text-white font-bold rounded hover:brightness-110 cursor-pointer">
                                     Lưu danh mục
                                 </button>
                             </div>
