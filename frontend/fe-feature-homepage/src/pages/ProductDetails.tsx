@@ -84,6 +84,7 @@ export default function ProductDetail() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
                 <div className="lg:col-span-7 space-y-4">
+                    {/* KHUNG ẢNH CHÍNH */}
                     <div
                         className="relative rounded-2xl overflow-hidden bg-surface-container-lowest shadow-[0_20px_50px_-15px_rgba(14,48,78,0.06)] aspect-[4/3] flex items-center justify-center p-8">
                         <img className="w-full h-full object-contain" src={mainImage} alt={product.name}/>
@@ -96,8 +97,9 @@ export default function ProductDetail() {
                             )}
                         </div>
                     </div>
+
                     <div className="grid grid-cols-4 gap-4">
-                        {product.thumbnailUrls?.map((url, index) => (
+                        {Array.from(new Set([product.imageUrl, ...(product.thumbnailUrls || [])])).map((url, index) => (
                             <div
                                 key={index}
                                 onClick={() => setMainImage(url)}

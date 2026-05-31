@@ -44,6 +44,7 @@ export default function Header() {
     
     const [activeParentId, setActiveParentId] = useState<number | null>(null);
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const cartRef = useRef<HTMLDivElement>(null);
 
     // Auth States & Refs
@@ -210,12 +211,21 @@ export default function Header() {
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-6">
-                    <div className="relative hidden md:block w-64">
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (searchQuery.trim()) {
+                            navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+                        } else {
+                            navigate('/products');
+                        }
+                    }} className="relative hidden md:block w-64">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline w-4 h-4"/>
                         <input
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-surface-container rounded-full pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/40 transition-all outline-none border-none placeholder:text-outline/70 font-medium"
                             placeholder="Tìm kiếm mô hình..." type="text"/>
-                    </div>
+                    </form>
 
                     <div className="flex items-center gap-3">
                         <Link to="/admin"

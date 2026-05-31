@@ -1,6 +1,14 @@
 import apiClient from "../api/api-client";
 
 export const AdminSyncService = {
+    getNhanhLoginUrl: (): Promise<string> => {
+        return apiClient.get('/api/nhanh/login');
+    },
+
+    handleNhanhCallback: (accessCode: string): Promise<string> => {
+        return apiClient.get('/api/nhanh/oauth/callback', {params: {accessCode}});
+    },
+
     syncProducts: (): Promise<{ message: string }> => {
         return apiClient.post('/api/admin/products/sync');
     },
@@ -9,8 +17,7 @@ export const AdminSyncService = {
         return apiClient.post('/api/admin/categories/sync');
     },
 
-    // Lưu ý theo API Doc: Endpoint này là ngoại lệ, KHÔNG có prefix /api
     syncBrands: (): Promise<{ message: string }> => {
-        return apiClient.post('/admin/brands/sync');
+        return apiClient.post('/api/admin/brands/sync');
     },
 };

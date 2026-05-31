@@ -22,3 +22,12 @@ export interface CategoryListItemDTO {
     status: number;
     children?: CategoryListItemDTO[];
 }
+
+export const mapCategoryDtoToModel = (dto: CategoryListItemDTO): CategoryModel => {
+    return {
+        id: String(dto.id),
+        name: dto.name,
+        parentId: dto.parentId ? String(dto.parentId) : null,
+        children: dto.children ? dto.children.map(mapCategoryDtoToModel) : undefined
+    };
+};

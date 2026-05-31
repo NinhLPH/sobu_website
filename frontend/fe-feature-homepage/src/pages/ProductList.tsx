@@ -1,18 +1,21 @@
 import {useState, useMemo, useEffect} from 'react';
-import {Link, useSearchParams} from 'react-router-dom';
-import {ChevronRight, SlidersHorizontal, X} from 'lucide-react';
+import {Link, useSearchParams, useNavigate} from 'react-router-dom';
+import {ChevronRight, ChevronDown, SlidersHorizontal, X} from 'lucide-react';
 
 import ProductCard from "../components/common/ProductCard";
 import {useProductStore} from '../store/useProductStore';
 import {mapListItemToProductModel} from '../interface/product.model';
 
 export default function ProductList() {
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const searchQuery = searchParams.get('search') || '';
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
     const [selectedScales, setSelectedScales] = useState<string[]>([]);
     const [inStockOnly, setInStockOnly] = useState<boolean>(false);
     const [priceRange, setPriceRange] = useState<number>(10000000);
+    const [expandedParents, setExpandedParents] = useState<number[]>([]);
 
     const { products, categories: apiCategories, brands: apiBrands, fetchProducts, fetchCategories, fetchBrands } = useProductStore();
 
@@ -25,6 +28,35 @@ export default function ProductList() {
     const mappedProducts = useMemo(() => {
         return products.map(mapListItemToProductModel);
     }, [products]);
+
+    const categoryTree = useMemo(() => {
+        if (!apiCategories || apiCategories.length === 0) return [];
+        
+        // Find parents
+        const parents = apiCategories.filter(cat => {
+            const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
+            return pId === null || pId === undefined;
+        });
+
+        // Map parents with their children
+        return parents.map(parent => {
+            // Find children from flat list
+            let children = apiCategories.filter(cat => {
+                const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
+                return pId !== null && pId !== undefined && String(pId) === String(parent.id);
+            });
+
+            // If no children in flat list, fallback to nested children list
+            if (children.length === 0 && parent.children && parent.children.length > 0) {
+                children = parent.children;
+            }
+
+            return {
+                ...parent,
+                children
+            };
+        });
+    }, [apiCategories]);
 
     const categories = useMemo(() => {
         if (!apiCategories || apiCategories.length === 0) return [];
@@ -40,6 +72,12 @@ export default function ProductList() {
         return Array.from(new Set(mappedProducts.map(p => p.scale).filter(Boolean))) as string[];
     }, [mappedProducts]);
 
+    const toggleParentExpand = (parentId: number) => {
+        setExpandedParents(prev => 
+            prev.includes(parentId) ? prev.filter(id => id !== parentId) : [...prev, parentId]
+        );
+    };
+
     // Parse URL query params and pre-select categories/brands
     useEffect(() => {
         const catId = searchParams.get('category');
@@ -49,6 +87,12 @@ export default function ProductList() {
             const cat = apiCategories.find(c => String(c.id) === String(catId));
             if (cat) {
                 setSelectedCategories(prev => prev.includes(cat.name) ? prev : [...prev, cat.name]);
+                
+                // Automatically expand parent if the selected category is a child
+                const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
+                if (pId !== null && pId !== undefined) {
+                    setExpandedParents(prev => prev.includes(Number(pId)) ? prev : [...prev, Number(pId)]);
+                }
             }
         }
         
@@ -65,16 +109,35 @@ export default function ProductList() {
     };
 
     const filteredProducts = useMemo(() => {
+        // Build a set of all category names that match the selected categories (including their children if parents are selected)
+        const activeCategoryNames = new Set<string>();
+        selectedCategories.forEach(selectedName => {
+            activeCategoryNames.add(selectedName);
+            
+            // Find if this is a parent in our tree, and if so, add all its children names
+            const parentNode = categoryTree.find(p => p.name === selectedName);
+            if (parentNode && parentNode.children) {
+                parentNode.children.forEach(child => {
+                    if (child.name) {
+                        activeCategoryNames.add(child.name);
+                    }
+                });
+            }
+        });
+
         return mappedProducts.filter(p => {
-            const catMatch = selectedCategories.length === 0 || (p.category && selectedCategories.includes(p.category));
+            const catMatch = selectedCategories.length === 0 || (p.category && activeCategoryNames.has(p.category));
             const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(p.brand);
             const scaleMatch = selectedScales.length === 0 || (p.scale && selectedScales.includes(p.scale));
             const stockMatch = !inStockOnly || p.stock > 0;
             const priceMatch = p.price <= priceRange;
+            const searchMatch = !searchQuery || 
+                p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
-            return catMatch && brandMatch && scaleMatch && stockMatch && priceMatch;
+            return catMatch && brandMatch && scaleMatch && stockMatch && priceMatch && searchMatch;
         });
-    }, [mappedProducts, selectedCategories, selectedBrands, selectedScales, inStockOnly, priceRange]);
+    }, [mappedProducts, selectedCategories, selectedBrands, selectedScales, inStockOnly, priceRange, categoryTree, searchQuery]);
 
     const clearFilters = () => {
         setSelectedCategories([]);
@@ -82,10 +145,12 @@ export default function ProductList() {
         setSelectedScales([]);
         setInStockOnly(false);
         setPriceRange(10000000);
+        setExpandedParents([]);
+        navigate('/products');
     };
 
     return (
-        <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
+        <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface min-h-screen flex flex-col">
             {/* Header / Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm font-bold text-on-surface-variant mb-8">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
@@ -112,17 +177,80 @@ export default function ProductList() {
                         <div className="mb-8">
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Danh mục</h3>
                             <div className="space-y-3">
-                                {categories.map(cat => (
-                                    <label key={cat} onClick={() => toggleFilter(cat, selectedCategories, setSelectedCategories)} className="flex items-center gap-3 cursor-pointer group select-none">
-                                        <div
-                                            className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${selectedCategories.includes(cat) ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}>
-                                            {selectedCategories.includes(cat) &&
-                                                <div className="w-2 h-2 bg-white rounded-sm"></div>}
+                                {categoryTree.map(parent => {
+                                    const isExpanded = expandedParents.includes(parent.id);
+                                    const hasChildren = parent.children && parent.children.length > 0;
+                                    const isParentSelected = selectedCategories.includes(parent.name);
+
+                                    return (
+                                        <div key={parent.id} className="space-y-2">
+                                            {/* Parent Category Row */}
+                                            <div className="flex items-center justify-between group">
+                                                <div 
+                                                    onClick={() => toggleFilter(parent.name, selectedCategories, setSelectedCategories)} 
+                                                    className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                                >
+                                                    <div
+                                                        className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${isParentSelected ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}
+                                                    >
+                                                        {isParentSelected &&
+                                                            <div className="w-2 h-2 bg-white rounded-sm"></div>}
+                                                    </div>
+                                                    <span
+                                                        className={`text-sm font-medium transition-colors ${isParentSelected ? 'text-primary font-bold' : 'text-on-surface group-hover:text-primary'}`}
+                                                    >
+                                                        {parent.name}
+                                                    </span>
+                                                </div>
+
+                                                {hasChildren && (
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleParentExpand(parent.id);
+                                                        }}
+                                                        className="p-1.5 hover:bg-surface-container rounded-lg text-outline/60 hover:text-primary transition-colors cursor-pointer border-none bg-transparent flex items-center justify-center"
+                                                        title={isExpanded ? "Thu gọn" : "Mở rộng"}
+                                                    >
+                                                        {isExpanded ? (
+                                                            <ChevronDown className="w-4 h-4" />
+                                                        ) : (
+                                                            <ChevronRight className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Child Categories (if expanded) */}
+                                            {hasChildren && isExpanded && (
+                                                <div className="pl-6 space-y-2.5 border-l-2 border-surface-container ml-2.5 py-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                    {parent.children.map(child => {
+                                                        const isChildSelected = selectedCategories.includes(child.name);
+                                                        return (
+                                                            <div 
+                                                                key={child.id}
+                                                                onClick={() => toggleFilter(child.name, selectedCategories, setSelectedCategories)}
+                                                                className="flex items-center gap-3 cursor-pointer group/child select-none"
+                                                            >
+                                                                <div
+                                                                    className={`w-4 h-4 rounded-md flex items-center justify-center transition-colors ${isChildSelected ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}
+                                                                >
+                                                                    {isChildSelected &&
+                                                                        <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>}
+                                                                </div>
+                                                                <span
+                                                                    className={`text-xs font-medium transition-colors ${isChildSelected ? 'text-primary font-bold' : 'text-on-surface group-hover/child:text-primary'}`}
+                                                                >
+                                                                    {child.name}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
-                                        <span
-                                            className={`text-sm font-medium transition-colors ${selectedCategories.includes(cat) ? 'text-primary font-bold' : 'text-on-surface group-hover:text-primary'}`}>{cat}</span>
-                                    </label>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -185,15 +313,19 @@ export default function ProductList() {
                 </aside>
 
                 {/* ---------------- PRODUCT GRID ---------------- */}
-                <div className="flex-1 w-full">
+                <div className="flex-1 w-full min-h-[600px] flex flex-col">
                     <div
                         className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 bg-surface-container-lowest px-6 py-4 rounded-2xl shadow-[0_10px_30px_-15px_rgba(14,48,78,0.05)]">
                         <div className="flex items-center gap-2">
-                            <p className="text-sm text-on-surface-variant font-bold">Hiển thị <span
-                                className="text-primary text-lg">{filteredProducts.length}</span> kết quả</p>
-                            {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedScales.length > 0) && (
+                            <p className="text-sm text-on-surface-variant font-bold">
+                                Hiển thị <span className="text-primary text-lg">{filteredProducts.length}</span> kết quả
+                                {searchQuery && (
+                                    <> cho từ khóa <span className="text-primary">"{searchQuery}"</span></>
+                                )}
+                            </p>
+                            {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedScales.length > 0 || searchQuery) && (
                                 <button onClick={clearFilters}
-                                        className="ml-4 flex items-center gap-1 text-xs font-bold text-error bg-error/10 px-3 py-1 rounded-full hover:bg-error/20">
+                                        className="ml-4 flex items-center gap-1 text-xs font-bold text-error bg-error/10 px-3 py-1 rounded-full hover:bg-error/20 cursor-pointer">
                                     <X className="w-3 h-3"/> Xóa lọc
                                 </button>
                             )}
@@ -216,12 +348,12 @@ export default function ProductList() {
                         </div>
                     ) : (
                         <div
-                            className="bg-surface-container-lowest rounded-[2rem] p-16 text-center border-2 border-dashed border-outline-variant/30">
+                            className="bg-surface-container-lowest rounded-[2rem] p-16 text-center border-2 border-dashed border-outline-variant/30 w-full flex-1 flex flex-col items-center justify-center my-auto">
                             <h3 className="text-2xl font-black mb-4 text-on-surface">Không tìm thấy sản phẩm</h3>
                             <p className="text-on-surface-variant font-medium">Không có mô hình nào khớp với bộ lọc của
                                 bạn.</p>
                             <button onClick={clearFilters}
-                                    className="mt-8 px-8 py-3 bg-primary text-white rounded-full font-bold shadow-md hover:scale-105 transition-transform">Xóa
+                                    className="mt-8 px-8 py-3 bg-primary text-white rounded-full font-bold shadow-md hover:scale-105 transition-transform cursor-pointer">Xóa
                                 tất cả bộ lọc
                             </button>
                         </div>
