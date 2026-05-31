@@ -1,5 +1,5 @@
 import {useState, useMemo, useEffect} from 'react';
-import {Link} from 'react-router-dom';
+import {Link, useSearchParams} from 'react-router-dom';
 import {ChevronRight, SlidersHorizontal, X} from 'lucide-react';
 
 import ProductCard from "../components/common/ProductCard";
@@ -7,33 +7,58 @@ import {useProductStore} from '../store/useProductStore';
 import {mapListItemToProductModel} from '../interface/product.model';
 
 export default function ProductList() {
+    const [searchParams] = useSearchParams();
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
     const [selectedScales, setSelectedScales] = useState<string[]>([]);
     const [inStockOnly, setInStockOnly] = useState<boolean>(false);
     const [priceRange, setPriceRange] = useState<number>(10000000);
 
-    const { products, fetchProducts } = useProductStore();
+    const { products, categories: apiCategories, brands: apiBrands, fetchProducts, fetchCategories, fetchBrands } = useProductStore();
 
     useEffect(() => {
         fetchProducts();
-    }, [fetchProducts]);
+        fetchCategories();
+        fetchBrands();
+    }, [fetchProducts, fetchCategories, fetchBrands]);
 
     const mappedProducts = useMemo(() => {
         return products.map(mapListItemToProductModel);
     }, [products]);
 
     const categories = useMemo(() => {
-        return Array.from(new Set(mappedProducts.map(p => p.category).filter(Boolean))) as string[];
-    }, [mappedProducts]);
+        if (!apiCategories || apiCategories.length === 0) return [];
+        return Array.from(new Set(apiCategories.map(c => c.name).filter(Boolean))) as string[];
+    }, [apiCategories]);
 
     const brands = useMemo(() => {
-        return Array.from(new Set(mappedProducts.map(p => p.brand).filter(b => b && b !== 'N/A'))) as string[];
-    }, [mappedProducts]);
+        if (!apiBrands || apiBrands.length === 0) return [];
+        return Array.from(new Set(apiBrands.map(b => b.name).filter(b => b && b !== 'N/A'))) as string[];
+    }, [apiBrands]);
 
     const scales = useMemo(() => {
         return Array.from(new Set(mappedProducts.map(p => p.scale).filter(Boolean))) as string[];
     }, [mappedProducts]);
+
+    // Parse URL query params and pre-select categories/brands
+    useEffect(() => {
+        const catId = searchParams.get('category');
+        const brandId = searchParams.get('brand');
+        
+        if (catId && apiCategories.length > 0) {
+            const cat = apiCategories.find(c => String(c.id) === String(catId));
+            if (cat) {
+                setSelectedCategories(prev => prev.includes(cat.name) ? prev : [...prev, cat.name]);
+            }
+        }
+        
+        if (brandId && apiBrands.length > 0) {
+            const br = apiBrands.find(b => String(b.id) === String(brandId));
+            if (br) {
+                setSelectedBrands(prev => prev.includes(br.name) ? prev : [...prev, br.name]);
+            }
+        }
+    }, [searchParams, apiCategories, apiBrands]);
 
     const toggleFilter = (item: string, list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>) => {
         setList(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
@@ -88,7 +113,7 @@ export default function ProductList() {
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Danh mục</h3>
                             <div className="space-y-3">
                                 {categories.map(cat => (
-                                    <label key={cat} className="flex items-center gap-3 cursor-pointer group">
+                                    <label key={cat} onClick={() => toggleFilter(cat, selectedCategories, setSelectedCategories)} className="flex items-center gap-3 cursor-pointer group select-none">
                                         <div
                                             className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${selectedCategories.includes(cat) ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}>
                                             {selectedCategories.includes(cat) &&
@@ -106,7 +131,7 @@ export default function ProductList() {
                                 hiệu</h3>
                             <div className="max-h-[160px] overflow-y-auto custom-scrollbar pr-2 space-y-3">
                                 {brands.map(brand => (
-                                    <label key={brand} className="flex items-center gap-3 cursor-pointer group">
+                                    <label key={brand} onClick={() => toggleFilter(brand, selectedBrands, setSelectedBrands)} className="flex items-center gap-3 cursor-pointer group select-none">
                                         <div
                                             className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${selectedBrands.includes(brand) ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}>
                                             {selectedBrands.includes(brand) &&

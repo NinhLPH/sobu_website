@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AuthService } from '../service/auth.service';
 import { AccountDTO } from '../interface/account.model';
+import { Register } from '../interface/auth.model';
 
 interface AuthState {
     user: AccountDTO | null;
@@ -9,6 +10,7 @@ interface AuthState {
     error: string | null;
 
     loginAction: (email: string, password: string) => Promise<void>;
+    registerAction: (data: Register) => Promise<void>;
     logoutAction: () => Promise<void>;
     clearError: () => void;
 }
@@ -51,6 +53,34 @@ export const useAuthStore = create<AuthState>((set) => ({
                 isLoading: false,
                 isAuthenticated: false,
                 user: null,
+            });
+            throw err;
+        }
+    },
+
+    registerAction: async (data) => {
+        set({ isLoading: true, error: null });
+        try {
+            await AuthService.register(data);
+            
+            // Tự động đăng nhập sau khi đăng ký thành công
+            const loginData = await AuthService.login({ email: data.email, password: data.password });
+            
+            localStorage.setItem('accessToken', loginData.accessToken);
+            localStorage.setItem('refreshToken', loginData.refreshToken);
+            localStorage.setItem('user', JSON.stringify(loginData.account));
+
+            set({
+                user: loginData.account,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null,
+            });
+        } catch (err: any) {
+            const errorMessage = err?.response?.data?.message || err?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin!';
+            set({
+                error: errorMessage,
+                isLoading: false,
             });
             throw err;
         }
