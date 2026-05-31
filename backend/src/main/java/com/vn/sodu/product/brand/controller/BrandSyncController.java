@@ -17,7 +17,7 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/admin/brands")
+@RequestMapping("/api/admin/brands")
 @Tag(name = "Admin Sync", description = "Admin endpoints for syncing data from the upstream source")
 public class BrandSyncController {
 
