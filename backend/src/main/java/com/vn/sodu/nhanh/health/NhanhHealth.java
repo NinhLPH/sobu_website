@@ -11,7 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
-@Endpoint(id = "nhanh-health")
+@Endpoint(id = "nhanhHealth")
 public class NhanhHealth {
 
     private final NhanhService nhanhService;
