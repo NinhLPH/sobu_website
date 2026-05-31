@@ -1,5 +1,6 @@
-package com.vn.sodu.order;
+package com.vn.sodu.order.repo;
 
+import com.vn.sodu.order.Order;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;

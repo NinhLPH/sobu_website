@@ -1,5 +1,7 @@
-package com.vn.sodu.order;
+package com.vn.sodu.order.dtos;
 
+import com.vn.sodu.order.Order;
+import com.vn.sodu.order.OrderSyncStatus;
 import lombok.Builder;
 import lombok.Getter;
 

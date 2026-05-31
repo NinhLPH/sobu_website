@@ -1,5 +1,7 @@
-package com.vn.sodu.order;
+package com.vn.sodu.order.dtos;
 
+import com.vn.sodu.order.OrderStatus;
+import com.vn.sodu.order.OrderSyncStatus;
 import com.vn.sodu.request.OrderType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
