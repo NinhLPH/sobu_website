@@ -60,7 +60,8 @@ public class NhanhService {
     }
 
     public java.util.Optional<NhanhIntegration> getIntegration() {
-        return nhanhIntegrationRepo.findAll().stream().findFirst();
+        Long businessId = Long.valueOf(nhanhProperties.getBusinessId());
+        return nhanhIntegrationRepo.findByBusinessId(businessId).stream().findFirst();
     }
 
     @Transactional

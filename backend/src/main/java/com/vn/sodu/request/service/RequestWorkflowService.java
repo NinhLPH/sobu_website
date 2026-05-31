@@ -61,6 +61,9 @@ public class RequestWorkflowService {
         if (normalized == null || normalized.getType() == null) {
             throw new IllegalArgumentException("Request type is required");
         }
+        if (normalized.getType() == OrderType.NORMAL) {
+            throw new IllegalArgumentException("NORMAL requests are no longer created through the request flow. Create an order instead.");
+        }
         RequestStrategy strategy = requestStrategyFactory.getStrategy(normalized.getType());
         strategy.validate(normalized);
 

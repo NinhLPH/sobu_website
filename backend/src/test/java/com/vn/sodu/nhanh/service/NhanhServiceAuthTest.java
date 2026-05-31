@@ -9,8 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
@@ -43,10 +42,8 @@ public class NhanhServiceAuthTest {
         integration.setAccessToken("real_access_token_12345");
         integration.setAppId("app1");
 
-        List<NhanhIntegration> list = new ArrayList<>();
-        list.add(integration);
-
-        when(nhanhIntegrationRepo.findAll()).thenReturn(list);
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.of(integration));
 
         // Act
         String token = nhanhService.getValidAccessToken();
@@ -60,7 +57,8 @@ public class NhanhServiceAuthTest {
     @Test
     public void testGetValidAccessToken_NoIntegration() {
         // Arrange
-        when(nhanhIntegrationRepo.findAll()).thenReturn(new ArrayList<>());
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> {
@@ -81,11 +79,8 @@ public class NhanhServiceAuthTest {
         integration2.setAccessToken("token_2");
         integration2.setBusinessId(456L);
 
-        List<NhanhIntegration> list = new ArrayList<>();
-        list.add(integration1);
-        list.add(integration2);
-
-        when(nhanhIntegrationRepo.findAll()).thenReturn(list);
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.of(integration1));
 
         // Act
         String token = nhanhService.getValidAccessToken();

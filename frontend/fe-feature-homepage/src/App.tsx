@@ -16,6 +16,7 @@ import BlogList from "./pages/BlogList";
 import BlogDetail from "./pages/BlogDetail";
 import ServicesPage from "./pages/ServicesPage";
 import Membership from "./pages/Membership";
+import LoginPage from './pages/LoginPage';
 
 export default function App() {
     return (
@@ -32,6 +33,7 @@ export default function App() {
                     <Route path="/blog/:id" element={<BlogDetail/>}/>
                     <Route path="/services" element={<ServicesPage/>}/>
                     <Route path="/membership" element={<Membership/>}/>
+                    <Route path="/login" element={<LoginPage/>}/>
 
                     <Route path="/admin" element={<AdminLayout/>}>
                         <Route index element={<Navigate to="/admin/products" replace/>}/>

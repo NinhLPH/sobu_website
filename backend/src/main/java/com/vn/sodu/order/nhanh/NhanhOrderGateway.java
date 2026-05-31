@@ -27,18 +27,22 @@ public class NhanhOrderGateway {
 
     public NhanhOrderAddResult createOrder(Order order, String accessToken) {
         NhanhOrderAddRequest request = toNhanhOrderAddRequest(order);
-        NhanhResponse<NhanhOrderAddResult> response = nhanhClient.post(
+        NhanhResponse<List<NhanhOrderAddResult>> response = nhanhClient.post(
                 ORDER_ADD_PATH,
                 accessToken,
                 request,
-                new ParameterizedTypeReference<NhanhResponse<NhanhOrderAddResult>>() {}
+                new ParameterizedTypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
         );
 
         if (response == null) {
             throw new ExternalServiceException("Nhanh order add response is null");
         }
-        if (response.getCode() == 1 && response.getData() != null) {
-            return response.getData();
+        if (response.getCode() == 1) {
+            List<NhanhOrderAddResult> data = response.getData();
+            if (data == null || data.isEmpty()) {
+                return new NhanhOrderAddResult();
+            }
+            return data.get(0);
         }
         if (isDuplicateResponse(response)) {
             return NhanhOrderAddResult.duplicate();
@@ -97,16 +101,19 @@ public class NhanhOrderGateway {
         return value == null ? BigDecimal.ZERO : value;
     }
 
-    private boolean isDuplicateResponse(NhanhResponse<NhanhOrderAddResult> response) {
+    private boolean isDuplicateResponse(NhanhResponse<?> response) {
         String message = errorMessage(response).toLowerCase(Locale.ROOT);
         return message.contains("duplicate")
+                || message.contains("already exists")
                 || message.contains("trung")
                 || message.contains("trung lap")
                 || message.contains("trùng")
+                || message.contains("tồn tại")
+                || message.contains("ton tai")
                 || message.contains("apporderid");
     }
 
-    private String errorMessage(NhanhResponse<NhanhOrderAddResult> response) {
+    private String errorMessage(NhanhResponse<?> response) {
         if (response.getMessages() == null || response.getMessages().isEmpty()) {
             return "Nhanh order add failed";
         }

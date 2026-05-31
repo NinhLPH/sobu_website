@@ -1,5 +1,7 @@
 package com.vn.sodu.order.nhanh;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.service.NhanhClient;
@@ -58,7 +60,7 @@ class NhanhOrderGatewayTest {
                 eq("access-token"),
                 any(NhanhOrderAddRequest.class),
                 anyResponseType()
-        )).thenReturn(new NhanhResponse<>(1, data, null));
+        )).thenReturn(new NhanhResponse<>(1, List.of(data), null));
 
         NhanhOrderAddResult result = gateway.createOrder(normalOrder(), "access-token");
 
@@ -69,10 +71,51 @@ class NhanhOrderGatewayTest {
     }
 
     @Test
+    void parsesNhanhOrderAddDataArrayShape() throws Exception {
+        String json = """
+                {
+                  "code": 1,
+                  "data": [
+                    {
+                      "id": 987,
+                      "trackingUrl": "https://track.example/order/987"
+                    }
+                  ]
+                }
+                """;
+
+        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+                json,
+                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+        );
+
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0).getId()).isEqualTo(987L);
+        assertThat(response.getData().get(0).getTrackingUrl()).isEqualTo("https://track.example/order/987");
+    }
+
+    @Test
     void treatsDuplicateAppOrderIdResponseAsSuccessfulDuplicate() {
         NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient);
-        NhanhResponse<NhanhOrderAddResult> response = new NhanhResponse<>(0, null, null);
+        NhanhResponse<List<NhanhOrderAddResult>> response = new NhanhResponse<>(0, null, null);
         response.setMessages(List.of("Duplicate appOrderId"));
+        when(nhanhClient.post(
+                eq("/v3.0/order/add"),
+                eq("access-token"),
+                any(NhanhOrderAddRequest.class),
+                anyResponseType()
+        )).thenReturn(response);
+
+        NhanhOrderAddResult result = gateway.createOrder(normalOrder(), "access-token");
+
+        assertThat(result.isDuplicate()).isTrue();
+    }
+
+    @Test
+    void treatsVietnameseExistingOrderResponseAsSuccessfulDuplicate() {
+        NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient);
+        NhanhResponse<List<NhanhOrderAddResult>> response = new NhanhResponse<>(0, null, null);
+        response.setMessages(List.of("Đơn hàng: SOBU-ORD-20260531223411-3213 đã tồn tại"));
         when(nhanhClient.post(
                 eq("/v3.0/order/add"),
                 eq("access-token"),
@@ -109,7 +152,7 @@ class NhanhOrderGatewayTest {
     }
 
     @SuppressWarnings("unchecked")
-    private ParameterizedTypeReference<NhanhResponse<NhanhOrderAddResult>> anyResponseType() {
+    private ParameterizedTypeReference<NhanhResponse<List<NhanhOrderAddResult>>> anyResponseType() {
         return any(ParameterizedTypeReference.class);
     }
 }

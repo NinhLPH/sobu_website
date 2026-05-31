@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 public class ProductListItemDTO {
 
     private Long id;
+    private Long externalId;
     private String name;
     private String code;
     private BigDecimal price;

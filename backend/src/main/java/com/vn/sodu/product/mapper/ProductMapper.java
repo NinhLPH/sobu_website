@@ -185,6 +185,7 @@ public class ProductMapper {
 
         return ProductListItemDTO.builder()
                 .id(entity.getId())
+                .externalId(entity.getExternalId())
                 .name(entity.getName())
                 .code(entity.getCode())
                 .price(entity.getRetailPrice())
