@@ -1,24 +1,24 @@
 import { create } from 'zustand';
 
-import {Product} from "../interface/product";
-import {Category} from "../interface/category";
+import {ProductModel} from "../interface/product.model";
+import {CategoryModel} from "../interface/category.model";
 import {Order} from "../interface/order";
 import {ServiceRequest} from "../interface/service-request";
 
 import { mockProducts, mockCategories, mockOrders, mockRequests } from '../data/mockData';
 
 interface AdminState {
-    products: Product[];
-    categories: Category[];
+    products: ProductModel[];
+    categories: CategoryModel[];
     orders: Order[];
     requests: ServiceRequest[];
 
-    addProduct: (product: Product) => void;
-    updateProduct: (id: string, updates: Partial<Product>) => void;
+    addProduct: (product: ProductModel) => void;
+    updateProduct: (id: string, updates: Partial<ProductModel>) => void;
     deleteProduct: (id: string) => void;
 
-    addCategory: (category: Category) => void;
-    updateCategory: (id: string, updates: Partial<Category>) => void;
+    addCategory: (category: CategoryModel) => void;
+    updateCategory: (id: string, updates: Partial<CategoryModel>) => void;
     deleteCategory: (id: string) => void;
 
     updateOrderStatus: (id: string, status: Order['status']) => void;
@@ -42,7 +42,7 @@ export const useAdminStore = create<AdminState>((set) => ({
 
     addCategory: (category) => set((state) => {
         if (category.parentId) {
-            const addNested = (cats: Category[]): Category[] =>
+            const addNested = (cats: CategoryModel[]): CategoryModel[] =>
                 cats.map(c => c.id === category.parentId
                     ? { ...c, children: [...(c.children || []), category] }
                     : { ...c, children: c.children ? addNested(c.children) : c.children });
@@ -51,7 +51,7 @@ export const useAdminStore = create<AdminState>((set) => ({
         return { categories: [...state.categories, category] };
     }),
     updateCategory: (id, updates) => set((state) => {
-        const updateNested = (cats: Category[]): Category[] =>
+        const updateNested = (cats: CategoryModel[]): CategoryModel[] =>
             cats.map(c => c.id === id
                 ? { ...c, ...updates }
                 : { ...c, children: c.children ? updateNested(c.children) : c.children });
@@ -59,7 +59,7 @@ export const useAdminStore = create<AdminState>((set) => ({
     }),
 
     deleteCategory: (id) => set((state) => {
-        const deleteNested = (cats: Category[]): Category[] =>
+        const deleteNested = (cats: CategoryModel[]): CategoryModel[] =>
             cats.filter(c => c.id !== id)
                 .map(c => ({ ...c, children: c.children ? deleteNested(c.children) : c.children }));
         return { categories: deleteNested(state.categories) };

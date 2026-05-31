@@ -1,7 +1,8 @@
 import {useState, useEffect} from 'react';
-import {Link} from 'react-router-dom';
+import {Link, useNavigate} from 'react-router-dom';
 import {Trash2, Minus, Plus, ShoppingBag} from 'lucide-react';
 import {useCartStore} from '../store/useCartStore';
+import {useAuthStore} from '../store/useAuthStore';
 import {formatCurrency} from "../util/format";
 
 interface QuantityControllerProps {
@@ -69,6 +70,8 @@ function QuantityController({quantity, onIncrease, onDecrease, onChange}: Quanti
 export default function Cart() {
     const {items, removeFromCart, updateQuantity, getTotals} = useCartStore();
     const {subtotal, itemCount} = getTotals();
+    const {isAuthenticated} = useAuthStore();
+    const navigate = useNavigate();
 
     if (items.length === 0) {
         return (
@@ -183,7 +186,14 @@ export default function Cart() {
                         </div>
 
                         <button
-                            className="w-full mt-6 py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-md shadow-primary/10 hover:scale-[1.01] transition-transform">
+                            onClick={(e) => {
+                                if (!isAuthenticated) {
+                                    e.preventDefault();
+                                    navigate('/login');
+                                }
+                            }}
+                            className="w-full mt-6 py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl font-black uppercase tracking-widest text-xs shadow-md shadow-primary/10 hover:scale-[1.01] transition-transform cursor-pointer"
+                        >
                             Xác nhận đặt hàng
                         </button>
 

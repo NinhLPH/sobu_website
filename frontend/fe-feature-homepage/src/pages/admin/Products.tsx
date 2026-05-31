@@ -1,8 +1,8 @@
 import {useState} from 'react';
 import {Plus, Edit, Trash2, Search, X} from 'lucide-react';
 
-import {Product} from "../../interface/product";
-import {Category} from "../../interface/category";
+import {ProductModel} from "../../interface/product.model";
+import {CategoryModel} from "../../interface/category.model";
 import {useAdminStore} from '../../store/useAdminStore';
 import {formatCurrency} from "../../util/format";
 
@@ -11,11 +11,11 @@ export default function AdminProducts() {
     const [searchTerm, setSearchTerm] = useState('');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+    const [editingProduct, setEditingProduct] = useState<Partial<ProductModel> | null>(null);
 
     // Flatten categories for dropdown
     const flatCategories: { id: string; name: string }[] = [];
-    const flatten = (cats: Category[], prefix = '') => {
+    const flatten = (cats: CategoryModel[], prefix = '') => {
         cats.forEach(c => {
             flatCategories.push({ id: c.id, name: `${prefix}${c.name}` });
             if (c.children) flatten(c.children, `${prefix}${c.name} > `);
@@ -25,7 +25,7 @@ export default function AdminProducts() {
 
     const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const handleOpenModal = (product?: Product) => {
+    const handleOpenModal = (product?: ProductModel) => {
         if (product) {
             setEditingProduct({ ...product });
         } else {
@@ -55,7 +55,7 @@ export default function AdminProducts() {
 
         // Find category name based on categoryId to keep them in sync
         const cat = flatCategories.find(c => c.id === editingProduct.categoryId);
-        const productToSave = { ...editingProduct, category: cat ? cat.name : editingProduct.category } as Product;
+        const productToSave = { ...editingProduct, category: cat ? cat.name : editingProduct.category } as ProductModel;
 
         if (products.some(p => p.id === productToSave.id)) {
             updateProduct(productToSave.id, productToSave);
@@ -146,7 +146,7 @@ export default function AdminProducts() {
                     </table>
                 </div>
             </div>
-            {/* Product Modal */}
+            {/* ProductModel Modal */}
             {isModalOpen && editingProduct && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">

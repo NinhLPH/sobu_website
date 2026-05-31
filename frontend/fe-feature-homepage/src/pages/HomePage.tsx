@@ -1,8 +1,10 @@
 import {useState, useEffect} from 'react';
 import {Link} from 'react-router-dom';
 import {ChevronLeft, ChevronRight, Star} from 'lucide-react';
-import {mockProducts, placeholderImages, mockBlogs, HERO_SLIDES} from '../data/mockData';
+import {placeholderImages, mockBlogs, HERO_SLIDES} from '../data/mockData';
 import ProductSlider from '../components/common/ProductSlider';
+import {useProductStore} from '../store/useProductStore';
+import {mapListItemToProductModel} from '../interface/product.model';
 
 const SectionHeader = ({title, subtitle}: { title: string, subtitle?: string }) => (
     <div className="flex items-center gap-4 mb-6">
@@ -19,13 +21,13 @@ const SectionHeader = ({title, subtitle}: { title: string, subtitle?: string }) 
     </div>
 );
 
-const SectionWithBanner = ({title, subtitle, bannerImg}: { title: string, subtitle?: string, bannerImg: string }) => (
+const SectionWithBanner = ({title, subtitle, bannerImg, products}: { title: string, subtitle?: string, bannerImg: string, products: any[] }) => (
     <section className="px-6 max-w-screen-2xl mx-auto mb-20">
         <SectionHeader title={title} subtitle={subtitle}/>
         <div className="w-full h-[200px] md:h-[300px] bg-surface-container rounded-xl mb-8 overflow-hidden">
             <img src={bannerImg} className="w-full h-full object-cover" alt={`${title} banner`}/>
         </div>
-        <ProductSlider products={mockProducts}/>
+        <ProductSlider products={products}/>
         <div className="flex justify-center mt-8">
             <Link to="/products"
                   className="px-8 py-2 border border-on-surface text-on-surface rounded-full font-bold hover:bg-on-surface hover:text-surface transition-all uppercase text-sm">
@@ -39,6 +41,13 @@ const SectionWithBanner = ({title, subtitle, bannerImg}: { title: string, subtit
 
 export default function HomePage() {
     const [current, setCurrent] = useState(0);
+    const { products, fetchProducts } = useProductStore();
+
+    useEffect(() => {
+        fetchProducts();
+    }, [fetchProducts]);
+
+    const mappedProducts = products.map(mapListItemToProductModel);
 
     const nextSlide = () => {
         setCurrent((prev) => (prev === HERO_SLIDES.length - 1 ? 0 : prev + 1));
@@ -124,6 +133,7 @@ export default function HomePage() {
                     title="BÁN CHẠY"
                     subtitle="Giao Hàng Toàn Quốc"
                     bannerImg="https://i0.wp.com/www.comicbookrevolution.com/wp-content/uploads/2023/12/transformers-4-previw-banner.jpg"
+                    products={mappedProducts}
                 />
             </div>
 
@@ -166,7 +176,7 @@ export default function HomePage() {
             {/* 4. MÔ HÌNH CUSTOM */}
             <section className="px-6 max-w-screen-2xl mx-auto mb-20">
                 <SectionHeader title="MÔ HÌNH CUSTOM" subtitle="Giao Hàng Toàn Quốc"/>
-                <ProductSlider products={mockProducts.slice().reverse()}/>
+                <ProductSlider products={mappedProducts.slice().reverse()}/>
                 <div className="flex justify-center mt-8">
                     <Link to="/products"
                           className="px-8 py-2 border border-on-surface text-on-surface rounded-full font-bold hover:bg-on-surface hover:text-surface transition-all uppercase text-sm">Xem
@@ -206,6 +216,7 @@ export default function HomePage() {
                 title="Dụng Cụ"
                 subtitle="Giao Hàng Toàn Quốc"
                 bannerImg="https://tooltechvietnam.com/wp-content/uploads/2023/03/handtools.jpg"
+                products={mappedProducts}
             />
 
             {/* 7. KHỐI PROMO 2x2 */}
@@ -280,11 +291,13 @@ export default function HomePage() {
                 title="Hotwheels"
                 subtitle="Giao Hàng Toàn Quốc"
                 bannerImg="https://images.unsplash.com/photo-1551522435-a13afa10f103?q=80&w=1600&auto=format&fit=crop"
+                products={mappedProducts}
             />
 
             <SectionWithBanner
                 title="GIảm giá cực mạnh"
                 bannerImg="https://img.magnific.com/free-vector/modern-black-friday-holiday-sale-offer-banner-get-30-percent-price-drop-vector_1017-47794.jpg?semt=ais_hybrid&w=740&q=80"
+                products={mappedProducts}
             />
 
             {/* 11. TIN TỨC */}
