@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { authStorage } from '../utils/auth-storage';
 
 const BASE_URL = 'http://localhost:8081';
 
@@ -34,7 +35,7 @@ apiClient.interceptors.request.use(
         const url = config.url || '';
 
         if (!isPublicRoute(url)) {
-            const token = localStorage.getItem('accessToken');
+            const token = authStorage.getAccessToken();
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
@@ -65,18 +66,17 @@ apiClient.interceptors.response.use(
         if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
             originalRequest._retry = true;
             try {
-                const refreshToken = localStorage.getItem('refreshToken');
+                const refreshToken = authStorage.getRefreshToken();
                 // Gọi API refresh token
                 const res = await axios.post(`${BASE_URL}/api/auth/refresh-token`, { refreshToken });
 
                 const newAccessToken = res.data.data.accessToken;
-                localStorage.setItem('accessToken', newAccessToken);
+                authStorage.setAccessToken(newAccessToken);
 
                 originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
                 return apiClient(originalRequest);
             } catch (refreshError) {
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('refreshToken');
+                authStorage.clear();
                 window.location.href = '/login';
                 return Promise.reject(refreshError);
             }
