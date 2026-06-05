@@ -3,6 +3,7 @@ package com.vn.sodu.order;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.order.nhanh.NhanhOrderGateway;
+import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.order.services.OrderSyncService;
 import com.vn.sodu.request.OrderType;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -99,6 +101,41 @@ class OrderSyncServiceTest {
     @Test
     void syncOrderToNhanhSkipsNonNormalOrders() {
         Order order = order(OrderType.PREORDER);
+        order.setStatus(OrderStatus.DEPOSIT_PAID);
+        order.setPaymentStatus(PaymentStatus.PENDING);
+        when(orderRepository.findWithItemsAndRequestById(1L)).thenReturn(Optional.of(order));
+
+        orderSyncService.syncOrderToNhanh(1L);
+
+        assertThat(order.getSyncStatus()).isEqualTo(OrderSyncStatus.PENDING);
+        verify(orderRepository, never()).save(order);
+        verifyNoInteractions(nhanhService, nhanhOrderGateway, requestRepo);
+    }
+
+    @Test
+    void syncOrderToNhanhAllowsFullyPaidPreordersOnceProcessingStarts() {
+        Order order = order(OrderType.PREORDER);
+        order.setStatus(OrderStatus.PROCESSING);
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaidAmount(new BigDecimal("1000.00"));
+        NhanhOrderAddResult result = new NhanhOrderAddResult();
+        result.setId(654321L);
+        when(orderRepository.findWithItemsAndRequestById(1L)).thenReturn(Optional.of(order));
+        when(nhanhService.getValidAccessToken()).thenReturn("token");
+        when(nhanhOrderGateway.createOrder(order, "token")).thenReturn(result);
+
+        orderSyncService.syncOrderToNhanh(1L);
+
+        assertThat(order.getSyncStatus()).isEqualTo(OrderSyncStatus.SYNCED);
+        assertThat(order.getNhanhOrderId()).isEqualTo("654321");
+        verify(orderRepository).save(order);
+        verify(requestRepo).save(order.getRequest());
+    }
+
+    @Test
+    void syncOrderToNhanhSkipsOrdersWithoutConfirmedPayments() {
+        Order order = order(OrderType.NORMAL);
+        order.setPaidAmount(BigDecimal.ZERO);
         when(orderRepository.findWithItemsAndRequestById(1L)).thenReturn(Optional.of(order));
 
         orderSyncService.syncOrderToNhanh(1L);
@@ -136,6 +173,9 @@ class OrderSyncServiceTest {
                 .orderCode("SOBU-REQ-1")
                 .request(request)
                 .type(type)
+                .status(OrderStatus.NEW)
+                .paidAmount(new BigDecimal("100.00"))
+                .paymentStatus(PaymentStatus.PAID)
                 .syncStatus(OrderSyncStatus.PENDING)
                 .build();
     }

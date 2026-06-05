@@ -37,7 +37,7 @@ public class OrderController {
     @PostMapping
     @Operation(
             summary = "Create a normal order",
-            description = "Creates an order for available catalog products and starts automatic Nhanh sync."
+            description = "Creates an order for available catalog products. Nhanh sync proceeds only after the order reaches its required payment milestone."
     )
     public ResponseEntity<ApiResponseDTO<OrderResponseDto>> createNormalOrder(
             @Valid @RequestBody CreateNormalOrderDto dto

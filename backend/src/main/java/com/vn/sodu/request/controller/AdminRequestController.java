@@ -138,7 +138,7 @@ public class AdminRequestController {
             Authentication authentication
     ) {
         requireStaff(authentication);
-        Request request = requestWorkflowService.updateRequest(requestId, dto);
+        Request request = requestWorkflowService.updateRequestAsAdmin(requestId, dto);
         return ResponseEntity.ok(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request updated", HttpStatus.OK.value()));
     }
 

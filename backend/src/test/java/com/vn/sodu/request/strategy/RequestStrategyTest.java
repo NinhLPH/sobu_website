@@ -5,20 +5,40 @@ import com.vn.sodu.request.Request;
 import com.vn.sodu.request.RequestStatus;
 import com.vn.sodu.request.dto.CreateRequestDto;
 import com.vn.sodu.request.dto.RequestItemDto;
+import com.vn.sodu.product.Product;
+import com.vn.sodu.product.repo.ProductRepo;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class RequestStrategyTest {
 
+    private final ProductRepo productRepo = mock(ProductRepo.class);
     private final NormalRequestStrategy normal = new NormalRequestStrategy();
-    private final PreOrderRequestStrategy preOrder = new PreOrderRequestStrategy();
+    private final PreOrderRequestStrategy preOrder = new PreOrderRequestStrategy(productRepo);
     private final FindingRequestStrategy finding = new FindingRequestStrategy();
     private final CustomRequestStrategy custom = new CustomRequestStrategy();
+
+    @BeforeEach
+    void setUp() {
+        when(productRepo.findByExternalId(anyLong())).thenAnswer(invocation -> {
+            long externalId = invocation.getArgument(0, Long.class);
+            return Optional.of(Product.builder()
+                    .id(externalId)
+                    .externalId(externalId)
+                    .name("Catalog product " + externalId)
+                    .build());
+        });
+    }
 
     @Test
     void normalStrategyValidatesAndCalculatesTotal() {
@@ -40,6 +60,17 @@ class RequestStrategyTest {
         assertThat(preOrder.calculateDeposit(dto)).isEqualByComparingTo("75.00");
         assertThat(preOrder.initialStatus()).isEqualTo(RequestStatus.SOURCING);
         assertThat(preOrder.autoCreateNhanhOrder()).isFalse();
+    }
+
+    @Test
+    void preorderStrategyRejectsUnknownCatalogProduct() {
+        CreateRequestDto dto = baseDto(OrderType.PREORDER, null);
+        dto.getItems().get(0).setNhanhProductId("999999999");
+        when(productRepo.findByExternalId(999999999L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> preOrder.validate(dto));
+
+        assertThat(ex.getMessage()).contains("PREORDER product not found");
     }
 
     @Test
@@ -117,14 +148,14 @@ class RequestStrategyTest {
                 .customRequirements(requirements)
                 .items(List.of(
                         RequestItemDto.builder()
-                                .nhanhProductId("P1")
+                                .nhanhProductId("9001001")
                                 .name("Item 1")
                                 .note("note")
                                 .price(new BigDecimal("100"))
                                 .quantity(2)
                                 .build(),
                         RequestItemDto.builder()
-                                .nhanhProductId("P2")
+                                .nhanhProductId("9001002")
                                 .name("Item 2")
                                 .note("note")
                                 .price(new BigDecimal("50"))

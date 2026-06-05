@@ -2,6 +2,8 @@ package com.vn.sodu.request.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.order.services.OrderService;
+import com.vn.sodu.product.Product;
+import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.request.RequestAttachment;
@@ -30,12 +32,14 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,6 +47,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class RequestWorkflowServiceTest {
+
+        private static final LocalDateTime SAVED_AT = LocalDateTime.of(2026, 6, 5, 11, 0, 0);
 
         @Mock
         private RequestRepo requestRepo;
@@ -56,13 +62,16 @@ class RequestWorkflowServiceTest {
         @Mock
         private OrderService orderService;
 
+        @Mock
+        private ProductRepo productRepo;
+
         private RequestWorkflowService service;
 
         @BeforeEach
         void setUp() {
                 RequestStrategyFactory factory = new RequestStrategyFactory(
                                 new NormalRequestStrategy(),
-                                new PreOrderRequestStrategy(),
+                                new PreOrderRequestStrategy(productRepo),
                                 new FindingRequestStrategy(),
                                 new CustomRequestStrategy());
                 service = new RequestWorkflowService(
@@ -74,8 +83,20 @@ class RequestWorkflowServiceTest {
                                  new RequestTransitionPolicy(),
                                  new RequestEditPolicy(),
                                  new ObjectMapper(), orderService);
+                when(productRepo.findByExternalId(anyLong())).thenAnswer(invocation -> {
+                        long externalId = invocation.getArgument(0, Long.class);
+                        return Optional.of(Product.builder()
+                                        .id(externalId)
+                                        .externalId(externalId)
+                                        .name("Catalog product " + externalId)
+                                        .build());
+                });
                 when(requestRepo.findByRequestCode(anyString())).thenReturn(Optional.empty());
-                when(requestRepo.save(any(Request.class))).thenAnswer(invocation -> invocation.getArgument(0));
+                when(requestRepo.save(any(Request.class))).thenAnswer(invocation -> {
+                        Request request = invocation.getArgument(0);
+                        request.setUpdatedAt(SAVED_AT);
+                        return request;
+                });
         }
 
         @Test
@@ -87,14 +108,14 @@ class RequestWorkflowServiceTest {
                                 .uploadedImageUrls(List.of(" https://img/1 ", "https://img/1", "https://img/2"))
                                 .items(List.of(
                                                 RequestItemDto.builder()
-                                                                .nhanhProductId(" P1 ")
+                                                                .nhanhProductId(" 9001003 ")
                                                                 .name(" Item A ")
                                                                 .note(" note ")
                                                                 .price(new BigDecimal("100"))
                                                                 .quantity(1)
                                                                 .build(),
                                                 RequestItemDto.builder()
-                                                                .nhanhProductId("P1")
+                                                                .nhanhProductId("9001003")
                                                                 .name("Item A")
                                                                 .note("note")
                                                                 .price(new BigDecimal("100"))
@@ -113,6 +134,26 @@ class RequestWorkflowServiceTest {
                 assertThat(result.getAttachments()).hasSize(2);
                 verify(requestSnapshotRepo).save(any());
                 verify(requestTimelineRepo).save(any());
+        }
+
+        @Test
+        void createRequestRejectsUnknownPreorderCatalogProduct() {
+                CreateRequestDto dto = CreateRequestDto.builder()
+                                .customerPhone("0123456789")
+                                .type(OrderType.PREORDER)
+                                .items(List.of(RequestItemDto.builder()
+                                                .nhanhProductId("999999999")
+                                                .name("Item A")
+                                                .price(new BigDecimal("100"))
+                                                .quantity(1)
+                                                .build()))
+                                .build();
+                when(productRepo.findByExternalId(999999999L)).thenReturn(Optional.empty());
+
+                IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                                () -> service.createRequest(dto));
+
+                assertThat(ex.getMessage()).contains("PREORDER product not found");
         }
 
         @Test
@@ -181,6 +222,54 @@ class RequestWorkflowServiceTest {
                 assertThat(result.getTotalAmount()).isEqualByComparingTo("300.00");
                 assertThat(result.getItems()).hasSize(1);
                 assertThat(result.getAttachments()).hasSize(1);
+                verify(requestSnapshotRepo).save(any());
+                verify(requestTimelineRepo).save(any());
+        }
+
+        @Test
+        void updateRequestAsAdminAllowsManualAmountsAndRequirements() {
+                Request existing = Request.builder()
+                                .id(16L)
+                                .requestCode("SOBU-REQ-20260507210000-0007")
+                                .customerPhone("0123456789")
+                                .type(OrderType.PREORDER)
+                                .status(RequestStatus.SOURCING)
+                                .totalAmount(new BigDecimal("250.00"))
+                                .depositAmount(new BigDecimal("75.00"))
+                                .customRequirements("Old requirement")
+                                .items(new java.util.ArrayList<>(List.of(
+                                                RequestItem.builder()
+                                                                .nhanhProductId("9001003")
+                                                                .name("Item A")
+                                                                .note("note")
+                                                                .price(new BigDecimal("100"))
+                                                                .quantity(2)
+                                                                .build(),
+                                                RequestItem.builder()
+                                                                .nhanhProductId("9001002")
+                                                                .name("Item B")
+                                                                .note("note")
+                                                                .price(new BigDecimal("50"))
+                                                                .quantity(1)
+                                                                .build())))
+                                .attachments(new java.util.ArrayList<>())
+                                .build();
+
+                attachBackReferences(existing);
+                when(requestRepo.findById(16L)).thenReturn(Optional.of(existing));
+
+                UpdateRequestDto dto = UpdateRequestDto.builder()
+                                .customRequirements(" <div>Admin adjusted pricing</div> ")
+                                .totalAmount(new BigDecimal("550"))
+                                .depositAmount(new BigDecimal("125"))
+                                .build();
+
+                Request result = service.updateRequestAsAdmin(16L, dto);
+
+                assertThat(result.getCustomRequirements()).isEqualTo("Admin adjusted pricing");
+                assertThat(result.getTotalAmount()).isEqualByComparingTo("550.00");
+                assertThat(result.getDepositAmount()).isEqualByComparingTo("125.00");
+                assertThat(result.getUpdatedAt()).isEqualTo(SAVED_AT);
                 verify(requestSnapshotRepo).save(any());
                 verify(requestTimelineRepo).save(any());
         }

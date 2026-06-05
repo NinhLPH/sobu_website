@@ -6,6 +6,7 @@ import com.vn.sodu.order.Order;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.order.OrderSyncStatus;
 import com.vn.sodu.order.nhanh.NhanhOrderGateway;
+import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.request.repo.RequestRepo;
@@ -13,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+
+import java.math.BigDecimal;
 
 @Slf4j
 @Service
@@ -31,12 +34,22 @@ public class OrderSyncService {
         Order order = orderRepository.findWithItemsAndRequestById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
 
-        if (order.getType() != OrderType.NORMAL) {
-            log.info("Skipping Nhanh sync for non-NORMAL order id={}, type={}", order.getId(), order.getType());
+        if (!isSyncEligibleOrderType(order)) {
+            log.info("Skipping Nhanh sync for ineligible order id={}, type={}, status={}",
+                    order.getId(), order.getType(), order.getStatus());
             return;
         }
         if (order.getSyncStatus() == OrderSyncStatus.SYNCED) {
             log.info("Skipping Nhanh sync for already synced order id={}", order.getId());
+            return;
+        }
+        if (order.getPaymentStatus() != PaymentStatus.PAID) {
+            log.info("Skipping Nhanh sync for order id={} because payment status is {}",
+                    order.getId(), order.getPaymentStatus());
+            return;
+        }
+        if (order.getPaidAmount() == null || order.getPaidAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            log.info("Skipping Nhanh sync for order id={} because paidAmount={}", order.getId(), order.getPaidAmount());
             return;
         }
 
@@ -92,5 +105,15 @@ public class OrderSyncService {
             return message;
         }
         return message.substring(0, MAX_SYNC_ERROR_LENGTH);
+    }
+
+    private boolean isSyncEligibleOrderType(Order order) {
+        if (order == null) {
+            return false;
+        }
+        if (order.getType() == OrderType.NORMAL) {
+            return true;
+        }
+        return order.getType() == OrderType.PREORDER && order.getStatus() == com.vn.sodu.order.OrderStatus.PROCESSING;
     }
 }

@@ -208,7 +208,7 @@ id, request_code, customer_phone, version, status, type, total_amount, deposit_a
 custom_requirements, nhanh_order_id, nhanh_order_code, admin_id, created_at, updated_at
 ) VALUES
 (1, 'SOBU-REQ-0001', '0912000001', 0, 'APPROVED', 'NORMAL', 738000, 0, '{"note":"Giao giờ hành chính","preferredChannel":"phone"}', 'NH-10001', 'NH-SODU-10001', 2, '2026-05-18 09:00:00', '2026-05-18 09:20:00'),
-(2, 'SOBU-REQ-0002', '0912000002', 0, 'APPROVED', 'PREORDER', 498000, 100000, '{"note":"Đặt trước 2 thỏi son","giftWrap":true}', 'NH-10002', 'NH-SODU-10002', 2, '2026-05-19 13:40:00', '2026-05-19 14:00:00'),
+(2, 'SOBU-REQ-0002', '0912000002', 0, 'APPROVED', 'PREORDER', 498000, 100000, '{"note":"Đặt trước 2 thỏi son","giftWrap":true}', NULL, NULL, 2, '2026-05-19 13:40:00', '2026-05-20 09:05:00'),
 (3, 'SOBU-REQ-0003', '0912000003', 0, 'REVIEWING', 'FINDING', 0, 0, '{"lookingFor":"Serum phục hồi cho da nhạy cảm","budget":"500000"}', NULL, NULL, 3, '2026-05-20 08:30:00', '2026-05-20 09:00:00')
 ON DUPLICATE KEY UPDATE
 customer_phone = VALUES(customer_phone),
@@ -274,15 +274,15 @@ snapshot_json = VALUES(snapshot_json),
 captured_at = VALUES(captured_at);
 
 INSERT INTO orders (
-id, order_code, request_id, type, status, sync_status, total_amount, deposit_amount, description,
+id, order_code, request_id, type, status, sync_status, total_amount, deposit_amount, paid_amount, remaining_amount, payment_status, description,
 customer_name, customer_mobile, customer_email, customer_address, customer_city_name,
 customer_district_name, customer_ward_name, nhanh_order_id, nhanh_order_code, sync_error,
 version, created_at, updated_at
 ) VALUES
-(1, 'SOBU-ORD-0001', 1, 'NORMAL', 'PROCESSING', 'SYNCED', 738000, 0, 'Đơn hàng từ yêu cầu SOBU-REQ-0001.',
+(1, 'SOBU-ORD-0001', 1, 'NORMAL', 'PROCESSING', 'SYNCED', 738000, 0, 738000, 0, 'PAID', 'Đơn hàng từ yêu cầu SOBU-REQ-0001.',
 'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé', 'NH-10001', 'NH-SODU-10001', NULL, 0, '2026-05-18 09:30:00', '2026-05-18 09:45:00'),
-(2, 'SOBU-ORD-0002', 2, 'PREORDER', 'NEW', 'PENDING', 498000, 100000, 'Đơn đặt trước từ yêu cầu SOBU-REQ-0002.',
-'Trần Gia Minh', '0912000002', 'minh.tran@example.com', '26 Tràng Thi', 'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Hàng Trống', 'NH-10002', 'NH-SODU-10002', NULL, 0, '2026-05-19 14:10:00', '2026-05-19 14:10:00')
+(2, 'SOBU-ORD-0002', 2, 'PREORDER', 'READY_FOR_FINAL_PAYMENT', 'PENDING', 498000, 100000, 100000, 398000, 'PENDING', 'Đơn đặt trước từ yêu cầu SOBU-REQ-0002.',
+'Trần Gia Minh', '0912000002', 'minh.tran@example.com', '26 Tràng Thi', 'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Hàng Trống', NULL, NULL, NULL, 0, '2026-05-19 14:10:00', '2026-05-20 09:10:00')
 ON DUPLICATE KEY UPDATE
 request_id = VALUES(request_id),
 type = VALUES(type),
@@ -290,6 +290,9 @@ status = VALUES(status),
 sync_status = VALUES(sync_status),
 total_amount = VALUES(total_amount),
 deposit_amount = VALUES(deposit_amount),
+paid_amount = VALUES(paid_amount),
+remaining_amount = VALUES(remaining_amount),
+payment_status = VALUES(payment_status),
 description = VALUES(description),
 customer_name = VALUES(customer_name),
 customer_mobile = VALUES(customer_mobile),
@@ -315,6 +318,31 @@ note = VALUES(note),
 price = VALUES(price),
 discount = VALUES(discount),
 quantity = VALUES(quantity);
+
+INSERT INTO order_payments (
+id, order_id, payment_code, type, status, amount, provider, provider_reference,
+checkout_url, qr_code, failure_reason, expires_at, paid_at, version, created_at, updated_at
+) VALUES
+(1, 1, 'SOBU-PAY-0001', 'FULL', 'PAID', 738000, 'PAYOS_MOCK', 'PAYOS-MOCK-0001',
+'https://pay.payos.vn/mock/SOBU-PAY-0001', 'qr://SOBU-PAY-0001', NULL, '2026-05-18 10:30:00', '2026-05-18 09:35:00', 0, '2026-05-18 09:30:00', '2026-05-18 09:35:00'),
+(2, 2, 'SOBU-PAY-0002', 'DEPOSIT', 'PAID', 100000, 'PAYOS_MOCK', 'PAYOS-MOCK-0002',
+'https://pay.payos.vn/mock/SOBU-PAY-0002', 'qr://SOBU-PAY-0002', NULL, '2026-05-19 18:00:00', '2026-05-19 14:30:00', 0, '2026-05-19 14:10:00', '2026-05-19 14:30:00'),
+(3, 2, 'SOBU-PAY-0003', 'FINAL', 'PENDING', 398000, 'PAYOS_MOCK', 'PAYOS-MOCK-0003',
+'https://pay.payos.vn/mock/SOBU-PAY-0003', 'qr://SOBU-PAY-0003', NULL, '2026-05-21 18:00:00', NULL, 0, '2026-05-20 09:10:00', '2026-05-20 09:10:00')
+ON DUPLICATE KEY UPDATE
+order_id = VALUES(order_id),
+payment_code = VALUES(payment_code),
+type = VALUES(type),
+status = VALUES(status),
+amount = VALUES(amount),
+provider = VALUES(provider),
+provider_reference = VALUES(provider_reference),
+checkout_url = VALUES(checkout_url),
+qr_code = VALUES(qr_code),
+failure_reason = VALUES(failure_reason),
+expires_at = VALUES(expires_at),
+paid_at = VALUES(paid_at),
+updated_at = VALUES(updated_at);
 
 -- ========================
 -- UI / CONFIGURATION

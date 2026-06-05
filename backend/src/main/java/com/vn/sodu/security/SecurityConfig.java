@@ -44,7 +44,8 @@ public class SecurityConfig {
             "/actuator/nhanhHealth",
             "/api/public/**",
             "/api/v1/public/**",
-            "/api/nhanh/**"
+            "/api/nhanh/**",
+            "/api/payos/**"
     };
 
     @Bean

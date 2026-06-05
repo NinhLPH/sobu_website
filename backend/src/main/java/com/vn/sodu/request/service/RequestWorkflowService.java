@@ -25,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -88,6 +90,15 @@ public class RequestWorkflowService {
 
     @Transactional
     public Request updateRequest(Long requestId, UpdateRequestDto dto) {
+        return updateRequestInternal(requestId, dto, false);
+    }
+
+    @Transactional
+    public Request updateRequestAsAdmin(Long requestId, UpdateRequestDto dto) {
+        return updateRequestInternal(requestId, dto, true);
+    }
+
+    private Request updateRequestInternal(Long requestId, UpdateRequestDto dto, boolean adminOverrideAmounts) {
         if (dto == null) {
             throw new IllegalArgumentException("Update request payload is required");
         }
@@ -111,6 +122,11 @@ public class RequestWorkflowService {
         }
         if (normalized.getItems() != null && !requestEditPolicy.canEditItems(currentStatus)) {
             throw new IllegalStateException("Items cannot be edited in status " + currentStatus);
+        }
+        if (adminOverrideAmounts
+                && (normalized.getTotalAmount() != null || normalized.getDepositAmount() != null)
+                && requestEditPolicy.editableFields(currentStatus).isEmpty()) {
+            throw new IllegalStateException("Amounts cannot be edited in status " + currentStatus);
         }
 
         OrderType effectiveType = normalized.getType() != null ? normalized.getType() : request.getType();
@@ -137,6 +153,7 @@ public class RequestWorkflowService {
 
         strategy.validate(toCreateRequestDto(request));
         recalculate(request, strategy);
+        applyAdminAmountOverrides(request, normalized, adminOverrideAmounts);
 
         Request saved = requestRepo.save(request);
         appendTimeline(saved, "UPDATE", currentStatus, saved.getStatus(), "system", "Request updated");
@@ -185,6 +202,25 @@ public class RequestWorkflowService {
         CreateRequestDto currentDto = toCreateRequestDto(request);
         request.setTotalAmount(strategy.calculateTotal(currentDto));
         request.setDepositAmount(strategy.calculateDeposit(currentDto));
+    }
+
+    private void applyAdminAmountOverrides(Request request, UpdateRequestDto dto, boolean adminOverrideAmounts) {
+        if (!adminOverrideAmounts || dto == null) {
+            return;
+        }
+
+        if (dto.getTotalAmount() != null) {
+            request.setTotalAmount(scaleMoney(dto.getTotalAmount()));
+        }
+        if (dto.getDepositAmount() != null) {
+            request.setDepositAmount(scaleMoney(dto.getDepositAmount()));
+        }
+
+        BigDecimal totalAmount = scaleMoney(request.getTotalAmount());
+        BigDecimal depositAmount = scaleMoney(request.getDepositAmount());
+        if (depositAmount.compareTo(totalAmount) > 0) {
+            throw new IllegalArgumentException("Deposit amount must not exceed total amount");
+        }
     }
 
     private void applyItems(Request request, List<RequestItemDto> itemDtos) {
@@ -259,6 +295,13 @@ public class RequestWorkflowService {
 
     private String normalizeActor(String actor) {
         return actor == null || actor.isBlank() ? "system" : actor.trim();
+    }
+
+    private BigDecimal scaleMoney(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private String generateUniqueRequestCode() {

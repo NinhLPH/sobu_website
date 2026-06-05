@@ -1,5 +1,7 @@
 package com.vn.sodu.order;
 
+import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import jakarta.persistence.*;
@@ -51,6 +53,19 @@ public class Order {
     @Column(precision = 19, scale = 2)
     private BigDecimal depositAmount;
 
+    @Column(precision = 19, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal paidAmount = BigDecimal.ZERO;
+
+    @Column(precision = 19, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal remainingAmount = BigDecimal.ZERO;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
@@ -76,6 +91,10 @@ public class Order {
     @Builder.Default
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderPayment> payments = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

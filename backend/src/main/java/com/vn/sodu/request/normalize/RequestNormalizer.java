@@ -39,6 +39,8 @@ public class RequestNormalizer {
                 .type(dto.getType())
                 .items(dto.getItems() == null ? null : normalizeItems(dto.getItems()))
                 .customRequirements(normalizeRichText(dto.getCustomRequirements()))
+                .totalAmount(dto.getTotalAmount())
+                .depositAmount(dto.getDepositAmount())
                 .uploadedImageUrls(dto.getUploadedImageUrls() == null ? null : normalizeAttachmentUrls(dto.getUploadedImageUrls()))
                 .build();
     }
