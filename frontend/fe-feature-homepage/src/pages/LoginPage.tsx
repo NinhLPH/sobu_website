@@ -24,6 +24,8 @@ export default function LoginPage() {
     const [regEmail, setRegEmail] = useState('');
     const [regPhone, setRegPhone] = useState('');
     const [regPassword, setRegPassword] = useState('');
+    const [regConfirmPassword, setRegConfirmPassword] = useState('');
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const [registerSuccess, setRegisterSuccess] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
@@ -51,9 +53,10 @@ export default function LoginPage() {
 
         try {
             await loginAction(loginEmail, loginPassword);
-            navigate('/'); // Chuyển về trang chủ sau khi login
+            navigate('/');
         } catch (err: any) {
-            console.error('Login action failed:', err);
+            const msg = 'Tài khoản hoặc mật khẩu không chính xác!';
+            setLocalError(msg);
         }
     };
 
@@ -62,8 +65,13 @@ export default function LoginPage() {
         setLocalError(null);
         setRegisterSuccess(false);
 
-        if (!regName || !regEmail || !regPhone || !regPassword) {
+        if (!regName || !regEmail || !regPhone || !regPassword || !regConfirmPassword) {
             setLocalError('Vui lòng điền đầy đủ các thông tin đăng ký!');
+            return;
+        }
+
+        if (regPassword !== regConfirmPassword) {
+            setLocalError('Mật khẩu nhập lại không khớp!');
             return;
         }
 
@@ -74,9 +82,10 @@ export default function LoginPage() {
                 fullName: regName,
                 phone: regPhone
             });
-            navigate('/'); // Đăng ký (và login) thành công thì về trang chủ
+
+            setRegisterSuccess(true);
         } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || 'Đăng ký thất bại. Email hoặc Số điện thoại có thể đã tồn tại!';
+            const msg = 'Đăng ký thất bại. Email hoặc Số điện thoại có thể đã tồn tại!';
             setLocalError(msg);
         }
     };
@@ -137,17 +146,19 @@ export default function LoginPage() {
 
                     {registerSuccess ? (
                         <div className="py-8 flex flex-col items-center text-center">
-                            <div
-                                className="w-16 h-16 rounded-full bg-primary-container/20 flex items-center justify-center text-primary mb-4">
+                            <div className="w-16 h-16 rounded-full bg-primary-container/20 flex items-center justify-center text-primary mb-4">
                                 <CheckCircle2 className="w-10 h-10 stroke-[2]"/>
                             </div>
                             <h3 className="text-lg font-black text-on-surface mb-2">Đăng ký thành công!</h3>
+                            <p className="text-sm text-outline mb-4 font-medium">
+                                Vui lòng kiểm tra email của bạn để kích hoạt tài khoản trước khi đăng nhập.
+                            </p>
                             <button
                                 onClick={() => {
                                     setRegisterSuccess(false);
                                     setActiveTab('login');
                                 }}
-                                className="px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-black uppercase shadow-md mt-4"
+                                className="px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-black uppercase shadow-md"
                             >
                                 Đăng nhập ngay
                             </button>
@@ -223,14 +234,31 @@ export default function LoginPage() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1.5 pl-1">Mật
-                                    khẩu</label>
+                                <label className="block text-xs font-bold text-outline uppercase mb-1.5 pl-1">Mật khẩu</label>
                                 <div className="relative">
                                     <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-outline/60"/>
                                     <input type={showPassword ? "text" : "password"} value={regPassword}
                                            onChange={(e) => setRegPassword(e.target.value)} disabled={isLoading}
                                            className="w-full bg-surface-container rounded-2xl pl-11 pr-11 py-3.5 text-xs font-semibold outline-none text-on-surface"
                                            required/>
+                                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-3.5 top-3.5 text-outline/60">
+                                        {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-outline uppercase mb-1.5 pl-1">Nhập lại mật khẩu</label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-outline/60"/>
+                                    <input type={showConfirmPassword ? "text" : "password"} value={regConfirmPassword}
+                                           onChange={(e) => setRegConfirmPassword(e.target.value)} disabled={isLoading}
+                                           className="w-full bg-surface-container rounded-2xl pl-11 pr-11 py-3.5 text-xs font-semibold outline-none text-on-surface"
+                                           required/>
+                                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            className="absolute right-3.5 top-3.5 text-outline/60">
+                                        {showConfirmPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                                    </button>
                                 </div>
                             </div>
                             <button type="submit" disabled={isLoading}

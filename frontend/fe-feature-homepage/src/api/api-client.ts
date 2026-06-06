@@ -62,9 +62,15 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        const isLoginRequest = originalRequest.url?.includes('/login');
         const isLogoutRequest = originalRequest.url?.includes('/logout');
 
         if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
+
+            if (isLoginRequest) {
+                return Promise.reject(error);
+            }
+
             if (isLogoutRequest) {
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
@@ -75,7 +81,6 @@ apiClient.interceptors.response.use(
             originalRequest._retry = true;
             try {
                 const refreshToken = localStorage.getItem('refreshToken');
-                // Gọi API refresh token
                 const res = await axios.post(`${BASE_URL}/api/auth/refresh-token`, { refreshToken });
 
                 const newAccessToken = res.data.data.accessToken;
@@ -90,6 +95,7 @@ apiClient.interceptors.response.use(
                 return Promise.reject(refreshError);
             }
         }
+
         return Promise.reject(error);
     }
 );
