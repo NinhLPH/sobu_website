@@ -24,9 +24,10 @@ export default function AdminNhanhCallback() {
 
                 if (response === 'Connected' || response?.includes('Connected')) {
                     setStatus('success');
-                    setTimeout(() => {
-                        navigate('/admin/sync?oauth=success');
-                    }, 2000);
+                    if (window.opener) {
+                        window.opener.postMessage('NHANH_AUTH_SUCCESS', '*');
+                    }
+                    window.close();
                 } else {
                     throw new Error(response || 'Xác thực OAuth thất bại từ hệ thống.');
                 }

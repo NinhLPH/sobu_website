@@ -25,6 +25,7 @@ import AdminSync from "./pages/admin/Sync";
 import AdminNhanhCallback from "./pages/admin/NhanhCallback";
 import OrderTracking from "./pages/OrderTracking";
 import ProtectedRoute from "./components/common/ProtectedRoute";
+import Toast from "./components/common/Toast";
 
 export default function App() {
     return (
@@ -69,6 +70,7 @@ export default function App() {
                     </Route>
                 </Routes>
                 <Footer/>
+                <Toast/>
             </div>
         </Router>
     );

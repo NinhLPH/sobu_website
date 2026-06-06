@@ -2,6 +2,7 @@ import {useState, useEffect} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {RefreshCw, CheckCircle2, AlertCircle, Loader2, Package, ListTree, Award} from 'lucide-react';
 import {AdminSyncService} from '../../service/sync.service';
+import {ToastService} from '../../service/toast.service';
 
 export default function AdminSync() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -40,6 +41,18 @@ export default function AdminSync() {
         }
     }, [searchParams, setSearchParams]);
 
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data === 'NHANH_AUTH_SUCCESS') {
+                setOauthStatus('success');
+                console.log('NHANH_AUTH_SUCCESS');
+                ToastService.success('Kết nối tài khoản ERP Nhanh.vn thành công!');
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
     const handleNhanhConnect = async () => {
         setIsConnecting(true);
         setOauthStatus(null);
@@ -47,7 +60,7 @@ export default function AdminSync() {
         try {
             const url = await AdminSyncService.getNhanhLoginUrl();
             if (url) {
-                window.location.href = url;
+                window.open(url, 'NhanhAuth', 'width=600,height=700,left=200,top=100');
             } else {
                 throw new Error("Không lấy được URL đăng nhập từ hệ thống.");
             }
