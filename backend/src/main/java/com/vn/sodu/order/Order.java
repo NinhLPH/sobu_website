@@ -1,5 +1,7 @@
 package com.vn.sodu.order;
 
+import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import jakarta.persistence.*;
@@ -27,6 +29,9 @@ public class Order {
     @Column(unique = true, nullable = false)
     private String orderCode;
 
+    @Column(unique = true)
+    private String appOrderId;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "request_id", unique = true)
     private Request request;
@@ -51,6 +56,24 @@ public class Order {
     @Column(precision = 19, scale = 2)
     private BigDecimal depositAmount;
 
+    @Column(precision = 19, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal paidAmount = BigDecimal.ZERO;
+
+    @Column(precision = 19, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal remainingAmount = BigDecimal.ZERO;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 40)
+    @Builder.Default
+    private NhanhSyncStage nhanhSyncStage = NhanhSyncStage.NONE;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
@@ -62,13 +85,31 @@ public class Order {
     private String customerCityName;
     private String customerDistrictName;
     private String customerWardName;
+    private Long customerCityId;
+    private Long customerDistrictId;
+    private Long customerWardId;
 
     // Nhanh Sync fields
     private String nhanhOrderId;
     private String nhanhOrderCode;
+    private Long carrierId;
+    private Long carrierServiceId;
+
+    @Column(precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal shippingFee = BigDecimal.ZERO;
+
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private String locationVersion = "v1";
+
+    private LocalDateTime lastSyncAt;
 
     @Column(columnDefinition = "TEXT")
     private String syncError;
+
+    @Column(columnDefinition = "TEXT")
+    private String lastSyncMessage;
 
     @Version
     private Long version;
@@ -76,6 +117,10 @@ public class Order {
     @Builder.Default
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
+
+    @Builder.Default
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderPayment> payments = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

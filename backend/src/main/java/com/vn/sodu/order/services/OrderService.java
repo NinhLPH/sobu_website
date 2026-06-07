@@ -5,11 +5,13 @@ import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
 import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
+import com.vn.sodu.payment.PaymentType;
+import com.vn.sodu.payment.PaymentMethod;
+import com.vn.sodu.payment.service.PaymentService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +36,7 @@ public class OrderService {
     private final OrderConversionPolicy orderConversionPolicy;
     private final OrderCustomerResolver orderCustomerResolver;
     private final RequestToOrderMapper requestToOrderMapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final PaymentService paymentService;
 
     @Transactional
     public Order createFromApprovedRequest(Request request) {
@@ -54,23 +56,28 @@ public class OrderService {
 
         // 4. Map to internal Order
         Order newOrder = requestToOrderMapper.mapToOrder(request, customer);
+        paymentService.initializeOrderPaymentState(newOrder);
+        applyInitialPreorderStatus(newOrder);
 
         // 5. Save order
         Order savedOrder = orderRepository.save(newOrder);
-        eventPublisher.publishEvent(new OrderCreatedEvent(savedOrder.getId(), request.getId()));
+        createInitialPreorderDepositIfRequired(savedOrder);
         return savedOrder;
     }
 
     @Transactional
     public Order createNormalOrder(CreateNormalOrderDto dto) {
         validateDirectOrder(dto);
+        String orderCode = generateUniqueOrderCode();
 
         Order order = Order.builder()
-                .orderCode(generateUniqueOrderCode())
+                .orderCode(orderCode)
+                .appOrderId(orderCode)
                 .request(null)
                 .type(OrderType.NORMAL)
                 .status(OrderStatus.NEW)
                 .syncStatus(OrderSyncStatus.PENDING)
+                .nhanhSyncStage(NhanhSyncStage.NONE)
                 .customerName(trim(dto.getCustomerName()))
                 .customerMobile(trim(dto.getCustomerMobile()))
                 .customerEmail(trim(dto.getCustomerEmail()))
@@ -78,6 +85,12 @@ public class OrderService {
                 .customerCityName(trim(dto.getCustomerCityName()))
                 .customerDistrictName(trim(dto.getCustomerDistrictName()))
                 .customerWardName(trim(dto.getCustomerWardName()))
+                .customerCityId(dto.getCustomerCityId())
+                .customerDistrictId(dto.getCustomerDistrictId())
+                .customerWardId(dto.getCustomerWardId())
+                .carrierId(dto.getCarrierId())
+                .carrierServiceId(dto.getCarrierServiceId())
+                .shippingFee(money(dto.getShippingFee()))
                 .description(trim(dto.getDescription()))
                 .depositAmount(money(BigDecimal.ZERO))
                 .items(new ArrayList<>())
@@ -103,10 +116,9 @@ public class OrderService {
             order.getItems().add(item);
         }
 
-        order.setTotalAmount(money(total));
-        Order savedOrder = orderRepository.save(order);
-        eventPublisher.publishEvent(new OrderCreatedEvent(savedOrder.getId(), null));
-        return savedOrder;
+        order.setTotalAmount(money(total.add(money(dto.getShippingFee()))));
+        paymentService.initializeOrderPaymentState(order);
+        return orderRepository.save(order);
     }
 
     private void validateDirectOrder(CreateNormalOrderDto dto) {
@@ -155,5 +167,23 @@ public class OrderService {
 
     private String trim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    private void applyInitialPreorderStatus(Order order) {
+        if (requiresPreorderDeposit(order)) {
+            order.setStatus(OrderStatus.WAITING_DEPOSIT);
+        }
+    }
+
+    private void createInitialPreorderDepositIfRequired(Order order) {
+        if (requiresPreorderDeposit(order)) {
+            paymentService.createPayment(order, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
+        }
+    }
+
+    private boolean requiresPreorderDeposit(Order order) {
+        return order != null
+                && order.getType() == OrderType.PREORDER
+                && money(order.getDepositAmount()).compareTo(BigDecimal.ZERO) > 0;
     }
 }

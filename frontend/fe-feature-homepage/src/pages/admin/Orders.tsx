@@ -47,8 +47,12 @@ export default function AdminOrders() {
         switch (status) {
             case 'NEW':
                 return 'bg-amber-100 text-amber-800';
-            case 'PENDING':
-                return 'bg-amber-100 text-amber-800';
+            case 'WAITING_DEPOSIT':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'DEPOSIT_PAID':
+                return 'bg-cyan-100 text-cyan-800';
+            case 'READY_FOR_FINAL_PAYMENT':
+                return 'bg-indigo-100 text-indigo-800';
             case 'PROCESSING':
                 return 'bg-blue-100 text-blue-800';
             case 'SHIPPED':
@@ -66,8 +70,12 @@ export default function AdminOrders() {
         switch (status) {
             case 'NEW':
                 return 'Mới';
-            case 'PENDING':
-                return 'Chờ duyệt';
+            case 'WAITING_DEPOSIT':
+                return 'Chờ đặt cọc';
+            case 'DEPOSIT_PAID':
+                return 'Đã cọc';
+            case 'READY_FOR_FINAL_PAYMENT':
+                return 'Chờ thanh toán cuối';
             case 'PROCESSING':
                 return 'Đang xử lý';
             case 'SHIPPED':
@@ -104,6 +112,21 @@ export default function AdminOrders() {
                 return 'Đang chờ';
             default:
                 return sync;
+        }
+    };
+
+    const getNhanhStageText = (stage?: string) => {
+        switch (stage) {
+            case 'NORMAL_ORDER_CREATED':
+                return 'Normal Created';
+            case 'PREORDER_DEPOSIT_CREATED':
+                return 'Deposit Created';
+            case 'PREORDER_FINAL_UPDATED':
+                return 'Final Updated';
+            case 'NONE':
+                return 'Not Synced';
+            default:
+                return stage || 'Not Synced';
         }
     };
 
@@ -144,7 +167,9 @@ export default function AdminOrders() {
                     >
                         <option value="ALL">Tất cả trạng thái</option>
                         <option value="NEW">Mới (NEW)</option>
-                        <option value="PENDING">Chờ duyệt (PENDING)</option>
+                        <option value="WAITING_DEPOSIT">Chờ cọc (WAITING_DEPOSIT)</option>
+                        <option value="DEPOSIT_PAID">Đã cọc (DEPOSIT_PAID)</option>
+                        <option value="READY_FOR_FINAL_PAYMENT">Chờ thanh toán cuối (READY_FOR_FINAL_PAYMENT)</option>
                         <option value="PROCESSING">Đang xử lý (PROCESSING)</option>
                         <option value="SHIPPED">Đang giao (SHIPPED)</option>
                         <option value="DELIVERED">Đã giao (DELIVERED)</option>
@@ -213,11 +238,19 @@ export default function AdminOrders() {
                                 </td>
                                 <td className="px-6 py-4 text-right font-black text-on-surface text-sm">
                                     {formatCurrency(order.totalAmount)}
+                                    {order.shippingFee > 0 && (
+                                        <span className="block text-[10px] text-outline font-semibold">
+                                            Ship: {formatCurrency(order.shippingFee)}
+                                        </span>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 text-center">
                                         <span
                                             className={`inline-block px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
                                             {getSyncStatusText(order.syncStatus)}
+                                        </span>
+                                    <span className="block mt-1 text-[10px] text-outline font-semibold">
+                                            {getNhanhStageText(order.nhanhSyncStage)}
                                         </span>
                                 </td>
                                 <td className="px-6 py-4 text-center">

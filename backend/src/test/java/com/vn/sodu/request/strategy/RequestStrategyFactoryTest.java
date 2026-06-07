@@ -1,15 +1,17 @@
 package com.vn.sodu.request.strategy;
 
 import com.vn.sodu.request.OrderType;
+import com.vn.sodu.product.repo.ProductRepo;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class RequestStrategyFactoryTest {
 
     private final RequestStrategyFactory factory = new RequestStrategyFactory(
             new NormalRequestStrategy(),
-            new PreOrderRequestStrategy(),
+            new PreOrderRequestStrategy(mock(ProductRepo.class)),
             new FindingRequestStrategy(),
             new CustomRequestStrategy()
     );

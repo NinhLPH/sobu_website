@@ -138,7 +138,7 @@ public class AdminRequestController {
             Authentication authentication
     ) {
         requireStaff(authentication);
-        Request request = requestWorkflowService.updateRequest(requestId, dto);
+        Request request = requestWorkflowService.updateRequestAsAdmin(requestId, dto);
         return ResponseEntity.ok(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request updated", HttpStatus.OK.value()));
     }
 
@@ -171,7 +171,13 @@ public class AdminRequestController {
             Authentication authentication
     ) {
         requireStaff(authentication);
-        Request request = requestWorkflowService.processRequest(requestId, dto.getTargetStatus(), authentication.getName(), dto.getNote());
+        Request request = requestWorkflowService.processRequest(
+                requestId,
+                dto.getTargetStatus(),
+                authentication.getName(),
+                dto.getNote(),
+                dto.getDepositAmount()
+        );
         return ResponseEntity.ok(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request processed", HttpStatus.OK.value()));
     }
 

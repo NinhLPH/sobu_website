@@ -12,10 +12,12 @@ import com.vn.sodu.global.exception.NotFoundException;
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.mapper.AccountMapper;
 import com.vn.sodu.security.JwtService;
+import com.vn.sodu.security.TokenBlacklistService;
 import com.vn.sodu.utilites.PasswordEncrypt;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,7 @@ public class AuthService {
     private final ActivationTokenRepo activationTokenRepo;
     private final EmailService emailService;
     private final CustomerService customerService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     /**
      * Authenticate user and generate JWT tokens
@@ -60,10 +63,7 @@ public class AuthService {
                     .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
             // Check if account is active
-            if (account.getStatus() != Account.AccountStatus.ACTIVE) {
-                log.warn("Login attempt for non-active account: {}", request.getEmail());
-                throw new UnauthorizedException("Account is not active. Please activate your account.");
-            }
+            ensureAccountIsActive(account, request.getEmail());
 
             // Decrypt stored password and compare with request password
             String storedHash = account.getPasswordHash();
@@ -105,7 +105,7 @@ public class AuthService {
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
                     .tokenType("Bearer")
-                    .expiresIn(3600L) // 1 hour in seconds
+                    .expiresIn(jwtService.getAccessTokenExpiresInSeconds())
                     .account(accountMapper.toDTO(account))
                     .build();
 
@@ -129,7 +129,7 @@ public class AuthService {
             final String refreshToken = request.getRefreshToken();
             
             // Validate refresh token
-            if (!jwtService.isTokenValid(refreshToken)) {
+            if (!jwtService.isRefreshTokenValid(refreshToken)) {
                 throw new UnauthorizedException("Invalid or expired refresh token");
             }
 
@@ -140,6 +140,11 @@ public class AuthService {
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
             Account account = accountRepo.findByEmail(email)
                     .orElseThrow(() -> new NotFoundException("User not found"));
+            ensureAccountIsActive(account, email);
+
+            if (tokenBlacklistService.isBlacklisted(refreshToken)) {
+                throw new UnauthorizedException("Invalid or expired refresh token");
+            }
 
             // Generate new access token
             String newAccessToken = jwtService.generateAccessToken(userDetails);
@@ -150,7 +155,7 @@ public class AuthService {
                     .accessToken(newAccessToken)
                     .refreshToken(refreshToken)
                     .tokenType("Bearer")
-                    .expiresIn(3600L) // 1 hour in seconds
+                    .expiresIn(jwtService.getAccessTokenExpiresInSeconds())
                     .account(accountMapper.toDTO(account))
                     .build();
 
@@ -215,7 +220,7 @@ public class AuthService {
      * Logout - typically client-side only, but can be used to invalidate tokens
      */
     public RegisterResponse activateAccount(String token) {
-        log.info("Activate account with token: {}", token);
+//        log.info("Activate account with token: {}", token);
         ActivationToken activationToken = activationTokenRepo.findByToken(token)
                 .orElseThrow(() -> new BadRequestException("Invalid or expired activation token"));
         if (activationToken.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
@@ -228,12 +233,46 @@ public class AuthService {
         return accountMapper.toRegisterResponse(saved);
     }
 
-    public void logout(String token) {
+    public void logout(String accessToken) {
+        logout(accessToken, null);
+    }
+
+    public void logout(String accessToken, String refreshToken) {
         log.info("Logout request");
-        // In a production system, you might want to:
-        // 1. Add token to a blacklist
-        // 2. Update user's last logout timestamp
-        // For now, just log
+
+        blacklistToken(accessToken, "access");
+        blacklistToken(refreshToken, "refresh");
+        SecurityContextHolder.clearContext();
+    }
+
+    private void ensureAccountIsActive(Account account, String email) {
+        if (account.getStatus() != Account.AccountStatus.ACTIVE) {
+            log.warn("Auth attempt for non-active account: {}", email);
+            throw new UnauthorizedException("Account is not active. Please activate your account.");
+        }
+    }
+
+    private void blacklistToken(String token, String expectedType) {
+        if (token == null || token.isBlank()) {
+            return;
+        }
+
+        try {
+            if (!jwtService.isTokenValid(token)) {
+                log.warn("Ignoring invalid {} token during logout", expectedType);
+                return;
+            }
+
+            String actualType = jwtService.extractTokenType(token);
+            if (!expectedType.equals(actualType)) {
+                log.warn("Ignoring {} token presented as {} during logout", actualType, expectedType);
+                return;
+            }
+
+            tokenBlacklistService.blacklist(token, jwtService.extractExpiration(token));
+        } catch (Exception e) {
+            log.warn("Failed to blacklist {} token during logout: {}", expectedType, e.getMessage());
+        }
     }
 }
 

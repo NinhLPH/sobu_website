@@ -19,6 +19,7 @@ import java.io.IOException;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final TokenBlacklistService tokenBlacklistService;
     private final UserDetailsService userDetailsService;
 
     @Override
@@ -38,6 +39,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         String jwt = authHeader.substring(7);
+        if (tokenBlacklistService.isBlacklisted(jwt)) {
+            log.warn("Rejected blacklisted token for request to '{}'", request.getRequestURI());
+            chain.doFilter(request, response);
+            return;
+        }
+
         String username = null;
         try {
             username = jwtService.extractUsername(jwt);
@@ -50,7 +57,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             try {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-                if (jwtService.isTokenValid(jwt, userDetails)) {
+                if (!isUserEligibleForAuthentication(userDetails)) {
+                    log.warn("User '{}' is not eligible for request authentication", username);
+                } else if (jwtService.isAccessTokenValid(jwt, userDetails)) {
                     var authToken = new UsernamePasswordAuthenticationToken(
                             userDetails, null, userDetails.getAuthorities()
                     );
@@ -74,5 +83,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         chain.doFilter(request, response);
+    }
+
+    private boolean isUserEligibleForAuthentication(UserDetails userDetails) {
+        return userDetails.isAccountNonLocked()
+                && userDetails.isEnabled()
+                && userDetails.isAccountNonExpired()
+                && userDetails.isCredentialsNonExpired();
     }
 }

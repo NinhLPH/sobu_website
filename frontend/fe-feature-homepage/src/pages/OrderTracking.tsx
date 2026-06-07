@@ -3,13 +3,9 @@ import {Link} from 'react-router-dom';
 import {
     Search,
     Loader2,
-    ArrowLeft,
     ChevronRight,
     Package,
     MapPin,
-    Calendar,
-    DollarSign,
-    ShieldCheck
 } from 'lucide-react';
 import {CustomerService} from '../service/custom.service';
 import {OrderResponseDto} from '../interface/order.model';
@@ -46,8 +42,12 @@ export default function OrderTracking() {
         switch (status) {
             case 'NEW':
                 return 'Mới nhận';
-            case 'PENDING':
-                return 'Chờ xác nhận';
+            case 'WAITING_DEPOSIT':
+                return 'Chờ thanh toán đặt cọc';
+            case 'DEPOSIT_PAID':
+                return 'Đã nhận cọc';
+            case 'READY_FOR_FINAL_PAYMENT':
+                return 'Chờ thanh toán cuối';
             case 'PROCESSING':
                 return 'Đang xử lý';
             case 'SHIPPED':
@@ -65,8 +65,12 @@ export default function OrderTracking() {
         switch (status) {
             case 'NEW':
                 return 1;
-            case 'PENDING':
+            case 'WAITING_DEPOSIT':
                 return 1;
+            case 'DEPOSIT_PAID':
+                return 2;
+            case 'READY_FOR_FINAL_PAYMENT':
+                return 2;
             case 'PROCESSING':
                 return 2;
             case 'SHIPPED':
@@ -177,7 +181,6 @@ export default function OrderTracking() {
                                     {step: 4, label: 'Đã nhận'}
                                 ].map((s) => {
                                     const isCompleted = currentStep >= s.step;
-                                    const isActive = currentStep === s.step;
                                     return (
                                         <div key={s.step} className="flex flex-col items-center">
                                             <div
@@ -253,14 +256,18 @@ export default function OrderTracking() {
                                             className="text-on-surface">{formatCurrency(orderDetail.totalAmount)}</span>
                                     </div>
                                     <div className="flex justify-between font-bold">
-                                        <span>Đã cọc trước (Deposit):</span>
+                                        <span>Phí vận chuyển:</span>
                                         <span
-                                            className="text-on-surface">{formatCurrency(orderDetail.depositAmount)}</span>
+                                            className="text-on-surface">{formatCurrency(orderDetail.shippingFee || 0)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-bold">
+                                        <span>Đã cọc trước (Deposit):</span>
+                                        <span className="text-on-surface">{formatCurrency(orderDetail.paidAmount || orderDetail.depositAmount || 0)}</span>
                                     </div>
                                     <div
                                         className="flex justify-between font-black text-primary text-base pt-2 border-t border-outline-variant/20">
                                         <span>Tổng tiền cần thanh toán:</span>
-                                        <span>{formatCurrency(orderDetail.totalAmount - orderDetail.depositAmount)}</span>
+                                        <span>{formatCurrency(orderDetail.remainingAmount || 0)}</span>
                                     </div>
                                 </div>
                             </div>

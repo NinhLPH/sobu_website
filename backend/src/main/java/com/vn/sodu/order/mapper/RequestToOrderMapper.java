@@ -14,9 +14,11 @@ public class RequestToOrderMapper {
         Order order = Order.builder()
                 .request(request)
                 .orderCode(request.getRequestCode())
+                .appOrderId(request.getRequestCode())
                 .type(request.getType())
                 .status(OrderStatus.NEW)
                 .syncStatus(OrderSyncStatus.PENDING)
+                .nhanhSyncStage(NhanhSyncStage.NONE)
                 .totalAmount(request.getTotalAmount())
                 .depositAmount(request.getDepositAmount())
                 .description(request.getCustomRequirements())
@@ -27,6 +29,9 @@ public class RequestToOrderMapper {
                 .customerCityName(customer.getProvince())
                 .customerDistrictName(customer.getDistrict())
                 .customerWardName(customer.getWard())
+                .customerCityId(customer.getProvinceId())
+                .customerDistrictId(customer.getDistrictId())
+                .customerWardId(customer.getWardId())
                 .build();
 
         if (request.getItems() != null) {

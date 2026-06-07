@@ -1,6 +1,7 @@
 import {LoginResponse, RegisterResponse} from "../interface/api-response";
 import apiClient from "../api/api-client";
 import {Login, Register} from "../interface/auth.model";
+import { authStorage } from "../utils/auth-storage";
 
 export const AuthService = {
     login: (data: Login): Promise<LoginResponse> => {
@@ -20,6 +21,19 @@ export const AuthService = {
     },
 
     logout: (): Promise<any> => {
-        return apiClient.post('/api/auth/logout');
+        const accessToken = authStorage.getAccessToken();
+        const refreshToken = authStorage.getRefreshToken();
+
+        return apiClient.post(
+            '/api/auth/logout',
+            { refreshToken },
+            accessToken
+                ? {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                }
+                : undefined
+        );
     },
 };

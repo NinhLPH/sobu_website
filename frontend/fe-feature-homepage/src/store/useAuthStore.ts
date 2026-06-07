@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { AuthService } from '../service/auth.service';
 import { AccountDTO } from '../interface/account.model';
 import { Register } from '../interface/auth.model';
+import { authStorage } from '../utils/auth-storage';
 
 interface AuthState {
     user: AccountDTO | null;
@@ -16,17 +17,12 @@ interface AuthState {
 }
 
 const getInitialUser = (): AccountDTO | null => {
-    try {
-        const storedUser = localStorage.getItem('user');
-        return storedUser ? JSON.parse(storedUser) : null;
-    } catch {
-        return null;
-    }
+    return authStorage.getUser();
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
     user: getInitialUser(),
-    isAuthenticated: !!localStorage.getItem('accessToken'),
+    isAuthenticated: !!authStorage.getAccessToken(),
     isLoading: false,
     error: null,
 
@@ -35,10 +31,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         try {
             const data = await AuthService.login({ email, password });
             
-            // Save tokens to localStorage
-            localStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('refreshToken', data.refreshToken);
-            localStorage.setItem('user', JSON.stringify(data.account));
+            authStorage.setSession(data.accessToken, data.refreshToken, data.account);
 
             set({
                 user: data.account,
@@ -66,9 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             // Tự động đăng nhập sau khi đăng ký thành công
             const loginData = await AuthService.login({ email: data.email, password: data.password });
             
-            localStorage.setItem('accessToken', loginData.accessToken);
-            localStorage.setItem('refreshToken', loginData.refreshToken);
-            localStorage.setItem('user', JSON.stringify(loginData.account));
+            authStorage.setSession(loginData.accessToken, loginData.refreshToken, loginData.account);
 
             set({
                 user: loginData.account,
@@ -93,9 +84,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         } catch (err) {
             console.error('Logout error on server:', err);
         } finally {
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('user');
+            authStorage.clear();
 
             set({
                 user: null,

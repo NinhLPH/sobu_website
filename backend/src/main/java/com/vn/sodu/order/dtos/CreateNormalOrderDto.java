@@ -42,6 +42,18 @@ public class CreateNormalOrderDto {
     @Size(max = 100, message = "Customer ward must not exceed 100 characters")
     private String customerWardName;
 
+    private Long customerCityId;
+
+    private Long customerDistrictId;
+
+    private Long customerWardId;
+
+    private Long carrierId;
+
+    private Long carrierServiceId;
+
+    private java.math.BigDecimal shippingFee;
+
     @Size(max = 5000, message = "Description must not exceed 5000 characters")
     private String description;
 
