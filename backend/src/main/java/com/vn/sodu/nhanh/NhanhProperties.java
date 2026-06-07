@@ -33,8 +33,11 @@ public class NhanhProperties {
     @NotBlank
     private String businessId;
 
+    private Long depotId;
+
     private Sync sync = new Sync();
     private Webhooks webhooks = new Webhooks();
+    private Accounting accounting = new Accounting();
 
     @Getter
     @Setter
@@ -46,5 +49,11 @@ public class NhanhProperties {
     @Setter
     public static class Webhooks {
         private String verifyToken;
+    }
+
+    @Getter
+    @Setter
+    public static class Accounting {
+        private Long accountId;
     }
 }

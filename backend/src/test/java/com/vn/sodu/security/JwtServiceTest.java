@@ -138,7 +138,7 @@ class JwtServiceTest {
     void testValidTokenWithMatchingUser() {
         String token = jwtService.generateAccessToken(testUserDetails);
         
-        assertTrue(jwtService.isTokenValid(token, testUserDetails));
+        assertTrue(jwtService.isAccessTokenValid(token, testUserDetails));
     }
 
     @Test
@@ -146,7 +146,7 @@ class JwtServiceTest {
     void testInvalidTokenWithDifferentUser() {
         String token = jwtService.generateAccessToken(testUserDetails);
         
-        assertFalse(jwtService.isTokenValid(token, anotherUserDetails));
+        assertFalse(jwtService.isAccessTokenValid(token, anotherUserDetails));
     }
 
     @Test
@@ -174,6 +174,24 @@ class JwtServiceTest {
         assertFalse(jwtService.isTokenValid(wrongToken));
     }
 
+    @Test
+    @DisplayName("Should reject refresh token for access-token validation")
+    void testAccessValidationRejectsRefreshToken() {
+        String refreshToken = jwtService.generateRefreshToken(testUserDetails);
+
+        assertFalse(jwtService.isAccessTokenValid(refreshToken, testUserDetails));
+    }
+
+    @Test
+    @DisplayName("Should validate refresh token only for refresh-token validation")
+    void testRefreshValidationRequiresRefreshToken() {
+        String accessToken = jwtService.generateAccessToken(testUserDetails);
+        String refreshToken = jwtService.generateRefreshToken(testUserDetails);
+
+        assertTrue(jwtService.isRefreshTokenValid(refreshToken));
+        assertFalse(jwtService.isRefreshTokenValid(accessToken));
+    }
+
     // ─── Token Expiration Tests ────────────────────────────────────────────────
 
     @Test
@@ -190,9 +208,23 @@ class JwtServiceTest {
     @DisplayName("Should extract custom claim from token")
     void testExtractCustomClaim() {
         String refreshToken = jwtService.generateRefreshToken(testUserDetails);
-        String tokenType = jwtService.extractClaim(refreshToken, claims -> claims.get("type", String.class));
+        String tokenType = jwtService.extractTokenType(refreshToken);
         
         assertEquals("refresh", tokenType);
+    }
+
+    @Test
+    @DisplayName("Should mark access tokens with access type claim")
+    void testAccessTokenTypeClaim() {
+        String accessToken = jwtService.generateAccessToken(testUserDetails);
+
+        assertEquals("access", jwtService.extractTokenType(accessToken));
+    }
+
+    @Test
+    @DisplayName("Should expose access token expiration in seconds")
+    void testAccessTokenExpiresInSeconds() {
+        assertEquals(3600L, jwtService.getAccessTokenExpiresInSeconds());
     }
 
     @Test

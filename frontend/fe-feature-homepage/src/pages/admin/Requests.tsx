@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Search, ShieldAlert, CheckCircle, XCircle, SlidersHorizontal, Loader2, FileText, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, SlidersHorizontal, Loader2, FileText, CheckCircle2 } from 'lucide-react';
 import { useRequestStore } from '../../store/useRequestStore';
 import { formatCurrency } from '../../util/format';
-import { RequestStatus, RequestType } from '../../enum/union-types';
+import { RequestStatus } from '../../enum/union-types';
 
 export default function AdminRequests() {
     const { 
@@ -13,7 +13,6 @@ export default function AdminRequests() {
         processRequestAction, 
         isLoading, 
         isSubmitting, 
-        error, 
         clearError 
     } = useRequestStore();
 
@@ -111,7 +110,7 @@ export default function AdminRequests() {
 
         try {
             await processRequestAction(currentRequestDetail.id, {
-                action: processAction,
+                targetStatus: processAction,
                 note: processNote,
                 depositAmount: depositVal
             });

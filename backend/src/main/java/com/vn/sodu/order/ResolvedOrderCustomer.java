@@ -13,4 +13,7 @@ public class ResolvedOrderCustomer {
     private String province;
     private String district;
     private String ward;
+    private Long provinceId;
+    private Long districtId;
+    private Long wardId;
 }

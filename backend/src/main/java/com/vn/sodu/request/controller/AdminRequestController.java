@@ -171,7 +171,13 @@ public class AdminRequestController {
             Authentication authentication
     ) {
         requireStaff(authentication);
-        Request request = requestWorkflowService.processRequest(requestId, dto.getTargetStatus(), authentication.getName(), dto.getNote());
+        Request request = requestWorkflowService.processRequest(
+                requestId,
+                dto.getTargetStatus(),
+                authentication.getName(),
+                dto.getNote(),
+                dto.getDepositAmount()
+        );
         return ResponseEntity.ok(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request processed", HttpStatus.OK.value()));
     }
 

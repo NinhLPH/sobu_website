@@ -3,11 +3,13 @@ package com.vn.sodu.payment.service;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.OrderReadyForSyncEvent;
 import com.vn.sodu.order.OrderStatus;
+import com.vn.sodu.order.NhanhSyncStage;
 import com.vn.sodu.order.OrderSyncStatus;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PayOSCheckoutSession;
 import com.vn.sodu.payment.PayOSGateway;
+import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.repo.OrderPaymentRepository;
@@ -42,7 +44,7 @@ public class PaymentService {
             return;
         }
         order.setPaidAmount(paymentCalculationService.normalizeMoney(BigDecimal.ZERO));
-        order.setRemainingAmount(paymentCalculationService.normalizeMoney(order.getTotalAmount()));
+        order.setRemainingAmount(paymentCalculationService.calculateOrderGrandTotal(order));
         order.setPaymentStatus(PaymentStatus.PENDING);
     }
 
@@ -63,22 +65,30 @@ public class PaymentService {
 
         order.setStatus(OrderStatus.READY_FOR_FINAL_PAYMENT);
         orderRepository.save(order);
-        return createPayment(order, PaymentType.FINAL);
+        return createPayment(order, PaymentType.FINAL, PaymentMethod.ONLINE);
     }
 
     @Transactional
     public OrderPayment createPayment(Order order, PaymentType type) {
+        return createPayment(order, type, PaymentMethod.ONLINE);
+    }
+
+    @Transactional
+    public OrderPayment createPayment(Order order, PaymentType type, PaymentMethod paymentMethod) {
         if (order == null || order.getId() == null) {
             throw new IllegalArgumentException("A persisted order is required to create a payment");
         }
         if (type == null) {
             throw new IllegalArgumentException("Payment type is required");
         }
+        if (paymentMethod == null) {
+            throw new IllegalArgumentException("Payment method is required");
+        }
 
         Order managedOrder = orderRepository.findById(order.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + order.getId()));
         List<OrderPayment> existingPayments = orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(managedOrder.getId());
-        validatePaymentCreation(managedOrder, type, existingPayments);
+        validatePaymentCreation(managedOrder, type, paymentMethod, existingPayments);
 
         BigDecimal amount = paymentCalculationService.calculatePaymentAmount(managedOrder, type);
         if (amount.signum() <= 0) {
@@ -89,16 +99,19 @@ public class PaymentService {
                 .order(managedOrder)
                 .paymentCode(generateUniquePaymentCode())
                 .type(type)
+                .paymentMethod(paymentMethod)
                 .status(PaymentStatus.PENDING)
                 .amount(amount)
-                .provider(MOCK_PROVIDER)
+                .provider(paymentMethod == PaymentMethod.COD ? "COD" : MOCK_PROVIDER)
                 .build();
 
-        PayOSCheckoutSession session = payOSGateway.createCheckout(managedOrder, payment);
-        payment.setProviderReference(session.providerReference());
-        payment.setCheckoutUrl(session.checkoutUrl());
-        payment.setQrCode(session.qrCode());
-        payment.setExpiresAt(session.expiresAt());
+        if (paymentMethod == PaymentMethod.ONLINE) {
+            PayOSCheckoutSession session = payOSGateway.createCheckout(managedOrder, payment);
+            payment.setProviderReference(session.providerReference());
+            payment.setCheckoutUrl(session.checkoutUrl());
+            payment.setQrCode(session.qrCode());
+            payment.setExpiresAt(session.expiresAt());
+        }
 
         OrderPayment savedPayment = orderPaymentRepository.save(payment);
         recalculateOrderPaymentState(managedOrder);
@@ -147,13 +160,7 @@ public class PaymentService {
         if (order == null || order.getId() == null || payment == null) {
             return;
         }
-        if (order.getSyncStatus() == OrderSyncStatus.SYNCED) {
-            return;
-        }
         if (payment.getType() == PaymentType.REFUND) {
-            return;
-        }
-        if (order.getPaymentStatus() != PaymentStatus.PAID) {
             return;
         }
         if (!isEligibleForSyncEvent(order, payment)) {
@@ -162,31 +169,37 @@ public class PaymentService {
         eventPublisher.publishEvent(new OrderReadyForSyncEvent(order.getId(), payment.getPaymentCode()));
     }
 
-    private void validatePaymentCreation(Order order, PaymentType type, List<OrderPayment> existingPayments) {
+    private void validatePaymentCreation(Order order, PaymentType type, PaymentMethod paymentMethod, List<OrderPayment> existingPayments) {
         if (type == PaymentType.REFUND) {
             throw new IllegalArgumentException("Refund payments cannot be created from the customer payment flow");
         }
         switch (order.getType()) {
-            case NORMAL -> validateNormalOrderPaymentCreation(type, existingPayments);
-            case PREORDER -> validatePreorderPaymentCreation(order, type, existingPayments);
+            case NORMAL -> validateNormalOrderPaymentCreation(type, paymentMethod, existingPayments);
+            case PREORDER -> validatePreorderPaymentCreation(order, type, paymentMethod, existingPayments);
             default -> throw new IllegalStateException("Payments are not enabled for order type " + order.getType());
         }
     }
 
-    private void validateNormalOrderPaymentCreation(PaymentType type, List<OrderPayment> existingPayments) {
+    private void validateNormalOrderPaymentCreation(PaymentType type, PaymentMethod paymentMethod, List<OrderPayment> existingPayments) {
         if (type != PaymentType.FULL) {
             throw new IllegalArgumentException("NORMAL orders only support FULL payments");
+        }
+        if (paymentMethod != PaymentMethod.ONLINE && paymentMethod != PaymentMethod.COD) {
+            throw new IllegalArgumentException("NORMAL orders only support ONLINE or COD payment methods");
         }
         if (hasBlockingPayment(existingPayments, PaymentType.FULL)) {
             throw new IllegalStateException("A FULL payment already exists for this order");
         }
     }
 
-    private void validatePreorderPaymentCreation(Order order, PaymentType type, List<OrderPayment> existingPayments) {
+    private void validatePreorderPaymentCreation(Order order, PaymentType type, PaymentMethod paymentMethod, List<OrderPayment> existingPayments) {
         switch (type) {
             case DEPOSIT -> {
                 if (order.getStatus() != OrderStatus.WAITING_DEPOSIT) {
                     throw new IllegalStateException("PREORDER deposit payments require WAITING_DEPOSIT status");
+                }
+                if (paymentMethod != PaymentMethod.ONLINE) {
+                    throw new IllegalArgumentException("PREORDER deposit payments only support ONLINE");
                 }
                 if (paymentCalculationService.normalizeMoney(order.getDepositAmount()).compareTo(BigDecimal.ZERO) <= 0) {
                     throw new IllegalStateException("PREORDER deposit amount must be greater than 0");
@@ -198,6 +211,9 @@ public class PaymentService {
             case FINAL -> {
                 if (order.getStatus() != OrderStatus.READY_FOR_FINAL_PAYMENT) {
                     throw new IllegalStateException("PREORDER final payments require READY_FOR_FINAL_PAYMENT status");
+                }
+                if (paymentMethod != PaymentMethod.ONLINE && paymentMethod != PaymentMethod.COD) {
+                    throw new IllegalArgumentException("PREORDER final payments only support ONLINE or COD");
                 }
                 if (paymentCalculationService.normalizeMoney(order.getRemainingAmount()).compareTo(BigDecimal.ZERO) <= 0) {
                     throw new IllegalStateException("PREORDER remaining amount must be greater than 0");
@@ -241,6 +257,10 @@ public class PaymentService {
                 return order;
             }
             order.setStatus(OrderStatus.DEPOSIT_PAID);
+            order.setSyncStatus(OrderSyncStatus.PENDING);
+            if (order.getNhanhSyncStage() == null) {
+                order.setNhanhSyncStage(NhanhSyncStage.NONE);
+            }
             return orderRepository.save(order);
         }
 
@@ -248,6 +268,9 @@ public class PaymentService {
                 && order.getStatus() == OrderStatus.READY_FOR_FINAL_PAYMENT
                 && order.getPaymentStatus() == PaymentStatus.PAID) {
             order.setStatus(OrderStatus.PROCESSING);
+            if (order.getNhanhSyncStage() == NhanhSyncStage.PREORDER_DEPOSIT_CREATED) {
+                order.setSyncStatus(OrderSyncStatus.PENDING);
+            }
             return orderRepository.save(order);
         }
 
@@ -256,11 +279,20 @@ public class PaymentService {
 
     private boolean isEligibleForSyncEvent(Order order, OrderPayment payment) {
         if (order.getType() == OrderType.NORMAL) {
-            return true;
+            return payment.getType() == PaymentType.FULL
+                    && order.getPaymentStatus() == PaymentStatus.PAID;
         }
-        return order.getType() == OrderType.PREORDER
-                && payment.getType() == PaymentType.FINAL
-                && order.getStatus() == OrderStatus.PROCESSING;
+        if (order.getType() != OrderType.PREORDER) {
+            return false;
+        }
+        if (payment.getType() == PaymentType.DEPOSIT) {
+            BigDecimal requiredDeposit = paymentCalculationService.normalizeMoney(order.getDepositAmount());
+            return order.getStatus() == OrderStatus.DEPOSIT_PAID
+                    && paymentCalculationService.normalizeMoney(order.getPaidAmount()).compareTo(requiredDeposit) >= 0;
+        }
+        return payment.getType() == PaymentType.FINAL
+                && order.getStatus() == OrderStatus.PROCESSING
+                && order.getPaymentStatus() == PaymentStatus.PAID;
     }
 
     private String generateUniquePaymentCode() {

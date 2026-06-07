@@ -324,7 +324,7 @@ class RequestWorkflowServiceTest {
                 when(requestRepo.findById(11L)).thenReturn(Optional.of(existing));
 
                 Request result = service.processRequest(11L, RequestStatus.WAITING_CUSTOMER, "admin",
-                                "Need more detail");
+                                "Need more detail", null);
 
                 assertThat(result.getStatus()).isEqualTo(RequestStatus.WAITING_CUSTOMER);
                  verify(requestTimelineRepo).save(any());
@@ -353,7 +353,7 @@ class RequestWorkflowServiceTest {
                 attachBackReferences(existing);
                 when(requestRepo.findById(15L)).thenReturn(Optional.of(existing));
 
-                Request result = service.processRequest(15L, RequestStatus.APPROVED, "admin", "Approved");
+                Request result = service.processRequest(15L, RequestStatus.APPROVED, "admin", "Approved", null);
 
                 assertThat(result.getStatus()).isEqualTo(RequestStatus.APPROVED);
                 verify(orderService).createFromApprovedRequest(result);
@@ -363,7 +363,7 @@ class RequestWorkflowServiceTest {
 
         @Test
         void processRequestRejectsNullTargetStatus() {
-                assertThrows(IllegalArgumentException.class, () -> service.processRequest(11L, null, "admin", "note"));
+                assertThrows(IllegalArgumentException.class, () -> service.processRequest(11L, null, "admin", "note", null));
         }
 
         @Test
@@ -422,7 +422,7 @@ class RequestWorkflowServiceTest {
                 when(requestRepo.findById(13L)).thenReturn(Optional.of(existing));
 
                 assertThrows(IllegalStateException.class,
-                                () -> service.processRequest(13L, RequestStatus.REVIEWING, "admin", "reopen"));
+                                () -> service.processRequest(13L, RequestStatus.REVIEWING, "admin", "reopen", null));
         }
 
         private void attachBackReferences(Request request) {

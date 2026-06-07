@@ -75,7 +75,7 @@ public class OrderPaymentController {
         String customerPhone = resolveCustomerPhone(authentication);
         Order order = orderRepository.findCustomerOrderById(orderId, customerPhone)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-        OrderPayment payment = paymentService.createPayment(order, dto.getType());
+        OrderPayment payment = paymentService.createPayment(order, dto.getType(), dto.getPaymentMethod());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponseDTO.success(
                         OrderPaymentResponseDto.from(payment),

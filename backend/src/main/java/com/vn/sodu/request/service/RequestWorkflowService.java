@@ -162,7 +162,7 @@ public class RequestWorkflowService {
     }
 
     @Transactional
-    public Request processRequest(Long requestId, RequestStatus targetStatus, String actor, String note) {
+    public Request processRequest(Long requestId, RequestStatus targetStatus, String actor, String note, BigDecimal depositAmount) {
         if (targetStatus == null) {
             throw new IllegalArgumentException("Target status is required");
         }
@@ -171,6 +171,14 @@ public class RequestWorkflowService {
 
         RequestStatus from = request.getStatus();
         requestTransitionPolicy.validateTransition(from, targetStatus);
+
+        if (targetStatus == RequestStatus.APPROVED && depositAmount != null) {
+            request.setDepositAmount(scaleMoney(depositAmount));
+            BigDecimal totalAmount = scaleMoney(request.getTotalAmount());
+            if (request.getDepositAmount().compareTo(totalAmount) > 0) {
+                throw new IllegalArgumentException("Deposit amount must not exceed total amount");
+            }
+        }
 
         request.setStatus(targetStatus);
         Request saved = requestRepo.save(request);

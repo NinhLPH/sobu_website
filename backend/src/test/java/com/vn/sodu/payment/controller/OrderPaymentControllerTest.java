@@ -4,6 +4,7 @@ import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.repo.OrderPaymentRepository;
@@ -72,10 +73,11 @@ class OrderPaymentControllerTest {
                 .build();
         CreateOrderPaymentDto request = new CreateOrderPaymentDto();
         request.setType(PaymentType.FULL);
+        request.setPaymentMethod(PaymentMethod.ONLINE);
 
         when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
         when(orderRepository.findCustomerOrderById(15L, "0900000001")).thenReturn(Optional.of(order));
-        when(paymentService.createPayment(order, PaymentType.FULL)).thenReturn(payment);
+        when(paymentService.createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE)).thenReturn(payment);
 
         OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService);
 
@@ -85,7 +87,7 @@ class OrderPaymentControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getPaymentCode()).isEqualTo("SOBU-PAY-1");
-        verify(paymentService).createPayment(order, PaymentType.FULL);
+        verify(paymentService).createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE);
     }
 
     @Test

@@ -251,7 +251,10 @@ class PaymentServiceTest {
 
         assertThat(updated.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(updated.getOrder().getStatus()).isEqualTo(OrderStatus.DEPOSIT_PAID);
-        verifyNoInteractions(eventPublisher);
+        ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().orderId()).isEqualTo(6L);
+        assertThat(eventCaptor.getValue().paymentCode()).isEqualTo("SOBU-PAY-93");
     }
 
     @Test

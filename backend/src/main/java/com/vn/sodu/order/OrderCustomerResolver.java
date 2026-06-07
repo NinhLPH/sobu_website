@@ -34,7 +34,10 @@ public class OrderCustomerResolver {
             builder.street(customer.getStreet())
                    .province(customer.getProvince())
                    .district(customer.getDistrict())
-                   .ward(customer.getWard());
+                   .ward(customer.getWard())
+                   .provinceId(customer.getProvinceId())
+                   .districtId(customer.getDistrictId())
+                   .wardId(customer.getWardId());
         }
         
         return builder.build();

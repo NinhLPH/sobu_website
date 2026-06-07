@@ -1,6 +1,7 @@
 package com.vn.sodu.payment.dto;
 
 import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import lombok.Builder;
@@ -16,6 +17,7 @@ public class OrderPaymentResponseDto {
     private Long orderId;
     private String paymentCode;
     private PaymentType type;
+    private PaymentMethod paymentMethod;
     private PaymentStatus status;
     private BigDecimal amount;
     private String provider;
@@ -37,6 +39,7 @@ public class OrderPaymentResponseDto {
                 .orderId(payment.getOrder() == null ? null : payment.getOrder().getId())
                 .paymentCode(payment.getPaymentCode())
                 .type(payment.getType())
+                .paymentMethod(payment.getPaymentMethod())
                 .status(payment.getStatus())
                 .amount(payment.getAmount())
                 .provider(payment.getProvider())

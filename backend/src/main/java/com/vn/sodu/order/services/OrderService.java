@@ -6,6 +6,7 @@ import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
 import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.PaymentType;
+import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.service.PaymentService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
@@ -67,13 +68,16 @@ public class OrderService {
     @Transactional
     public Order createNormalOrder(CreateNormalOrderDto dto) {
         validateDirectOrder(dto);
+        String orderCode = generateUniqueOrderCode();
 
         Order order = Order.builder()
-                .orderCode(generateUniqueOrderCode())
+                .orderCode(orderCode)
+                .appOrderId(orderCode)
                 .request(null)
                 .type(OrderType.NORMAL)
                 .status(OrderStatus.NEW)
                 .syncStatus(OrderSyncStatus.PENDING)
+                .nhanhSyncStage(NhanhSyncStage.NONE)
                 .customerName(trim(dto.getCustomerName()))
                 .customerMobile(trim(dto.getCustomerMobile()))
                 .customerEmail(trim(dto.getCustomerEmail()))
@@ -81,6 +85,12 @@ public class OrderService {
                 .customerCityName(trim(dto.getCustomerCityName()))
                 .customerDistrictName(trim(dto.getCustomerDistrictName()))
                 .customerWardName(trim(dto.getCustomerWardName()))
+                .customerCityId(dto.getCustomerCityId())
+                .customerDistrictId(dto.getCustomerDistrictId())
+                .customerWardId(dto.getCustomerWardId())
+                .carrierId(dto.getCarrierId())
+                .carrierServiceId(dto.getCarrierServiceId())
+                .shippingFee(money(dto.getShippingFee()))
                 .description(trim(dto.getDescription()))
                 .depositAmount(money(BigDecimal.ZERO))
                 .items(new ArrayList<>())
@@ -106,7 +116,7 @@ public class OrderService {
             order.getItems().add(item);
         }
 
-        order.setTotalAmount(money(total));
+        order.setTotalAmount(money(total.add(money(dto.getShippingFee()))));
         paymentService.initializeOrderPaymentState(order);
         return orderRepository.save(order);
     }
@@ -167,7 +177,7 @@ public class OrderService {
 
     private void createInitialPreorderDepositIfRequired(Order order) {
         if (requiresPreorderDeposit(order)) {
-            paymentService.createPayment(order, PaymentType.DEPOSIT);
+            paymentService.createPayment(order, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
         }
     }
 

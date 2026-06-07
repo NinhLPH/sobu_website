@@ -5,7 +5,6 @@ import {
     User,
     MapPin,
     Package,
-    CreditCard,
     RefreshCw,
     AlertCircle,
     CheckCircle2,
@@ -19,7 +18,6 @@ export default function AdminOrderDetail() {
     const {id} = useParams();
     const [order, setOrder] = useState<OrderResponseDto | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isSyncing, setIsSyncing] = useState(false);
     const [isRetrying, setIsRetrying] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -41,6 +39,8 @@ export default function AdminOrderDetail() {
 
     useEffect(() => {
         fetchOrderDetail();
+        // fetchOrderDetail depends only on the route param and local state setters in this screen.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     const handleRetrySync = async () => {
@@ -53,15 +53,18 @@ export default function AdminOrderDetail() {
             if (res.syncStatus === 'SYNCED') {
                 setActionSuccess('Đồng bộ đơn hàng lên Nhanh.vn thành công!');
             } else {
-                setActionError(res.syncError || 'Đồng bộ thất bại. Vui lòng kiểm tra lại cấu hình Nhanh.vn!');
+                setActionError(res.lastSyncMessage || res.syncError || 'Đồng bộ thất bại. Vui lòng kiểm tra lại cấu hình Nhanh.vn!');
             }
             // Cập nhật state cục bộ từ kết quả trả về, không reload trang hay gọi API fetch lại
             setOrder(prev => prev ? {
                 ...prev,
                 syncStatus: res.syncStatus,
+                nhanhSyncStage: res.nhanhSyncStage,
                 nhanhOrderId: res.nhanhOrderId,
                 nhanhOrderCode: res.nhanhOrderCode,
-                syncError: res.syncError
+                syncError: res.syncError,
+                lastSyncMessage: res.lastSyncMessage,
+                lastSyncAt: res.lastSyncAt
             } : null);
         } catch (err: any) {
             setActionError(err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi đồng bộ đơn hàng!');
@@ -96,8 +99,12 @@ export default function AdminOrderDetail() {
         switch (status) {
             case 'NEW':
                 return 'bg-amber-100 text-amber-800 border-amber-200';
-            case 'PENDING':
-                return 'bg-amber-100 text-amber-800 border-amber-200';
+            case 'WAITING_DEPOSIT':
+                return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+            case 'DEPOSIT_PAID':
+                return 'bg-cyan-100 text-cyan-800 border-cyan-200';
+            case 'READY_FOR_FINAL_PAYMENT':
+                return 'bg-indigo-100 text-indigo-800 border-indigo-200';
             case 'PROCESSING':
                 return 'bg-blue-100 text-blue-800 border-blue-200';
             case 'SHIPPED':
@@ -115,8 +122,12 @@ export default function AdminOrderDetail() {
         switch (status) {
             case 'NEW':
                 return 'Mới';
-            case 'PENDING':
-                return 'Chờ xác nhận';
+            case 'WAITING_DEPOSIT':
+                return 'Chờ đặt cọc';
+            case 'DEPOSIT_PAID':
+                return 'Đã nhận cọc';
+            case 'READY_FOR_FINAL_PAYMENT':
+                return 'Chờ thanh toán cuối';
             case 'PROCESSING':
                 return 'Đang xử lý';
             case 'SHIPPED':
@@ -153,6 +164,21 @@ export default function AdminOrderDetail() {
                 return 'Chờ đồng bộ';
             default:
                 return sync;
+        }
+    };
+
+    const getNhanhStageText = (stage?: string) => {
+        switch (stage) {
+            case 'NORMAL_ORDER_CREATED':
+                return 'Normal order created on Nhanh';
+            case 'PREORDER_DEPOSIT_CREATED':
+                return 'Preorder deposit created on Nhanh';
+            case 'PREORDER_FINAL_UPDATED':
+                return 'Preorder final payment updated on Nhanh';
+            case 'NONE':
+                return 'Not synced to Nhanh yet';
+            default:
+                return stage || 'Not synced to Nhanh yet';
         }
     };
 
@@ -199,11 +225,11 @@ export default function AdminOrderDetail() {
             )}
 
             {/* Sync Alert details if FAILED */}
-            {order.syncStatus === 'FAILED' && order.syncError && (
+            {order.syncStatus === 'FAILED' && (order.lastSyncMessage || order.syncError) && (
                 <div
                     className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-800 text-xs font-medium leading-relaxed">
                     <span className="font-black text-red-600 uppercase tracking-wide block mb-1">❌ Chi tiết lỗi đồng bộ ERP Nhanh.vn:</span>
-                    {order.syncError}
+                    {order.lastSyncMessage || order.syncError}
                 </div>
             )}
 
@@ -249,13 +275,17 @@ export default function AdminOrderDetail() {
                                     <span className="text-on-surface">{formatCurrency(order.totalAmount)}</span>
                                 </div>
                                 <div className="flex justify-between text-outline">
+                                    <span>Phí vận chuyển:</span>
+                                    <span className="text-on-surface">{formatCurrency(order.shippingFee || 0)}</span>
+                                </div>
+                                <div className="flex justify-between text-outline">
                                     <span>Đã cọc (Deposit):</span>
-                                    <span className="text-on-surface">{formatCurrency(order.depositAmount)}</span>
+                                    <span className="text-on-surface">{formatCurrency(order.paidAmount || order.depositAmount || 0)}</span>
                                 </div>
                                 <div
                                     className="flex justify-between font-black text-primary text-base pt-2 border-t border-outline-variant/20">
                                     <span>Tổng thanh toán còn lại:</span>
-                                    <span>{formatCurrency(order.totalAmount - order.depositAmount)}</span>
+                                    <span>{formatCurrency(order.remainingAmount || 0)}</span>
                                 </div>
                             </div>
                         </div>
@@ -290,6 +320,10 @@ export default function AdminOrderDetail() {
                                     {order.syncStatus}
                                 </span>
                             </div>
+                            <div className="flex justify-between items-center gap-4">
+                                <span className="text-outline">Milestone đồng bộ:</span>
+                                <span className="text-on-surface text-right">{getNhanhStageText(order.nhanhSyncStage)}</span>
+                            </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-outline">ID hệ thống Nhanh:</span>
                                 <span
@@ -300,11 +334,17 @@ export default function AdminOrderDetail() {
                                 <span
                                     className="text-on-surface select-all">{order.nhanhOrderCode || 'Chưa kết nối'}</span>
                             </div>
-                            {order.syncError && (
+                            {order.lastSyncAt && (
+                                <div className="flex justify-between items-center">
+                                    <span className="text-outline">Lần sync cuối:</span>
+                                    <span className="text-on-surface">{new Date(order.lastSyncAt).toLocaleString('vi-VN')}</span>
+                                </div>
+                            )}
+                            {(order.lastSyncMessage || order.syncError) && (
                                 <div className="pt-2 border-t border-outline-variant/20">
                                     <span className="text-error uppercase text-[10px] tracking-wide block mb-1">Lý do lỗi đồng bộ:</span>
                                     <p className="text-[11px] text-error leading-relaxed font-semibold bg-error/5 p-2.5 rounded-lg border border-error/10">
-                                        {order.syncError}
+                                        {order.lastSyncMessage || order.syncError}
                                     </p>
                                 </div>
                             )}

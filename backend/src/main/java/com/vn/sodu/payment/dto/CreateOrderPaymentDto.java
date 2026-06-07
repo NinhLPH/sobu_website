@@ -1,5 +1,6 @@
 package com.vn.sodu.payment.dto;
 
+import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentType;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -11,4 +12,7 @@ public class CreateOrderPaymentDto {
 
     @NotNull(message = "Payment type is required")
     private PaymentType type;
+
+    @NotNull(message = "Payment method is required")
+    private PaymentMethod paymentMethod;
 }

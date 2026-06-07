@@ -131,16 +131,19 @@ public class AuthController {
     })
     public ResponseEntity<?> logout(
         @Parameter(description = "JWT token in Bearer format", example = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
-        @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        @RequestHeader(value = "Authorization", required = false) String authHeader,
+        @org.springframework.web.bind.annotation.RequestBody(required = false) RefreshTokenRequest request) {
         
         log.info("Logout request");
         
-        String token = null;
+        String accessToken = null;
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
+            accessToken = authHeader.substring(7);
         }
+
+        String refreshToken = request != null ? request.getRefreshToken() : null;
         
-        authService.logout(token);
+        authService.logout(accessToken, refreshToken);
         
         return ResponseEntity.ok(
                 ApiResponseDTO.success(null, "Logout successful", HttpStatus.OK.value())

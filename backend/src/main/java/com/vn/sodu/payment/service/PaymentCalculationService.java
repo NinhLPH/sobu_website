@@ -25,7 +25,7 @@ public class PaymentCalculationService {
             throw new IllegalArgumentException("Payment type is required");
         }
 
-        BigDecimal totalAmount = normalizeMoney(order.getTotalAmount());
+        BigDecimal totalAmount = calculateOrderGrandTotal(order);
         BigDecimal depositAmount = normalizeMoney(order.getDepositAmount());
         BigDecimal paidAmount = normalizeMoney(order.getPaidAmount());
 
@@ -71,7 +71,7 @@ public class PaymentCalculationService {
         if (order == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        BigDecimal totalAmount = normalizeMoney(order.getTotalAmount());
+        BigDecimal totalAmount = calculateOrderGrandTotal(order);
         BigDecimal paidAmount = calculatePaidAmount(payments);
         return normalizeMoney(totalAmount.subtract(paidAmount).max(BigDecimal.ZERO));
     }
@@ -81,7 +81,7 @@ public class PaymentCalculationService {
             return PaymentStatus.PENDING;
         }
 
-        BigDecimal totalAmount = normalizeMoney(order.getTotalAmount());
+        BigDecimal totalAmount = calculateOrderGrandTotal(order);
         BigDecimal paidAmount = calculatePaidAmount(payments);
 
         if (totalAmount.signum() > 0 && paidAmount.compareTo(totalAmount) >= 0) {
@@ -123,5 +123,14 @@ public class PaymentCalculationService {
         order.setPaidAmount(calculatePaidAmount(payments));
         order.setRemainingAmount(calculateRemainingAmount(order, payments));
         order.setPaymentStatus(calculateOrderPaymentStatus(order, payments));
+    }
+
+    public BigDecimal calculateOrderGrandTotal(Order order) {
+        if (order == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal totalAmount = normalizeMoney(order.getTotalAmount());
+        BigDecimal shippingFee = normalizeMoney(order.getShippingFee());
+        return normalizeMoney(totalAmount.add(shippingFee));
     }
 }

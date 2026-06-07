@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,4 +28,7 @@ public class ProcessRequestDto {
     @Size(max = 1000, message = "Note must not exceed 1000 characters")
     @Schema(description = "Optional process note", example = "Customer confirmed order details")
     private String note;
+
+    @Schema(description = "Optional deposit override applied before approved requests convert to orders", example = "300000")
+    private BigDecimal depositAmount;
 }

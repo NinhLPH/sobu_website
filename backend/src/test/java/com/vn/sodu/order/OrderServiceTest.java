@@ -4,6 +4,7 @@ import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
+import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.order.services.OrderService;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.service.PaymentService;
@@ -161,6 +162,6 @@ class OrderServiceTest {
         assertThat(mappedOrder.getStatus()).isEqualTo(OrderStatus.WAITING_DEPOSIT);
         verify(paymentService).initializeOrderPaymentState(mappedOrder);
         verify(orderRepository).save(mappedOrder);
-        verify(paymentService).createPayment(savedOrder, PaymentType.DEPOSIT);
+        verify(paymentService).createPayment(savedOrder, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
     }
 }

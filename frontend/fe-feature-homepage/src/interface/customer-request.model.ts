@@ -52,7 +52,7 @@ export interface CreateRequestDto {
 }
 
 export interface ProcessRequestDto {
-    action: RequestStatus;
+    targetStatus: RequestStatus;
     note?: string;
     depositAmount?: number;
 }

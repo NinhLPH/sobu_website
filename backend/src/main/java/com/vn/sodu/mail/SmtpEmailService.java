@@ -34,6 +34,6 @@ public class SmtpEmailService implements EmailService {
         String link = String.format("%s/api/auth/activate?token=%s", baseUrl, token);
         String body = String.format("Hello %s,\n\nPlease activate your account by visiting: %s\n\nIf you didn't register, ignore this email.",
                 account.getFullName() != null ? account.getFullName() : account.getEmail(), link);
-        send(account.getEmail(), "Activate your ChamViet account", body);
+        send(account.getEmail(), "Activate your Sobu account", body);
     }
 }

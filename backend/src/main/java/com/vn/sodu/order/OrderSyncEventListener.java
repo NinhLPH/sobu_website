@@ -22,6 +22,6 @@ public class OrderSyncEventListener {
             log.warn("Skipping Nhanh order sync event with missing order id");
             return;
         }
-        orderSyncService.syncOrderToNhanh(event.orderId());
+        orderSyncService.syncOrderToNhanh(event.orderId(), event.paymentCode());
     }
 }
