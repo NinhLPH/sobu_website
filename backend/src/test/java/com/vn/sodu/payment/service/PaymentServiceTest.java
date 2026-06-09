@@ -7,6 +7,7 @@ import com.vn.sodu.order.OrderSyncStatus;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.MockPayOSGateway;
 import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.repo.OrderPaymentRepository;
@@ -172,6 +173,51 @@ class PaymentServiceTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.READY_FOR_FINAL_PAYMENT);
         assertThat(payment.getType()).isEqualTo(PaymentType.FINAL);
         assertThat(payment.getAmount()).isEqualByComparingTo("700.00");
+        assertThat(payment.getCheckoutUrl()).contains(payment.getPaymentCode());
+    }
+
+    @Test
+    void createPaymentCreatesFinalCheckoutWhenPreorderDepositAlreadyPaid() {
+        Order order = Order.builder()
+                .id(18L)
+                .orderCode("SOBU-PRE-18")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.DEPOSIT_PAID)
+                .totalAmount(new BigDecimal("1200"))
+                .depositAmount(new BigDecimal("300"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("900"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+
+        when(orderRepository.findById(18L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(18L)).thenReturn(List.of(), List.of(
+                OrderPayment.builder()
+                        .order(order)
+                        .type(PaymentType.DEPOSIT)
+                        .status(PaymentStatus.PAID)
+                        .amount(new BigDecimal("300"))
+                        .build(),
+                OrderPayment.builder()
+                        .order(order)
+                        .type(PaymentType.FINAL)
+                        .status(PaymentStatus.PENDING)
+                        .amount(new BigDecimal("900"))
+                        .build()
+        ));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            payment.setId(118L);
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment payment = paymentService.createPayment(order, PaymentType.FINAL, PaymentMethod.ONLINE);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.READY_FOR_FINAL_PAYMENT);
+        assertThat(payment.getType()).isEqualTo(PaymentType.FINAL);
+        assertThat(payment.getProviderOrderCode()).isEqualTo(118L);
         assertThat(payment.getCheckoutUrl()).contains(payment.getPaymentCode());
     }
 

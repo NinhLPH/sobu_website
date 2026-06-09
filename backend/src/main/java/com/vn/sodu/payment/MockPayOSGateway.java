@@ -1,14 +1,21 @@
 package com.vn.sodu.payment;
 
 import com.vn.sodu.order.Order;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
 @Service
+@ConditionalOnProperty(name = "payos.gateway-mode", havingValue = "mock", matchIfMissing = true)
 public class MockPayOSGateway implements PayOSGateway {
 
     private static final String PROVIDER_PREFIX = "mock-payos";
+
+    @Override
+    public String providerName() {
+        return "PAYOS_MOCK";
+    }
 
     @Override
     public PayOSCheckoutSession createCheckout(Order order, OrderPayment payment) {

@@ -56,6 +56,9 @@ public class OrderPayment {
     @Column(length = 100)
     private String providerReference;
 
+    @Column(unique = true)
+    private Long providerOrderCode;
+
     @Column(columnDefinition = "TEXT")
     private String checkoutUrl;
 

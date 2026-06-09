@@ -1,6 +1,8 @@
 package com.vn.sodu.payment.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.global.idempotency.IdempotencyScope;
+import com.vn.sodu.global.idempotency.IdempotencyService;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
@@ -23,10 +25,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -39,6 +44,7 @@ public class OrderPaymentController {
     private final OrderPaymentRepository orderPaymentRepository;
     private final AccountRepo accountRepo;
     private final PaymentService paymentService;
+    private final IdempotencyService idempotencyService;
 
     @GetMapping("/{orderId}/payments")
     @Operation(
@@ -70,11 +76,27 @@ public class OrderPaymentController {
     public ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> createPayment(
             @PathVariable Long orderId,
             @Valid @RequestBody CreateOrderPaymentDto dto,
-            Authentication authentication
+            Authentication authentication,
+            @RequestHeader(value = IdempotencyService.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey
     ) {
         String customerPhone = resolveCustomerPhone(authentication);
         Order order = orderRepository.findCustomerOrderById(orderId, customerPhone)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        if (IdempotencyService.hasKey(idempotencyKey)) {
+            return idempotencyService.execute(
+                    IdempotencyScope.CREATE_PAYMENT,
+                    idempotencyKey,
+                    paymentIdentity(orderId, customerPhone, dto),
+                    OrderPaymentResponseDto.class,
+                    "PAYMENT",
+                    OrderPaymentResponseDto::getId,
+                    () -> createPaymentResponse(order, dto)
+            );
+        }
+        return createPaymentResponse(order, dto);
+    }
+
+    private ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> createPaymentResponse(Order order, CreateOrderPaymentDto dto) {
         OrderPayment payment = paymentService.createPayment(order, dto.getType(), dto.getPaymentMethod());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponseDTO.success(
@@ -82,6 +104,15 @@ public class OrderPaymentController {
                         "Payment created",
                         HttpStatus.CREATED.value()
                 ));
+    }
+
+    private Map<String, Object> paymentIdentity(Long orderId, String customerPhone, CreateOrderPaymentDto dto) {
+        Map<String, Object> identity = new LinkedHashMap<>();
+        identity.put("action", "create-payment");
+        identity.put("orderId", orderId);
+        identity.put("customerPhone", customerPhone);
+        identity.put("body", dto);
+        return identity;
     }
 
     private String resolveCustomerPhone(Authentication authentication) {

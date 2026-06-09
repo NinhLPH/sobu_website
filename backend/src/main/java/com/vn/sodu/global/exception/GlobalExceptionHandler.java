@@ -1,6 +1,7 @@
 package com.vn.sodu.global.exception;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.global.idempotency.IdempotencyConflictException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,13 @@ public class GlobalExceptionHandler {
         log.warn("Forbidden Operation: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponseDTO.error(ex.getMessage(), "FORBIDDEN", HttpStatus.FORBIDDEN.value()));
+    }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<ApiResponseDTO<Void>> handleIdempotencyConflictException(IdempotencyConflictException ex) {
+        log.warn("Idempotency Conflict: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponseDTO.error(ex.getMessage(), "IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT.value()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

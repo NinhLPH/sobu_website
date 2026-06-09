@@ -50,7 +50,7 @@ public class OrderService {
         // 2. Resolve customer
         ResolvedOrderCustomer customer = orderCustomerResolver.resolveByPhone(request.getCustomerPhone())
             .orElseThrow(() -> new IllegalArgumentException("Customer resolution failed for phone: " + request.getCustomerPhone()));
-
+        // use mail to resolve customer
         // 3. Validate for conversion
         orderConversionPolicy.validateForConversion(request, customer);
 
