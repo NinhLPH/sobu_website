@@ -2,6 +2,7 @@ package com.vn.sodu.payment.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PayOSProperties;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.PaymentWebhookEvent;
@@ -16,7 +17,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,14 +43,19 @@ class PayOSWebhookServiceTest {
     private PaymentService paymentService;
 
     private PayOSWebhookService webhookService;
+    private PayOSProperties payOSProperties;
 
     @BeforeEach
     void setUp() {
+        payOSProperties = new PayOSProperties();
+        payOSProperties.setChecksumKey("test-checksum-key");
+        payOSProperties.setGatewayMode("mock");
         webhookService = new PayOSWebhookService(
                 new ObjectMapper(),
                 paymentWebhookEventRepository,
                 orderPaymentRepository,
-                paymentService
+                paymentService,
+                payOSProperties
         );
         when(paymentWebhookEventRepository.save(any(PaymentWebhookEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
@@ -126,5 +135,69 @@ class PayOSWebhookServiceTest {
         PaymentWebhookEvent finalSave = captor.getAllValues().get(captor.getAllValues().size() - 1);
         assertThat(finalSave.getStatus()).isEqualTo(PaymentWebhookStatus.PROCESSED);
         assertThat(finalSave.getProviderReference()).isEqualTo("mock-payos-sobu-pay-503");
+    }
+
+    @Test
+    void receiveRealPayOSWebhookVerifiesSignatureAndResolvesProviderOrderCode() {
+        payOSProperties.setGatewayMode("real");
+        OrderPayment payment = OrderPayment.builder()
+                .paymentCode("SOBU-PAY-504")
+                .providerOrderCode(504L)
+                .type(PaymentType.FINAL)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("700.00"))
+                .providerReference("link-504")
+                .build();
+        when(orderPaymentRepository.findByProviderOrderCode(504L)).thenReturn(Optional.of(payment));
+
+        String data = """
+                {"orderCode":504,"amount":700,"currency":"VND","paymentLinkId":"link-504","reference":"TF504","code":"00"}
+                """;
+        String signature = sign("amount=700&code=00&currency=VND&orderCode=504&paymentLinkId=link-504&reference=TF504");
+
+        webhookService.receive("""
+                {"code":"00","desc":"success","success":true,"data":%s,"signature":"%s"}
+                """.formatted(data.trim(), signature), new HttpHeaders());
+
+        verify(paymentService).markPaymentPaid("SOBU-PAY-504");
+
+        ArgumentCaptor<PaymentWebhookEvent> captor = ArgumentCaptor.forClass(PaymentWebhookEvent.class);
+        verify(paymentWebhookEventRepository, atLeastOnce()).save(captor.capture());
+        PaymentWebhookEvent finalSave = captor.getAllValues().get(captor.getAllValues().size() - 1);
+        assertThat(finalSave.getStatus()).isEqualTo(PaymentWebhookStatus.PROCESSED);
+        assertThat(finalSave.getPaymentCode()).isEqualTo("SOBU-PAY-504");
+        assertThat(finalSave.getProviderReference()).isEqualTo("link-504");
+    }
+
+    @Test
+    void receiveRealPayOSWebhookRejectsInvalidSignature() {
+        payOSProperties.setGatewayMode("real");
+
+        webhookService.receive("""
+                {"code":"00","desc":"success","success":true,"data":{"orderCode":505,"amount":700,"currency":"VND","paymentLinkId":"link-505","reference":"TF505","code":"00"},"signature":"bad"}
+                """, new HttpHeaders());
+
+        verifyNoInteractions(paymentService);
+
+        ArgumentCaptor<PaymentWebhookEvent> captor = ArgumentCaptor.forClass(PaymentWebhookEvent.class);
+        verify(paymentWebhookEventRepository, atLeastOnce()).save(captor.capture());
+        PaymentWebhookEvent finalSave = captor.getAllValues().get(captor.getAllValues().size() - 1);
+        assertThat(finalSave.getStatus()).isEqualTo(PaymentWebhookStatus.INVALID);
+        assertThat(finalSave.getProcessingNote()).contains("Invalid PayOS webhook signature");
+    }
+
+    private String sign(String data) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(payOSProperties.getChecksumKey().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }

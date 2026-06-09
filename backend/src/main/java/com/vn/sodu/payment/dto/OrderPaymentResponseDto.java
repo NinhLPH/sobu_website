@@ -22,6 +22,7 @@ public class OrderPaymentResponseDto {
     private BigDecimal amount;
     private String provider;
     private String providerReference;
+    private Long providerOrderCode;
     private String checkoutUrl;
     private String qrCode;
     private String failureReason;
@@ -44,6 +45,7 @@ public class OrderPaymentResponseDto {
                 .amount(payment.getAmount())
                 .provider(payment.getProvider())
                 .providerReference(payment.getProviderReference())
+                .providerOrderCode(payment.getProviderOrderCode())
                 .checkoutUrl(payment.getCheckoutUrl())
                 .qrCode(payment.getQrCode())
                 .failureReason(payment.getFailureReason())

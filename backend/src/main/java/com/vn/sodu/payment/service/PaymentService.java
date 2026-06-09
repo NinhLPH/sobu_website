@@ -31,7 +31,6 @@ public class PaymentService {
 
     private static final DateTimeFormatter PAYMENT_CODE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final String MOCK_PROVIDER = "PAYOS_MOCK";
 
     private final OrderPaymentRepository orderPaymentRepository;
     private final OrderRepository orderRepository;
@@ -87,6 +86,7 @@ public class PaymentService {
 
         Order managedOrder = orderRepository.findById(order.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + order.getId()));
+        preparePreorderFinalPaymentIfNeeded(managedOrder, type);
         List<OrderPayment> existingPayments = orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(managedOrder.getId());
         validatePaymentCreation(managedOrder, type, paymentMethod, existingPayments);
 
@@ -102,18 +102,32 @@ public class PaymentService {
                 .paymentMethod(paymentMethod)
                 .status(PaymentStatus.PENDING)
                 .amount(amount)
-                .provider(paymentMethod == PaymentMethod.COD ? "COD" : MOCK_PROVIDER)
+                .provider(paymentMethod == PaymentMethod.COD ? "COD" : payOSGateway.providerName())
                 .build();
 
-        if (paymentMethod == PaymentMethod.ONLINE) {
-            PayOSCheckoutSession session = payOSGateway.createCheckout(managedOrder, payment);
-            payment.setProviderReference(session.providerReference());
-            payment.setCheckoutUrl(session.checkoutUrl());
-            payment.setQrCode(session.qrCode());
-            payment.setExpiresAt(session.expiresAt());
+        OrderPayment savedPayment = orderPaymentRepository.save(payment);
+        if (savedPayment.getProviderOrderCode() == null) {
+            savedPayment.setProviderOrderCode(savedPayment.getId());
+            savedPayment = orderPaymentRepository.save(savedPayment);
         }
 
-        OrderPayment savedPayment = orderPaymentRepository.save(payment);
+        if (paymentMethod == PaymentMethod.ONLINE) {
+            try {
+                PayOSCheckoutSession session = payOSGateway.createCheckout(managedOrder, savedPayment);
+                savedPayment.setProviderReference(session.providerReference());
+                savedPayment.setCheckoutUrl(session.checkoutUrl());
+                savedPayment.setQrCode(session.qrCode());
+                savedPayment.setExpiresAt(session.expiresAt());
+                savedPayment = orderPaymentRepository.save(savedPayment);
+            } catch (RuntimeException ex) {
+                savedPayment.setStatus(PaymentStatus.FAILED);
+                savedPayment.setFailureReason(ex.getMessage());
+                savedPayment = orderPaymentRepository.save(savedPayment);
+                recalculateOrderPaymentState(managedOrder);
+                return savedPayment;
+            }
+        }
+
         recalculateOrderPaymentState(managedOrder);
         return savedPayment;
     }
@@ -137,6 +151,7 @@ public class PaymentService {
             throw new IllegalArgumentException("Payment code is required");
         }
 
+        // Find the payment by its unique code
         OrderPayment payment = orderPaymentRepository.findByPaymentCode(paymentCode.trim())
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentCode));
 
@@ -144,11 +159,13 @@ public class PaymentService {
             return payment;
         }
 
+        // Mark the payment as successfully paid and clear any previous errors
         payment.setStatus(PaymentStatus.PAID);
         payment.setPaidAt(LocalDateTime.now());
         payment.setFailureReason(null);
         OrderPayment savedPayment = orderPaymentRepository.save(payment);
 
+        // Recalculate order state, advance workflow if needed, and publish sync events if eligible
         Order updatedOrder = recalculateOrderPaymentState(payment.getOrder());
         updatedOrder = advanceOrderAfterPayment(updatedOrder, savedPayment);
         savedPayment.setOrder(updatedOrder);
@@ -177,6 +194,16 @@ public class PaymentService {
             case NORMAL -> validateNormalOrderPaymentCreation(type, paymentMethod, existingPayments);
             case PREORDER -> validatePreorderPaymentCreation(order, type, paymentMethod, existingPayments);
             default -> throw new IllegalStateException("Payments are not enabled for order type " + order.getType());
+        }
+    }
+
+    private void preparePreorderFinalPaymentIfNeeded(Order order, PaymentType type) {
+        if (order == null || order.getType() != OrderType.PREORDER || type != PaymentType.FINAL) {
+            return;
+        }
+        if (order.getStatus() == OrderStatus.DEPOSIT_PAID) {
+            order.setStatus(OrderStatus.READY_FOR_FINAL_PAYMENT);
+            orderRepository.save(order);
         }
     }
 

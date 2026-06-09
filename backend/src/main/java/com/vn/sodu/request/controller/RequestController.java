@@ -2,6 +2,8 @@ package com.vn.sodu.request.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.dto.PageResponse;
+import com.vn.sodu.global.idempotency.IdempotencyScope;
+import com.vn.sodu.global.idempotency.IdempotencyService;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.request.dto.CreateRequestDto;
 import com.vn.sodu.request.dto.ProcessRequestDto;
@@ -29,9 +31,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -45,6 +51,7 @@ public class RequestController {
     private final RequestWorkflowService requestWorkflowService;
     private final RequestQueryService requestQueryService;
     private final RequestResponseMapper requestResponseMapper;
+    private final IdempotencyService idempotencyService;
 
     @GetMapping
     @Operation(
@@ -142,10 +149,35 @@ public class RequestController {
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ApiResponseDTO.class)))
     })
-    public ResponseEntity<?> createRequest(@Valid @RequestBody CreateRequestDto dto) {
+    public ResponseEntity<?> createRequest(
+            @Valid @RequestBody CreateRequestDto dto,
+            @RequestHeader(value = IdempotencyService.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey
+    ) {
+        if (IdempotencyService.hasKey(idempotencyKey)) {
+            return idempotencyService.execute(
+                    IdempotencyScope.CREATE_REQUEST,
+                    idempotencyKey,
+                    requestIdentity("create-request", dto),
+                    RequestResponseDto.class,
+                    "REQUEST",
+                    RequestResponseDto::getId,
+                    () -> createRequestResponse(dto)
+            );
+        }
+        return createRequestResponse(dto);
+    }
+
+    private ResponseEntity<ApiResponseDTO<RequestResponseDto>> createRequestResponse(CreateRequestDto dto) {
         Request request = requestWorkflowService.createRequest(dto);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponseDTO.success(requestResponseMapper.toDto(request), "Request created", HttpStatus.CREATED.value()));
+    }
+
+    private Map<String, Object> requestIdentity(String action, Object body) {
+        Map<String, Object> identity = new LinkedHashMap<>();
+        identity.put("action", action);
+        identity.put("body", body);
+        return identity;
     }
 
     @PutMapping("/{requestId}")

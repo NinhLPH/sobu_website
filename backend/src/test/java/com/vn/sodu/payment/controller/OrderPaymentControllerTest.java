@@ -1,6 +1,8 @@
 package com.vn.sodu.payment.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.global.idempotency.IdempotencyScope;
+import com.vn.sodu.global.idempotency.IdempotencyService;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
@@ -26,8 +28,11 @@ import org.springframework.security.core.Authentication;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,6 +50,9 @@ class OrderPaymentControllerTest {
 
     @Mock
     private PaymentService paymentService;
+
+    @Mock
+    private IdempotencyService idempotencyService;
 
     @Test
     void createPaymentReturnsCheckoutSessionForAuthenticatedCustomerOrder() {
@@ -79,15 +87,71 @@ class OrderPaymentControllerTest {
         when(orderRepository.findCustomerOrderById(15L, "0900000001")).thenReturn(Optional.of(order));
         when(paymentService.createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE)).thenReturn(payment);
 
-        OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService);
+        OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService, idempotencyService);
 
         ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> response =
-                controller.createPayment(15L, request, authentication);
+                controller.createPayment(15L, request, authentication, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getPaymentCode()).isEqualTo("SOBU-PAY-1");
         verify(paymentService).createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE);
+    }
+
+    @Test
+    void createPaymentUsesIdempotencyKeyWhenProvided() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
+        Account account = Account.builder()
+                .email("customer@example.com")
+                .phone("0900000001")
+                .passwordHash("hashed")
+                .fullName("Customer")
+                .build();
+        Order order = Order.builder()
+                .id(15L)
+                .customerMobile("0900000001")
+                .type(OrderType.NORMAL)
+                .build();
+        CreateOrderPaymentDto request = new CreateOrderPaymentDto();
+        request.setType(PaymentType.FULL);
+        request.setPaymentMethod(PaymentMethod.ONLINE);
+        OrderPaymentResponseDto replayed = OrderPaymentResponseDto.builder()
+                .id(25L)
+                .orderId(15L)
+                .paymentCode("SOBU-PAY-1")
+                .type(PaymentType.FULL)
+                .status(PaymentStatus.PENDING)
+                .build();
+        ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> idempotentResponse = ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponseDTO.success(replayed, "Payment created", HttpStatus.CREATED.value()));
+
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(orderRepository.findCustomerOrderById(15L, "0900000001")).thenReturn(Optional.of(order));
+        when(idempotencyService.execute(
+                eq(IdempotencyScope.CREATE_PAYMENT),
+                eq("payment-key-1"),
+                any(),
+                eq(OrderPaymentResponseDto.class),
+                eq("PAYMENT"),
+                any(),
+                any()
+        )).thenReturn(idempotentResponse);
+
+        OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService, idempotencyService);
+
+        ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> response =
+                controller.createPayment(15L, request, authentication, "payment-key-1");
+
+        assertThat(response).isSameAs(idempotentResponse);
+        verify(idempotencyService).execute(
+                eq(IdempotencyScope.CREATE_PAYMENT),
+                eq("payment-key-1"),
+                any(),
+                eq(OrderPaymentResponseDto.class),
+                eq("PAYMENT"),
+                any(),
+                any(Supplier.class)
+        );
     }
 
     @Test
@@ -119,7 +183,7 @@ class OrderPaymentControllerTest {
         when(orderRepository.findCustomerOrderById(15L, "0900000001")).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(15L)).thenReturn(List.of(payment));
 
-        OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService);
+        OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService, idempotencyService);
 
         ResponseEntity<ApiResponseDTO<List<OrderPaymentResponseDto>>> response =
                 controller.listPayments(15L, authentication);

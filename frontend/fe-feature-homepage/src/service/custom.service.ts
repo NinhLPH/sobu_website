@@ -2,6 +2,7 @@ import apiClient from "../api/api-client";
 import {PageResponse} from "../interface/api-response";
 import {CreateRequestDto, RequestResponseDto, UpdateRequestDto} from "../interface/customer-request.model";
 import {OrderResponseDto} from "../interface/order.model";
+import { createIdempotencyKey } from "../utils/idempotency";
 
 
 export const CustomerService = {
@@ -15,7 +16,11 @@ export const CustomerService = {
     },
 
     createRequest: (data: CreateRequestDto): Promise<RequestResponseDto> => {
-        return apiClient.post('/api/requests', data);
+        return apiClient.post('/api/requests', data, {
+            headers: {
+                'Idempotency-Key': createIdempotencyKey(),
+            },
+        });
     },
 
     updateRequest: (requestId: string | number, data: UpdateRequestDto): Promise<RequestResponseDto> => {
