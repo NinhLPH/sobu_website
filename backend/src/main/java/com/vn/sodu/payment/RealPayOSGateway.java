@@ -14,6 +14,8 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +23,7 @@ import java.time.ZoneId;
 public class RealPayOSGateway implements PayOSGateway {
 
     private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final long PAYMENT_TTL_SECONDS = 5 * 60;
 
     private final PayOSProperties properties;
 
@@ -35,8 +38,9 @@ public class RealPayOSGateway implements PayOSGateway {
                 .orderCode(payment.getProviderOrderCode())
                 .amount(toPayOSAmount(payment.getAmount()))
                 .description(buildDescription(payment))
+                .expiredAt(buildExpiredAtEpochSeconds())
                 .returnUrl(properties.getReturnUrl())
-                .cancelUrl(properties.getCancelUrl())
+                .cancelUrl(buildCancelCallbackUrl(payment))
                 .buyerName(order == null ? null : order.getCustomerName())
                 .buyerEmail(order == null ? null : order.getCustomerEmail())
                 .buyerPhone(order == null ? null : order.getCustomerMobile())
@@ -87,6 +91,33 @@ public class RealPayOSGateway implements PayOSGateway {
             return null;
         }
         return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), VIETNAM_ZONE);
+    }
+
+    private long buildExpiredAtEpochSeconds() {
+        return Instant.now().plusSeconds(PAYMENT_TTL_SECONDS).getEpochSecond();
+    }
+
+    private String buildCancelCallbackUrl(OrderPayment payment) {
+        if (payment == null || payment.getPaymentCode() == null || payment.getPaymentCode().isBlank()) {
+            return properties.getCancelUrl();
+        }
+        String backendBaseUrl = resolveBackendBaseUrl();
+        String paymentCode = URLEncoder.encode(payment.getPaymentCode(), StandardCharsets.UTF_8);
+        String redirect = URLEncoder.encode(properties.getCancelUrl(), StandardCharsets.UTF_8);
+        return backendBaseUrl + "/api/payos/payments/cancel?paymentCode=" + paymentCode + "&redirect=" + redirect;
+    }
+
+    private String resolveBackendBaseUrl() {
+        String webhookUrl = properties.getWebhookUrl();
+        if (isBlank(webhookUrl)) {
+            throw new IllegalStateException("PayOS webhookUrl is required to build cancel callbacks");
+        }
+        int schemeSeparator = webhookUrl.indexOf("://");
+        if (schemeSeparator < 0) {
+            throw new IllegalStateException("PayOS webhookUrl must be an absolute URL");
+        }
+        int pathStart = webhookUrl.indexOf('/', schemeSeparator + 3);
+        return pathStart < 0 ? webhookUrl : webhookUrl.substring(0, pathStart);
     }
 
     private boolean isBlank(String value) {

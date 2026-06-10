@@ -59,13 +59,14 @@ class OrderPaymentControllerTest {
         Authentication authentication = new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
         Account account = Account.builder()
                 .email("customer@example.com")
-                .phone("0900000001")
+                .phone(null)
                 .passwordHash("hashed")
                 .fullName("Customer")
                 .build();
         Order order = Order.builder()
                 .id(15L)
                 .customerMobile("0900000001")
+                .customerEmail("customer@example.com")
                 .type(OrderType.NORMAL)
                 .build();
         OrderPayment payment = OrderPayment.builder()
@@ -84,7 +85,7 @@ class OrderPaymentControllerTest {
         request.setPaymentMethod(PaymentMethod.ONLINE);
 
         when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
-        when(orderRepository.findCustomerOrderById(15L, "0900000001")).thenReturn(Optional.of(order));
+        when(orderRepository.findWithItemsAndRequestById(15L)).thenReturn(Optional.of(order));
         when(paymentService.createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE)).thenReturn(payment);
 
         OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService, idempotencyService);
@@ -103,13 +104,14 @@ class OrderPaymentControllerTest {
         Authentication authentication = new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
         Account account = Account.builder()
                 .email("customer@example.com")
-                .phone("0900000001")
+                .phone(null)
                 .passwordHash("hashed")
                 .fullName("Customer")
                 .build();
         Order order = Order.builder()
                 .id(15L)
                 .customerMobile("0900000001")
+                .customerEmail("customer@example.com")
                 .type(OrderType.NORMAL)
                 .build();
         CreateOrderPaymentDto request = new CreateOrderPaymentDto();
@@ -126,7 +128,7 @@ class OrderPaymentControllerTest {
                 .body(ApiResponseDTO.success(replayed, "Payment created", HttpStatus.CREATED.value()));
 
         when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
-        when(orderRepository.findCustomerOrderById(15L, "0900000001")).thenReturn(Optional.of(order));
+        when(orderRepository.findWithItemsAndRequestById(15L)).thenReturn(Optional.of(order));
         when(idempotencyService.execute(
                 eq(IdempotencyScope.CREATE_PAYMENT),
                 eq("payment-key-1"),
@@ -159,13 +161,14 @@ class OrderPaymentControllerTest {
         Authentication authentication = new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
         Account account = Account.builder()
                 .email("customer@example.com")
-                .phone("0900000001")
+                .phone(null)
                 .passwordHash("hashed")
                 .fullName("Customer")
                 .build();
         Order order = Order.builder()
                 .id(15L)
                 .customerMobile("0900000001")
+                .customerEmail("customer@example.com")
                 .type(OrderType.PREORDER)
                 .build();
         OrderPayment payment = OrderPayment.builder()
@@ -180,8 +183,8 @@ class OrderPaymentControllerTest {
                 .build();
 
         when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
-        when(orderRepository.findCustomerOrderById(15L, "0900000001")).thenReturn(Optional.of(order));
-        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(15L)).thenReturn(List.of(payment));
+        when(orderRepository.findWithItemsAndRequestById(15L)).thenReturn(Optional.of(order));
+        when(paymentService.refreshPaymentStatuses(15L)).thenReturn(List.of(payment));
 
         OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService, idempotencyService);
 
@@ -192,5 +195,48 @@ class OrderPaymentControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData()).hasSize(1);
         assertThat(response.getBody().getData().get(0).getPaymentCode()).isEqualTo("SOBU-PAY-30");
+    }
+
+    @Test
+    void createPaymentAcceptsEquivalentEmailCasing() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
+        Account account = Account.builder()
+                .email(" Customer@Example.com ")
+                .phone(null)
+                .passwordHash("hashed")
+                .fullName("Customer")
+                .build();
+        Order order = Order.builder()
+                .id(15L)
+                .customerMobile("0900000001")
+                .customerEmail("customer@example.com")
+                .type(OrderType.NORMAL)
+                .build();
+        OrderPayment payment = OrderPayment.builder()
+                .id(25L)
+                .order(order)
+                .paymentCode("SOBU-PAY-1")
+                .type(PaymentType.FULL)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("1000.00"))
+                .provider("PAYOS_MOCK")
+                .checkoutUrl("https://mock-payos.local/checkout/SOBU-PAY-1")
+                .build();
+        CreateOrderPaymentDto request = new CreateOrderPaymentDto();
+        request.setType(PaymentType.FULL);
+        request.setPaymentMethod(PaymentMethod.ONLINE);
+
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(orderRepository.findWithItemsAndRequestById(15L)).thenReturn(Optional.of(order));
+        when(paymentService.createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE)).thenReturn(payment);
+
+        OrderPaymentController controller = new OrderPaymentController(orderRepository, orderPaymentRepository, accountRepo, paymentService, idempotencyService);
+
+        ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> response =
+                controller.createPayment(15L, request, authentication, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData().getPaymentCode()).isEqualTo("SOBU-PAY-1");
     }
 }

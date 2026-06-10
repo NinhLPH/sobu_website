@@ -1,7 +1,9 @@
 package com.vn.sodu.nhanh.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.nhanh.NhanhProperties;
+import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.product.dto.NhanhProductDTO;
 import com.vn.sodu.product.dto.NhanhResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +39,7 @@ class NhanhClientTest {
         properties.setRedirectUri("http://localhost/callback");
         properties.setBusinessId("224003");
 
-        nhanhClient = new NhanhClient(restTemplate, properties);
+        nhanhClient = new NhanhClient(restTemplate, properties, new ObjectMapper());
     }
 
     @Test
@@ -148,5 +150,38 @@ class NhanhClientTest {
 
         assertEquals("Invalid accessToken or accessToken has expired", ex.getMessage());
         assertFalse(ex.getMessage().contains("code=0"));
+    }
+
+    @Test
+    @DisplayName("Should deserialize typed post response from raw JSON body")
+    void testPostDeserializesRawJsonResponse() {
+        String rawResponse = """
+                {
+                  "code": 1,
+                  "data": [
+                    {
+                      "orderId": 654321,
+                      "trackingUrl": "https://track.example/order/654321"
+                    }
+                  ]
+                }
+                """;
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(rawResponse));
+
+        NhanhResponse<List<NhanhOrderAddResult>> response = nhanhClient.post(
+                "/v3.0/order/add",
+                "token",
+                Map.of("sample", "payload"),
+                new ParameterizedTypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+        );
+
+        assertNotNull(response);
+        assertEquals(1, response.getCode());
+        assertNotNull(response.getData());
+        assertEquals(1, response.getData().size());
+        assertEquals(654321L, response.getData().get(0).getOrderId());
+        assertEquals("654321", response.getData().get(0).resolveNhanhOrderId());
     }
 }

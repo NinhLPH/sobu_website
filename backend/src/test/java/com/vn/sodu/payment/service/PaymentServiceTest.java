@@ -21,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -111,6 +113,141 @@ class PaymentServiceTest {
         assertThat(payment.getCheckoutUrl()).contains(payment.getPaymentCode());
         assertThat(payment.getQrCode()).contains("SOBU-ORD-1");
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void createPaymentPublishesSyncEventForNormalCodPaymentBeforePaid() {
+        Order order = Order.builder()
+                .id(19L)
+                .orderCode("SOBU-ORD-19")
+                .type(OrderType.NORMAL)
+                .syncStatus(OrderSyncStatus.PENDING)
+                .totalAmount(new BigDecimal("400"))
+                .remainingAmount(new BigDecimal("400"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(191L);
+            }
+            return payment;
+        });
+        when(orderRepository.findById(19L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(19L)).thenReturn(List.of(), List.of(
+                OrderPayment.builder()
+                        .order(order)
+                        .type(PaymentType.FULL)
+                        .paymentMethod(PaymentMethod.COD)
+                        .status(PaymentStatus.PENDING)
+                        .amount(new BigDecimal("400"))
+                        .build()
+        ));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment payment = paymentService.createPayment(order, PaymentType.FULL, PaymentMethod.COD);
+
+        assertThat(payment.getPaymentMethod()).isEqualTo(PaymentMethod.COD);
+        ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().orderId()).isEqualTo(19L);
+        assertThat(eventCaptor.getValue().paymentCode()).isEqualTo(payment.getPaymentCode());
+    }
+
+    @Test
+    void createPaymentMovesPreorderFinalCodToProcessingAndPublishesSyncEvent() {
+        Order order = Order.builder()
+                .id(20L)
+                .orderCode("SOBU-PRE-20")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.READY_FOR_FINAL_PAYMENT)
+                .syncStatus(OrderSyncStatus.PENDING)
+                .nhanhSyncStage(com.vn.sodu.order.NhanhSyncStage.PREORDER_DEPOSIT_CREATED)
+                .totalAmount(new BigDecimal("1000"))
+                .depositAmount(new BigDecimal("300"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("700"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(201L);
+            }
+            return payment;
+        });
+        when(orderRepository.findById(20L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(20L)).thenReturn(List.of(), List.of(
+                OrderPayment.builder()
+                        .order(order)
+                        .type(PaymentType.FINAL)
+                        .paymentMethod(PaymentMethod.COD)
+                        .status(PaymentStatus.PENDING)
+                        .amount(new BigDecimal("700"))
+                        .build()
+        ));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment payment = paymentService.createPayment(order, PaymentType.FINAL, PaymentMethod.COD);
+
+        assertThat(payment.getPaymentMethod()).isEqualTo(PaymentMethod.COD);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PROCESSING);
+        ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().orderId()).isEqualTo(20L);
+    }
+
+    @Test
+    void createPaymentExpiresOldPendingFullPaymentBeforeAllowingReplacement() {
+        Order order = Order.builder()
+                .id(15L)
+                .orderCode("SOBU-ORD-15")
+                .type(OrderType.NORMAL)
+                .totalAmount(new BigDecimal("1000"))
+                .depositAmount(BigDecimal.ZERO)
+                .paidAmount(BigDecimal.ZERO)
+                .remainingAmount(new BigDecimal("1000"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment expiredPayment = OrderPayment.builder()
+                .id(55L)
+                .order(order)
+                .paymentCode("SOBU-PAY-OLD")
+                .type(PaymentType.FULL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("1000"))
+                .provider("PAYOS_MOCK")
+                .expiresAt(LocalDateTime.now().minusMinutes(1))
+                .build();
+        List<OrderPayment> storedPayments = new ArrayList<>();
+        storedPayments.add(expiredPayment);
+
+        when(orderRepository.findById(15L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(15L))
+                .thenAnswer(invocation -> List.copyOf(storedPayments));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(156L);
+                storedPayments.add(payment);
+            }
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment replacement = paymentService.createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE);
+
+        assertThat(expiredPayment.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
+        assertThat(expiredPayment.getFailureReason()).isEqualTo("Payment session expired");
+        assertThat(replacement.getId()).isEqualTo(156L);
+        assertThat(replacement.getPaymentCode()).startsWith("SOBU-PAY-");
+        assertThat(replacement.getStatus()).isEqualTo(PaymentStatus.PENDING);
     }
 
     @Test
@@ -376,5 +513,39 @@ class PaymentServiceTest {
 
         assertThat(updated).isSameAs(payment);
         verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void markPaymentFailedRecalculatesOrderAndAllowsRetry() {
+        Order order = Order.builder()
+                .id(25L)
+                .orderCode("SOBU-ORD-25")
+                .type(OrderType.NORMAL)
+                .totalAmount(new BigDecimal("500"))
+                .remainingAmount(new BigDecimal("500"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment payment = OrderPayment.builder()
+                .id(251L)
+                .order(order)
+                .paymentCode("SOBU-PAY-251")
+                .type(PaymentType.FULL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("500"))
+                .provider("PAYOS_MOCK")
+                .build();
+
+        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-251")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(25L)).thenReturn(List.of(payment));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment failed = paymentService.markPaymentFailed("SOBU-PAY-251", "Payment cancelled by customer");
+
+        assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(failed.getFailureReason()).isEqualTo("Payment cancelled by customer");
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
     }
 }

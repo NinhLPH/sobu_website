@@ -4,6 +4,7 @@ import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.idempotency.IdempotencyScope;
 import com.vn.sodu.global.idempotency.IdempotencyService;
 import com.vn.sodu.order.Order;
+import com.vn.sodu.order.OrderCustomerEmailMatcher;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.repo.OrderPaymentRepository;
@@ -49,16 +50,17 @@ public class OrderPaymentController {
     @GetMapping("/{orderId}/payments")
     @Operation(
             summary = "List payments for my order",
-            description = "Returns the authenticated customer's payment records, including any auto-created preorder deposit checkout session."
+            description = "Returns the authenticated customer's payment records using the account email binding, including any auto-created preorder deposit checkout session."
     )
     public ResponseEntity<ApiResponseDTO<List<OrderPaymentResponseDto>>> listPayments(
             @PathVariable Long orderId,
             Authentication authentication
     ) {
-        String customerPhone = resolveCustomerPhone(authentication);
-        Order order = orderRepository.findCustomerOrderById(orderId, customerPhone)
+        String customerEmail = resolveCustomerEmail(authentication);
+        Order order = orderRepository.findWithItemsAndRequestById(orderId)
+                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(), customerEmail))
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
-        List<OrderPaymentResponseDto> payments = orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(order.getId()).stream()
+        List<OrderPaymentResponseDto> payments = paymentService.refreshPaymentStatuses(order.getId()).stream()
                 .map(OrderPaymentResponseDto::from)
                 .toList();
         return ResponseEntity.ok(ApiResponseDTO.success(
@@ -71,7 +73,7 @@ public class OrderPaymentController {
     @PostMapping("/{orderId}/payments")
     @Operation(
             summary = "Create a payment checkout session",
-            description = "Creates a payment record for the authenticated customer's order when the current order phase allows it."
+            description = "Creates a payment record for the authenticated customer's order using the account email binding when the current order phase allows it."
     )
     public ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> createPayment(
             @PathVariable Long orderId,
@@ -79,14 +81,15 @@ public class OrderPaymentController {
             Authentication authentication,
             @RequestHeader(value = IdempotencyService.IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey
     ) {
-        String customerPhone = resolveCustomerPhone(authentication);
-        Order order = orderRepository.findCustomerOrderById(orderId, customerPhone)
+        String customerEmail = resolveCustomerEmail(authentication);
+        Order order = orderRepository.findWithItemsAndRequestById(orderId)
+                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(), customerEmail))
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         if (IdempotencyService.hasKey(idempotencyKey)) {
             return idempotencyService.execute(
                     IdempotencyScope.CREATE_PAYMENT,
                     idempotencyKey,
-                    paymentIdentity(orderId, customerPhone, dto),
+                    paymentIdentity(orderId, customerEmail, dto),
                     OrderPaymentResponseDto.class,
                     "PAYMENT",
                     OrderPaymentResponseDto::getId,
@@ -106,16 +109,16 @@ public class OrderPaymentController {
                 ));
     }
 
-    private Map<String, Object> paymentIdentity(Long orderId, String customerPhone, CreateOrderPaymentDto dto) {
+    private Map<String, Object> paymentIdentity(Long orderId, String customerEmail, CreateOrderPaymentDto dto) {
         Map<String, Object> identity = new LinkedHashMap<>();
         identity.put("action", "create-payment");
         identity.put("orderId", orderId);
-        identity.put("customerPhone", customerPhone);
+        identity.put("customerEmail", customerEmail);
         identity.put("body", dto);
         return identity;
     }
 
-    private String resolveCustomerPhone(Authentication authentication) {
+    private String resolveCustomerEmail(Authentication authentication) {
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             throw new AccessDeniedException("Authentication is required");
         }
@@ -123,9 +126,9 @@ public class OrderPaymentController {
         Account account = accountRepo.findByEmail(authentication.getName())
                 .orElseThrow(() -> new AccessDeniedException("Authenticated account not found"));
 
-        if (account.getPhone() == null || account.getPhone().isBlank()) {
-            throw new AccessDeniedException("Authenticated account does not have a phone number");
+        if (account.getEmail() == null || account.getEmail().isBlank()) {
+            throw new AccessDeniedException("Authenticated account does not have an email address");
         }
-        return account.getPhone().trim();
+        return account.getEmail().trim();
     }
 }
