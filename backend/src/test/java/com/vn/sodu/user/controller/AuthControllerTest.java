@@ -5,6 +5,7 @@ import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.user.dto.LoginRequest;
 import com.vn.sodu.user.dto.LoginResponse;
 import com.vn.sodu.user.dto.RefreshTokenRequest;
+import com.vn.sodu.user.dto.ResendActivationEmailRequest;
 import com.vn.sodu.global.exception.UnauthorizedException;
 import com.vn.sodu.user.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
@@ -124,6 +125,24 @@ class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/resend-activation - success")
+    void testResendActivationEmailSuccess() throws Exception {
+        ResendActivationEmailRequest req = ResendActivationEmailRequest.builder()
+                .email("test@example.com")
+                .build();
+
+        mockMvc.perform(post("/api/auth/resend-activation")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Activation email sent"));
+
+        verify(authService).resendActivationEmail(any(ResendActivationEmailRequest.class));
     }
 
     @Test

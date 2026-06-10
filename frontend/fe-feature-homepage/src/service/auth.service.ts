@@ -20,6 +20,10 @@ export const AuthService = {
         return apiClient.get('/api/auth/activate', { params: { token } });
     },
 
+    resendActivationEmail: (email: string): Promise<any> => {
+        return apiClient.post('/api/auth/resend-activation', { email });
+    },
+
     logout: (): Promise<any> => {
         const accessToken = authStorage.getAccessToken();
         const refreshToken = authStorage.getRefreshToken();

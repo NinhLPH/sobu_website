@@ -74,7 +74,7 @@ export default function LoginPage() {
                 fullName: regName,
                 phone: regPhone
             });
-            navigate('/'); // Đăng ký (và login) thành công thì về trang chủ
+            navigate(`/verify-email?email=${encodeURIComponent(regEmail)}`);
         } catch (err: any) {
             const msg = err?.response?.data?.message || err?.message || 'Đăng ký thất bại. Email hoặc Số điện thoại có thể đã tồn tại!';
             setLocalError(msg);

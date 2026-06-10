@@ -30,6 +30,8 @@ import java.util.Objects;
 @Slf4j
 public class AuthService {
 
+    private static final long ACTIVATION_EMAIL_RESEND_COOLDOWN_SECONDS = 60;
+
     private final AccountRepo accountRepo;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -48,7 +50,7 @@ public class AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         log.info("Login attempt for email: {}", request.getEmail());
-        
+
         try {
             // Validate input
             if (request.getEmail() == null || request.getEmail().isEmpty()) {
@@ -69,8 +71,10 @@ public class AuthService {
             String storedHash = account.getPasswordHash();
             boolean passwordMatches = false;
 
-            // Check if it's already a BCrypt hash (starts with "$2a$" or "$2b$" etc. - usually length 60)
-            if (storedHash != null && (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$") || storedHash.startsWith("$2y$"))) {
+            // Check if it's already a BCrypt hash (starts with "$2a$" or "$2b$" etc. -
+            // usually length 60)
+            if (storedHash != null && (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$")
+                    || storedHash.startsWith("$2y$"))) {
                 passwordMatches = passwordEncoder.matches(request.getPassword(), storedHash);
             } else {
                 // Legacy AES decryption
@@ -124,10 +128,10 @@ public class AuthService {
     @Transactional(readOnly = true)
     public LoginResponse refreshToken(RefreshTokenRequest request) {
         log.info("Refresh token request");
-        
+
         try {
             final String refreshToken = request.getRefreshToken();
-            
+
             // Validate refresh token
             if (!jwtService.isRefreshTokenValid(refreshToken)) {
                 throw new UnauthorizedException("Invalid or expired refresh token");
@@ -135,7 +139,7 @@ public class AuthService {
 
             // Extract username from refresh token
             final String email = jwtService.extractUsername(refreshToken);
-            
+
             // Load user details
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
             Account account = accountRepo.findByEmail(email)
@@ -173,40 +177,33 @@ public class AuthService {
      */
     public RegisterResponse register(RegisterRequest request) {
         log.info("Register attempt for email: {}", request.getEmail());
-        
+
         // Check if email already exists
         if (accountRepo.findByEmail(request.getEmail()).isPresent()) {
             throw new BadRequestException("Email already registered");
         }
-       try {
+        try {
             Account account = accountMapper.toEntity(request);
             account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
             account.setStatus(Account.AccountStatus.INACTIVE);
 
-             
-             // Set default role to 2 (Customer)
-             Role customerRole = new Role();
-             customerRole.setId(2);
-             account.setRole(customerRole);
-            
-            
+            // Set default role to 2 (Customer)
+            Role customerRole = new Role();
+            customerRole.setId(2);
+            account.setRole(customerRole);
+
             Account savedAccount = accountRepo.save(account);
 
             Customer newCustomer = customerService.createCustomer(savedAccount.getId(),
-                    CreateCustomerRequest.builder().build() );
-           // create activation token
-            String token = java.util.UUID.randomUUID().toString();
-            ActivationToken activationToken = ActivationToken.builder()
-                    .token(token)
-                    .account(savedAccount)
-                    .expiresAt(java.time.LocalDateTime.now().plusHours(24))
-                    .build();
+                    CreateCustomerRequest.builder().build());
+            // create activation token
+            ActivationToken activationToken = createActivationToken(savedAccount);
             activationTokenRepo.save(activationToken);
-           // send activation email
-            emailService.sendActivationEmail(savedAccount, token);
-            
+            // send activation email
+            emailService.sendActivationEmail(savedAccount, activationToken.getToken());
+
             log.info("Registration successful for email: {}", request.getEmail());
-          return accountMapper.toRegisterResponse(savedAccount);
+            return accountMapper.toRegisterResponse(savedAccount);
         } catch (RuntimeException e) {
             log.error("Registration failed for email: {}", request.getEmail(), e);
             throw e;
@@ -219,8 +216,9 @@ public class AuthService {
     /**
      * Logout - typically client-side only, but can be used to invalidate tokens
      */
+    @Transactional
     public RegisterResponse activateAccount(String token) {
-//        log.info("Activate account with token: {}", token);
+        // log.info("Activate account with token: {}", token);
         ActivationToken activationToken = activationTokenRepo.findByToken(token)
                 .orElseThrow(() -> new BadRequestException("Invalid or expired activation token"));
         if (activationToken.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
@@ -231,6 +229,39 @@ public class AuthService {
         Account saved = accountRepo.save(account);
         activationTokenRepo.delete(activationToken);
         return accountMapper.toRegisterResponse(saved);
+    }
+
+    @Transactional
+    public void resendActivationEmail(ResendActivationEmailRequest request) {
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            throw new BadRequestException("Email is required");
+        }
+
+        Account account = accountRepo.findByEmail(request.getEmail())
+                .orElseThrow(() -> new BadRequestException("Account not found"));
+
+        if (account.getStatus() == Account.AccountStatus.ACTIVE) {
+            throw new BadRequestException("Account is already active");
+        }
+
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        java.util.Optional<ActivationToken> existingToken = activationTokenRepo.findTopByAccount_IdOrderByCreatedAtDesc(account.getId())
+                .filter(token -> token.getExpiresAt().isAfter(now));
+
+        ActivationToken activationToken = existingToken.orElseGet(() -> createActivationToken(account));
+
+        if (existingToken.isPresent()) {
+            java.time.LocalDateTime lastSentAt = activationToken.getLastSentAt() != null
+                    ? activationToken.getLastSentAt()
+                    : activationToken.getCreatedAt();
+            if (lastSentAt != null && lastSentAt.plusSeconds(ACTIVATION_EMAIL_RESEND_COOLDOWN_SECONDS).isAfter(now)) {
+                throw new BadRequestException("Please wait 60 seconds before requesting another activation email");
+            }
+        }
+
+        activationToken.setLastSentAt(now);
+        ActivationToken savedToken = activationTokenRepo.save(activationToken);
+        emailService.sendActivationEmail(account, savedToken.getToken());
     }
 
     public void logout(String accessToken) {
@@ -250,6 +281,16 @@ public class AuthService {
             log.warn("Auth attempt for non-active account: {}", email);
             throw new UnauthorizedException("Account is not active. Please activate your account.");
         }
+    }
+
+    private ActivationToken createActivationToken(Account account) {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        return ActivationToken.builder()
+                .token(java.util.UUID.randomUUID().toString())
+                .account(account)
+                .expiresAt(now.plusHours(24))
+                .lastSentAt(now)
+                .build();
     }
 
     private void blacklistToken(String token, String expectedType) {
@@ -275,4 +316,3 @@ public class AuthService {
         }
     }
 }
-

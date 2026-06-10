@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { AuthService } from '../service/auth.service';
 import { AccountDTO } from '../interface/account.model';
 import { Register } from '../interface/auth.model';
+import { RegisterResponse } from '../interface/api-response';
 import { authStorage } from '../utils/auth-storage';
 
 interface AuthState {
@@ -11,7 +12,7 @@ interface AuthState {
     error: string | null;
 
     loginAction: (email: string, password: string) => Promise<void>;
-    registerAction: (data: Register) => Promise<void>;
+    registerAction: (data: Register) => Promise<RegisterResponse>;
     logoutAction: () => Promise<void>;
     clearError: () => void;
 }
@@ -54,19 +55,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     registerAction: async (data) => {
         set({ isLoading: true, error: null });
         try {
-            await AuthService.register(data);
-            
-            // Tự động đăng nhập sau khi đăng ký thành công
-            const loginData = await AuthService.login({ email: data.email, password: data.password });
-            
-            authStorage.setSession(loginData.accessToken, loginData.refreshToken, loginData.account);
+            const response = await AuthService.register(data);
 
             set({
-                user: loginData.account,
-                isAuthenticated: true,
                 isLoading: false,
                 error: null,
             });
+
+            return response;
         } catch (err: any) {
             const errorMessage = err?.response?.data?.message || err?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin!';
             set({
