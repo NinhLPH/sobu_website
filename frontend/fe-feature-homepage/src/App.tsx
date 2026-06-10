@@ -1,6 +1,7 @@
 import {BrowserRouter as Router, Routes, Route, Navigate} from 'react-router-dom';
 
 import LoginPage from './pages/LoginPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import Cart from './pages/Cart';
 import Header from "./components/common/Header";
 import Footer from "./components/common/Footer";
@@ -35,6 +36,7 @@ export default function App() {
                 <Routes>
                     <Route path="/" element={<HomePage/>}/>
                     <Route path="/login" element={<LoginPage/>}/>
+                    <Route path="/verify-email" element={<VerifyEmailPage/>}/>
                     <Route path="/products" element={<ProductList/>}/>
                     <Route path="/product/:id" element={<ProductDetail/>}/>
                     <Route path="/category/:category" element={<ProductList/>}/>

@@ -7,4 +7,5 @@ import java.util.Optional;
 @Repository
 public interface ActivationTokenRepo extends JpaRepository<ActivationToken, Long> {
     Optional<ActivationToken> findByToken(String token);
+    Optional<ActivationToken> findTopByAccount_IdOrderByCreatedAtDesc(Long accountId);
 }

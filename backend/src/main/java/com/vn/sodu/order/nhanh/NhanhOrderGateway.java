@@ -6,6 +6,7 @@ import com.vn.sodu.nhanh.dto.NhanhOrderAddRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditResult;
+import com.vn.sodu.nhanh.dto.NhanhOrderListItem;
 import com.vn.sodu.nhanh.service.NhanhClient;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.OrderItem;
@@ -14,19 +15,27 @@ import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class NhanhOrderGateway {
 
     private static final String ORDER_ADD_PATH = "/v3.0/order/add";
     private static final String ORDER_EDIT_PATH = "/v3.0/order/edit";
+    private static final String ORDER_LIST_PATH = "/v3.0/order/list";
     private static final int SHOPPING_ORDER_TYPE = 2;
     private static final String SOURCE_NAME = "Sodu Website";
 
@@ -47,11 +56,18 @@ public class NhanhOrderGateway {
         if (response.getCode() == 1) {
             List<NhanhOrderAddResult> data = response.getData();
             if (data == null || data.isEmpty()) {
-                return new NhanhOrderAddResult();
+                throw new ExternalServiceException(
+                    "Nhanh order add returned success (code=1) but data list is empty; " +
+                    "server may not have created order; appOrderId=" + request.getChannel().getAppOrderId()
+                );
             }
-            return data.get(0);
+            NhanhOrderAddResult result = data.get(0);
+            log.debug("Nhanh order add success: id={}, orderId={}, appOrderId={}",
+                result.getId(), result.getOrderId(), request.getChannel().getAppOrderId());
+            return result;
         }
         if (isDuplicateResponse(response)) {
+            log.warn("Nhanh order add returned duplicate: appOrderId={}", request.getChannel().getAppOrderId());
             return NhanhOrderAddResult.duplicate();
         }
         throw new ExternalServiceException(errorMessage(response));
@@ -76,6 +92,61 @@ public class NhanhOrderGateway {
             return data.get(0);
         }
         throw new ExternalServiceException(errorMessage(response));
+    }
+
+    public Optional<NhanhOrderListItem> findOrderByReference(Order order, String accessToken) {
+        if (order == null) {
+            return Optional.empty();
+        }
+        String appOrderId = defaultText(order.getAppOrderId(), order.getOrderCode());
+        String orderCode = defaultText(order.getOrderCode(), order.getAppOrderId());
+        if (appOrderId == null || appOrderId.isBlank()) {
+            return Optional.empty();
+        }
+
+        Map<String, Object> filters = new HashMap<>();
+        filters.put("type", SHOPPING_ORDER_TYPE);
+        filters.put("createdAtFrom", toEpochSeconds(resolveLookupFrom(order.getCreatedAt())));
+        filters.put("createdAtTo", toEpochSeconds(LocalDateTime.now().plusDays(1)));
+        if (order.getCustomerMobile() != null && !order.getCustomerMobile().isBlank()) {
+            filters.put("shippingAddress", Map.of("mobile", order.getCustomerMobile().trim()));
+        }
+
+        log.info(
+                "Looking up Nhanh order after unresolved add result: orderId={}, appOrderId={}, orderCode={}, filters={}",
+                order.getId(),
+                appOrderId,
+                orderCode,
+                filters
+        );
+
+        List<NhanhOrderListItem> orders = nhanhClient.fetchAllPages(
+                ORDER_LIST_PATH,
+                accessToken,
+                filters,
+                new ParameterizedTypeReference<NhanhResponse<List<NhanhOrderListItem>>>() {}
+        );
+
+        Optional<NhanhOrderListItem> matchedOrder = orders.stream()
+                .filter(item -> item != null && item.matchesReference(appOrderId, orderCode))
+                .findFirst();
+
+        matchedOrder.ifPresentOrElse(
+                item -> log.info(
+                        "Resolved Nhanh order by lookup: orderId={}, appOrderId={}, nhanhOrderId={}",
+                        order.getId(),
+                        appOrderId,
+                        item.resolveNhanhOrderId()
+                ),
+                () -> log.warn(
+                        "Could not resolve Nhanh order by lookup: orderId={}, appOrderId={}, orderCode={}",
+                        order.getId(),
+                        appOrderId,
+                        orderCode
+                )
+        );
+
+        return matchedOrder;
     }
 
     public NhanhOrderAddRequest buildAddRequest(Order order, OrderPayment payment) {
@@ -204,6 +275,19 @@ public class NhanhOrderGateway {
             return preferred;
         }
         return fallback;
+    }
+
+    private LocalDateTime resolveLookupFrom(LocalDateTime orderCreatedAt) {
+        LocalDateTime lowerBound = LocalDateTime.now().minusDays(31);
+        if (orderCreatedAt == null) {
+            return lowerBound;
+        }
+        LocalDateTime paddedCreatedAt = orderCreatedAt.minusDays(1);
+        return paddedCreatedAt.isAfter(lowerBound) ? paddedCreatedAt : lowerBound;
+    }
+
+    private long toEpochSeconds(LocalDateTime value) {
+        return value.atZone(ZoneId.systemDefault()).toEpochSecond();
     }
 
     private Long parseLong(String value, String label) {

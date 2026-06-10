@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -87,7 +88,10 @@ public class PaymentService {
         Order managedOrder = orderRepository.findById(order.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + order.getId()));
         preparePreorderFinalPaymentIfNeeded(managedOrder, type);
-        List<OrderPayment> existingPayments = orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(managedOrder.getId());
+        List<OrderPayment> existingPayments = normalizePendingPayments(
+                managedOrder.getId(),
+                orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(managedOrder.getId())
+        );
         validatePaymentCreation(managedOrder, type, paymentMethod, existingPayments);
 
         BigDecimal amount = paymentCalculationService.calculatePaymentAmount(managedOrder, type);
@@ -128,7 +132,12 @@ public class PaymentService {
             }
         }
 
-        recalculateOrderPaymentState(managedOrder);
+        Order updatedOrder = recalculateOrderPaymentState(managedOrder);
+        if (paymentMethod == PaymentMethod.COD) {
+            updatedOrder = advanceOrderAfterCodPayment(updatedOrder, savedPayment);
+            savedPayment.setOrder(updatedOrder);
+            publishOrderReadyForSync(updatedOrder, savedPayment);
+        }
         return savedPayment;
     }
 
@@ -171,6 +180,46 @@ public class PaymentService {
         savedPayment.setOrder(updatedOrder);
         publishOrderReadyForSync(updatedOrder, savedPayment);
         return savedPayment;
+    }
+
+    @Transactional
+    public OrderPayment markPaymentFailed(String paymentCode, String reason) {
+        if (paymentCode == null || paymentCode.isBlank()) {
+            throw new IllegalArgumentException("Payment code is required");
+        }
+
+        OrderPayment payment = orderPaymentRepository.findByPaymentCode(paymentCode.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentCode));
+
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            return payment;
+        }
+
+        payment.setStatus(PaymentStatus.FAILED);
+        payment.setFailureReason(reason == null || reason.isBlank() ? "Payment failed" : reason);
+        OrderPayment savedPayment = orderPaymentRepository.save(payment);
+        Order updatedOrder = recalculateOrderPaymentState(payment.getOrder());
+        savedPayment.setOrder(updatedOrder);
+        return savedPayment;
+    }
+
+    @Transactional
+    public List<OrderPayment> refreshPaymentStatuses(Long orderId) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("Order id is required");
+        }
+        List<OrderPayment> payments = normalizePendingPayments(
+                orderId,
+                orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(orderId)
+        );
+        Order order = payments.stream()
+                .map(OrderPayment::getOrder)
+                .filter(existingOrder -> existingOrder != null && existingOrder.getId() != null)
+                .findFirst()
+                .orElseGet(() -> orderRepository.findById(orderId)
+                        .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId)));
+        recalculateOrderPaymentState(order);
+        return payments;
     }
 
     private void publishOrderReadyForSync(Order order, OrderPayment payment) {
@@ -264,6 +313,34 @@ public class PaymentService {
         );
     }
 
+    private List<OrderPayment> normalizePendingPayments(Long orderId, List<OrderPayment> payments) {
+        if (payments == null || payments.isEmpty()) {
+            return payments == null ? List.of() : payments;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        boolean changed = false;
+        List<OrderPayment> normalized = new ArrayList<>(payments);
+        for (OrderPayment payment : normalized) {
+            if (payment == null || payment.getStatus() != PaymentStatus.PENDING || payment.getExpiresAt() == null) {
+                continue;
+            }
+            if (payment.getExpiresAt().isAfter(now)) {
+                continue;
+            }
+            payment.setStatus(PaymentStatus.EXPIRED);
+            if (payment.getFailureReason() == null || payment.getFailureReason().isBlank()) {
+                payment.setFailureReason("Payment session expired");
+            }
+            orderPaymentRepository.save(payment);
+            changed = true;
+        }
+
+        return changed
+                ? orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(orderId)
+                : normalized;
+    }
+
     private Order advanceOrderAfterPayment(Order order, OrderPayment payment) {
         if (order == null || payment == null) {
             return order;
@@ -304,7 +381,34 @@ public class PaymentService {
         return order;
     }
 
+    private Order advanceOrderAfterCodPayment(Order order, OrderPayment payment) {
+        if (order == null || payment == null || payment.getPaymentMethod() != PaymentMethod.COD) {
+            return order;
+        }
+        if (order.getType() != OrderType.PREORDER || payment.getType() != PaymentType.FINAL) {
+            return order;
+        }
+        if (order.getStatus() != OrderStatus.READY_FOR_FINAL_PAYMENT) {
+            return order;
+        }
+        order.setStatus(OrderStatus.PROCESSING);
+        if (order.getNhanhSyncStage() == NhanhSyncStage.PREORDER_DEPOSIT_CREATED) {
+            order.setSyncStatus(OrderSyncStatus.PENDING);
+        }
+        return orderRepository.save(order);
+    }
+
     private boolean isEligibleForSyncEvent(Order order, OrderPayment payment) {
+        if (payment != null && payment.getPaymentMethod() == PaymentMethod.COD) {
+            if (order.getType() == OrderType.NORMAL) {
+                return payment.getType() == PaymentType.FULL;
+            }
+            if (order.getType() == OrderType.PREORDER) {
+                return payment.getType() == PaymentType.FINAL
+                        && (order.getStatus() == OrderStatus.READY_FOR_FINAL_PAYMENT
+                        || order.getStatus() == OrderStatus.PROCESSING);
+            }
+        }
         if (order.getType() == OrderType.NORMAL) {
             return payment.getType() == PaymentType.FULL
                     && order.getPaymentStatus() == PaymentStatus.PAID;

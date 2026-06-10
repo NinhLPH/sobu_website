@@ -28,8 +28,14 @@ public class ActivationToken {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "last_sent_at")
+    private LocalDateTime lastSentAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        if (lastSentAt == null) {
+            lastSentAt = createdAt;
+        }
     }
 }

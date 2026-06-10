@@ -3,10 +3,10 @@ package com.vn.sodu.config;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.SimpleMailMessage;
-import org.springframework.context.annotation.Profile;
 
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.Session;
@@ -16,7 +16,7 @@ import java.util.Properties;
 public class MailAutoConfiguration {
 
     @Bean
-    @Profile("!prod")
+    @ConditionalOnProperty(name = "app.mail.mock", havingValue = "true")
     @ConditionalOnMissingBean(JavaMailSender.class)
     public JavaMailSender javaMailSender() {
         return new JavaMailSenderImpl() {

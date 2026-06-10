@@ -21,7 +21,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.ParameterizedTypeReference;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -107,6 +110,72 @@ class NhanhOrderGatewayTest {
     }
 
     @Test
+    void parsesNhanhOrderAddAlternateOrderIdField() throws Exception {
+        String json = """
+                {
+                  "code": 1,
+                  "data": [
+                    {
+                      "orderId": 654321,
+                      "trackingUrl": "https://track.example/order/654321"
+                    }
+                  ]
+                }
+                """;
+
+        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+                json,
+                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+        );
+
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0).getOrderId()).isEqualTo(654321L);
+        assertThat(response.getData().get(0).resolveNhanhOrderId()).isEqualTo("654321");
+    }
+
+    @Test
+    void parsesNhanhMessagesArrayOfObjectsShape() throws Exception {
+        String json = """
+                {
+                  "code": 0,
+                  "messages": [
+                    {
+                      "code": "duplicate",
+                      "message": "Duplicate appOrderId"
+                    }
+                  ]
+                }
+                """;
+
+        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+                json,
+                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+        );
+
+        assertThat(response.getMessages()).containsExactly("duplicate: Duplicate appOrderId");
+    }
+
+    @Test
+    void parsesNhanhSingleMessageObjectShape() throws Exception {
+        String json = """
+                {
+                  "code": 0,
+                  "messages": {
+                    "code": "duplicate",
+                    "message": "Duplicate appOrderId"
+                  }
+                }
+                """;
+
+        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+                json,
+                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+        );
+
+        assertThat(response.getMessages()).containsExactly("duplicate: Duplicate appOrderId");
+    }
+
+    @Test
     void treatsDuplicateAppOrderIdResponseAsSuccessfulDuplicate() {
         NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
         NhanhResponse<List<NhanhOrderAddResult>> response = new NhanhResponse<>(0, null, null);
@@ -138,6 +207,52 @@ class NhanhOrderGatewayTest {
         NhanhOrderAddResult result = gateway.createOrder(gateway.buildAddRequest(normalOrder(), normalPayment()), "access-token");
 
         assertThat(result.isDuplicate()).isTrue();
+    }
+
+    @Test
+    void findsExistingOrderByAppOrderIdViaOrderList() {
+        NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
+        Order order = normalOrder();
+        order.setCreatedAt(LocalDateTime.now());
+
+        String json = """
+                {
+                  "code": 1,
+                  "data": [
+                    {
+                      "info": {
+                        "id": 654321
+                      },
+                      "channel": {
+                        "appOrderId": "SOBU-REQ-1"
+                      }
+                    }
+                  ]
+                }
+                """;
+
+        ObjectMapper mapper = new ObjectMapper();
+        NhanhResponse<List<com.vn.sodu.nhanh.dto.NhanhOrderListItem>> response;
+        try {
+            response = mapper.readValue(
+                    json,
+                    new TypeReference<NhanhResponse<List<com.vn.sodu.nhanh.dto.NhanhOrderListItem>>>() {}
+            );
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+
+        when(nhanhClient.fetchAllPages(
+                eq("/v3.0/order/list"),
+                eq("access-token"),
+                any(Map.class),
+                anyLookupResponseType()
+        )).thenReturn(response.getData());
+
+        Optional<com.vn.sodu.nhanh.dto.NhanhOrderListItem> result = gateway.findOrderByReference(order, "access-token");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().resolveNhanhOrderId()).isEqualTo("654321");
     }
 
     private Order normalOrder() {
@@ -194,8 +309,34 @@ class NhanhOrderGatewayTest {
         return properties;
     }
 
+    @Test
+    void throwsExceptionWhenNhanhReturnsSuccessButEmptyDataList() {
+        NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
+        when(nhanhClient.post(
+                eq("/v3.0/order/add"),
+                eq("access-token"),
+                any(NhanhOrderAddRequest.class),
+                anyResponseType()
+        )).thenReturn(new NhanhResponse<>(1, List.of(), null));  // Empty data list
+
+        NhanhOrderAddRequest request = gateway.buildAddRequest(normalOrder(), normalPayment());
+
+        try {
+            gateway.createOrder(request, "access-token");
+            assertThat(true).as("Should have thrown exception for empty data list").isFalse();
+        } catch (Exception ex) {
+            assertThat(ex).isInstanceOf(Exception.class);
+            assertThat(ex.getMessage()).contains("empty", "data");
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private ParameterizedTypeReference<NhanhResponse<List<NhanhOrderAddResult>>> anyResponseType() {
+        return any(ParameterizedTypeReference.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ParameterizedTypeReference<NhanhResponse<List<com.vn.sodu.nhanh.dto.NhanhOrderListItem>>> anyLookupResponseType() {
         return any(ParameterizedTypeReference.class);
     }
 }

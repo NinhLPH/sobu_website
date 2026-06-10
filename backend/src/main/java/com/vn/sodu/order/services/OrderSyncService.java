@@ -6,6 +6,7 @@ import com.vn.sodu.nhanh.dto.NhanhOrderAddRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditResult;
+import com.vn.sodu.nhanh.dto.NhanhOrderListItem;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.order.NhanhSyncStage;
 import com.vn.sodu.order.Order;
@@ -19,6 +20,7 @@ import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
+import com.vn.sodu.payment.repo.OrderPaymentRepository;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.request.repo.RequestRepo;
@@ -34,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -43,6 +46,7 @@ public class OrderSyncService {
     private static final int MAX_SYNC_ERROR_LENGTH = 1000;
 
     private final OrderRepository orderRepository;
+    private final OrderPaymentRepository orderPaymentRepository;
     private final RequestRepo requestRepo;
     private final NhanhService nhanhService;
     private final NhanhOrderGateway nhanhOrderGateway;
@@ -94,20 +98,23 @@ public class OrderSyncService {
 
         if (attempt.getStatus() == NhanhSyncAttemptStatus.SUCCESS) {
             NhanhOrderAddResult existingResult = parseJson(attempt.getResponsePayload(), NhanhOrderAddResult.class);
-            transactionTemplate.executeWithoutResult(status -> markAddSynced(order.getId(), target.stage(), existingResult));
+            NhanhOrderAddResult reconciledResult = reconcileAddResult(order, existingResult, accessToken);
+            updateAttemptPayloadIfChanged(attempt, existingResult, reconciledResult);
+            transactionTemplate.executeWithoutResult(status -> markAddResult(order.getId(), target.stage(), reconciledResult));
             return;
         }
 
         try {
             NhanhOrderAddResult result = nhanhOrderGateway.createOrder(request, accessToken);
-            String responsePayload = toJson(result);
+            NhanhOrderAddResult reconciledResult = reconcileAddResult(order, result, accessToken);
+            String responsePayload = toJson(reconciledResult);
             attempt.setStatus(NhanhSyncAttemptStatus.SUCCESS);
             attempt.setResponsePayload(responsePayload);
-            attempt.setLastMessage(successMessage(target.operationType(), result));
+            attempt.setLastMessage(successMessage(target.operationType(), reconciledResult));
             attempt.setCompletedAt(LocalDateTime.now());
             nhanhSyncAttemptRepository.save(attempt);
-            NhanhOrderAddResult finalResult = result;
-            transactionTemplate.executeWithoutResult(status -> markAddSynced(order.getId(), target.stage(), finalResult));
+            NhanhOrderAddResult finalResult = reconciledResult;
+            transactionTemplate.executeWithoutResult(status -> markAddResult(order.getId(), target.stage(), finalResult));
         } catch (Exception ex) {
             attempt.setStatus(NhanhSyncAttemptStatus.FAILED);
             attempt.setLastMessage(truncate(messageOf(ex)));
@@ -164,7 +171,7 @@ public class OrderSyncService {
         }
 
         if (order.getType() == OrderType.NORMAL) {
-            return resolvePaidPayment(order, PaymentType.FULL)
+            return resolveSyncReadyPayment(order, PaymentType.FULL)
                     .map(payment -> new SyncTarget(payment, NhanhSyncOperationType.NHANH_ADD_NORMAL, NhanhSyncStage.NORMAL_ORDER_CREATED))
                     .orElse(null);
         }
@@ -172,7 +179,7 @@ public class OrderSyncService {
             return null;
         }
 
-        Optional<OrderPayment> finalPayment = resolvePaidPayment(order, PaymentType.FINAL);
+        Optional<OrderPayment> finalPayment = resolveSyncReadyPayment(order, PaymentType.FINAL);
         if (finalPayment.isPresent()) {
             return new SyncTarget(finalPayment.get(), NhanhSyncOperationType.NHANH_EDIT_PREORDER_FINAL, NhanhSyncStage.PREORDER_FINAL_UPDATED);
         }
@@ -182,7 +189,7 @@ public class OrderSyncService {
     }
 
     private SyncTarget toSyncTarget(Order order, OrderPayment payment) {
-        if (payment == null || payment.getStatus() != PaymentStatus.PAID) {
+        if (!isSyncReadyPayment(order, payment)) {
             return null;
         }
         if (order.getType() == OrderType.NORMAL && payment.getType() == PaymentType.FULL) {
@@ -195,6 +202,31 @@ public class OrderSyncService {
             return new SyncTarget(payment, NhanhSyncOperationType.NHANH_EDIT_PREORDER_FINAL, NhanhSyncStage.PREORDER_FINAL_UPDATED);
         }
         return null;
+    }
+
+    private Optional<OrderPayment> resolveSyncReadyPayment(Order order, PaymentType type) {
+        if (order == null || order.getPayments() == null) {
+            return Optional.empty();
+        }
+        return order.getPayments().stream()
+                .filter(payment -> payment != null
+                        && payment.getType() == type
+                        && isSyncReadyPayment(order, payment))
+                .max(Comparator.comparing(OrderPayment::getPaidAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(OrderPayment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    private boolean isSyncReadyPayment(Order order, OrderPayment payment) {
+        if (order == null || payment == null) {
+            return false;
+        }
+        if (payment.getStatus() == PaymentStatus.PAID) {
+            return true;
+        }
+        return payment.getPaymentMethod() == com.vn.sodu.payment.PaymentMethod.COD
+                && payment.getStatus() == PaymentStatus.PENDING
+                && ((order.getType() == OrderType.NORMAL && payment.getType() == PaymentType.FULL)
+                || (order.getType() == OrderType.PREORDER && payment.getType() == PaymentType.FINAL));
     }
 
     private Optional<OrderPayment> resolvePaidPayment(Order order, PaymentType type) {
@@ -239,34 +271,77 @@ public class OrderSyncService {
                         .build()));
     }
 
-    private void markAddSynced(Long orderId, NhanhSyncStage stage, NhanhOrderAddResult result) {
+    private void markAddResult(Long orderId, NhanhSyncStage stage, NhanhOrderAddResult result) {
         Order order = loadOrder(orderId);
         String resolvedNhanhOrderId = resolveNhanhOrderId(order, result);
-        if (resolvedNhanhOrderId == null || resolvedNhanhOrderId.isBlank()) {
-            throw new IllegalStateException("Nhanh add completed without a stored nhanhOrderId; manual reconciliation is required");
-        }
+        boolean needsReconcile = resolvedNhanhOrderId == null || resolvedNhanhOrderId.isBlank();
 
-        order.setNhanhOrderId(resolvedNhanhOrderId);
-        order.setNhanhOrderCode(defaultText(order.getNhanhOrderCode(), order.getOrderCode()));
         order.setNhanhSyncStage(stage);
-        order.setSyncStatus(OrderSyncStatus.SYNCED);
-        order.setSyncError(result != null && result.isDuplicate()
-                ? "Nhanh duplicate appOrderId; reused existing local Nhanh order reference."
-                : null);
+        order.setSyncStatus(needsReconcile ? OrderSyncStatus.NEED_RECONCILE : OrderSyncStatus.SYNCED);
+        order.setNhanhOrderId(needsReconcile ? null : resolvedNhanhOrderId);
+        order.setNhanhOrderCode(needsReconcile ? null : defaultText(order.getNhanhOrderCode(), order.getOrderCode()));
+
+        String syncError = null;
+        if (needsReconcile) {
+            syncError = result != null && result.isDuplicate()
+                    ? "Nhanh duplicate appOrderId detected but the existing Nhanh order ID could not be resolved automatically."
+                    : "Nhanh order add completed without a resolvable Nhanh order ID; manual reconciliation is required.";
+        } else if (result != null && result.isDuplicate()) {
+            syncError = "Nhanh duplicate appOrderId detected and the existing Nhanh order ID was resolved automatically.";
+        }
+        order.setSyncError(syncError);
         order.setLastSyncAt(LocalDateTime.now());
-        order.setLastSyncMessage(successMessage(
+        order.setLastSyncMessage(buildAddSyncMessage(
+                needsReconcile,
                 stage == NhanhSyncStage.NORMAL_ORDER_CREATED
                         ? NhanhSyncOperationType.NHANH_ADD_NORMAL
                         : NhanhSyncOperationType.NHANH_ADD_PREORDER_DEPOSIT,
                 result
         ));
-        orderRepository.save(order);
+        log.info(
+                "Persisting Nhanh add sync state: orderId={}, stage={}, duplicate={}, resolvedNhanhOrderId={}, syncStatus={}",
+                orderId,
+                stage,
+                result != null && result.isDuplicate(),
+                resolvedNhanhOrderId,
+                order.getSyncStatus()
+        );
+        try {
+            orderRepository.save(order);
+            log.info(
+                    "Persisted Nhanh add sync state: orderId={}, nhanhOrderId={}, syncStatus={}",
+                    order.getId(),
+                    order.getNhanhOrderId(),
+                    order.getSyncStatus()
+            );
 
-        Request request = order.getRequest();
-        if (request != null && request.getId() != null) {
-            request.setNhanhOrderId(order.getNhanhOrderId());
-            request.setNhanhOrderCode(order.getNhanhOrderCode());
-            requestRepo.save(request);
+            Request request = order.getRequest();
+            if (!needsReconcile && request != null && request.getId() != null) {
+                request.setNhanhOrderId(order.getNhanhOrderId());
+                request.setNhanhOrderCode(order.getNhanhOrderCode());
+                log.info(
+                        "Persisting request Nhanh reference: requestId={}, orderId={}, nhanhOrderId={}, nhanhOrderCode={}",
+                        request.getId(),
+                        order.getId(),
+                        request.getNhanhOrderId(),
+                        request.getNhanhOrderCode()
+                );
+                requestRepo.save(request);
+                log.info(
+                        "Persisted request Nhanh reference: requestId={}, orderId={}",
+                        request.getId(),
+                        order.getId()
+                );
+            }
+        } catch (RuntimeException ex) {
+            log.error(
+                    "Failed to persist Nhanh add sync state: orderId={}, resolvedNhanhOrderId={}, stage={}",
+                    orderId,
+                    resolvedNhanhOrderId,
+                    stage,
+                    ex
+            );
+            throw ex;
         }
     }
 
@@ -281,13 +356,41 @@ public class OrderSyncService {
     }
 
     private String resolveNhanhOrderId(Order order, NhanhOrderAddResult result) {
-        if (result != null && result.getId() != null) {
-            return result.getId().toString();
+        if (result != null) {
+            String resolvedFromResult = result.resolveNhanhOrderId();
+            if (resolvedFromResult == null || resolvedFromResult.isBlank()) {
+                log.warn(
+                        "Nhanh order add parsed result has no resolvable nhanhOrderId: orderId={}, resultId={}, resultOrderId={}, trackingUrl={}, duplicate={}",
+                        order.getId(),
+                        result.getId(),
+                        result.getOrderId(),
+                        result.getTrackingUrl(),
+                        result.isDuplicate()
+                );
+            } else {
+                log.info(
+                        "Nhanh order add parsed result resolved nhanhOrderId: orderId={}, resultId={}, resultOrderId={}, resolvedNhanhOrderId={}, duplicate={}",
+                        order.getId(),
+                        result.getId(),
+                        result.getOrderId(),
+                        resolvedFromResult,
+                        result.isDuplicate()
+                );
+            }
+            if (resolvedFromResult != null && !resolvedFromResult.isBlank()) {
+                return resolvedFromResult;
+            }
+            String existing = normalizeRealNhanhOrderId(order.getNhanhOrderId());
+            if (result.isDuplicate() && existing != null) {
+                    log.warn(
+                            "Nhanh duplicate result missing identifier, reusing existing local nhanhOrderId: orderId={}, existingNhanhOrderId={}",
+                            order.getId(),
+                            existing
+                    );
+                    return existing;
+            }
         }
-        if (result != null && result.isDuplicate()) {
-            return order.getNhanhOrderId();
-        }
-        return order.getNhanhOrderId();
+        return normalizeRealNhanhOrderId(order.getNhanhOrderId());
     }
 
     private void markFailed(Long orderId, Exception ex) {
@@ -302,8 +405,19 @@ public class OrderSyncService {
     }
 
     private Order loadOrder(Long orderId) {
-        return orderRepository.findWithItemsAndRequestById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        return transactionTemplate.execute(status -> {
+            Order order = orderRepository.findWithItemsAndRequestById(orderId)
+                    .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+            List<OrderPayment> payments = order.getPayments();
+            if (payments != null) {
+                payments.size();
+                payments.sort(Comparator.comparing(
+                        OrderPayment::getCreatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ));
+            }
+            return order;
+        });
     }
 
     private String buildBaseKey(NhanhSyncOperationType operationType, Long orderId, Long paymentId) {
@@ -366,15 +480,92 @@ public class OrderSyncService {
         return ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
     }
 
-    private String successMessage(NhanhSyncOperationType operationType, NhanhOrderAddResult result) {
-        if (result != null && result.isDuplicate()) {
-            return "Nhanh reported duplicate appOrderId and the existing local Nhanh order reference was reused.";
+    private String buildAddSyncMessage(boolean needsReconcile, NhanhSyncOperationType operationType, NhanhOrderAddResult result) {
+        if (needsReconcile) {
+            return result != null && result.isDuplicate()
+                    ? "Nhanh reported duplicate appOrderId but the existing Nhanh order ID could not be resolved automatically."
+                    : "Nhanh order add response did not contain a resolvable Nhanh order ID; manual reconciliation is required.";
+        }
+        if (result != null && result.isDuplicate() && result.resolveNhanhOrderId() != null) {
+            return "Nhanh reported duplicate appOrderId and the existing Nhanh order ID was resolved automatically.";
         }
         return switch (operationType) {
             case NHANH_ADD_NORMAL -> "Nhanh normal order created successfully.";
             case NHANH_ADD_PREORDER_DEPOSIT -> "Nhanh preorder deposit order created successfully.";
             case NHANH_EDIT_PREORDER_FINAL -> "Nhanh preorder final payment updated successfully.";
         };
+    }
+
+    private String successMessage(NhanhSyncOperationType operationType, NhanhOrderAddResult result) {
+        if (operationType != NhanhSyncOperationType.NHANH_EDIT_PREORDER_FINAL) {
+            return buildAddSyncMessage(false, operationType, result);
+        }
+        return switch (operationType) {
+            case NHANH_EDIT_PREORDER_FINAL -> "Nhanh preorder final payment updated successfully.";
+            case NHANH_ADD_NORMAL -> "Nhanh normal order created successfully.";
+            case NHANH_ADD_PREORDER_DEPOSIT -> "Nhanh preorder deposit order created successfully.";
+        };
+    }
+
+    private NhanhOrderAddResult reconcileAddResult(Order order, NhanhOrderAddResult result, String accessToken) {
+        if (result == null) {
+            return null;
+        }
+        if (result.resolveNhanhOrderId() != null) {
+            return result;
+        }
+
+        String existingNhanhOrderId = normalizeRealNhanhOrderId(order.getNhanhOrderId());
+        if (existingNhanhOrderId != null) {
+            result.setOrderId(Long.valueOf(existingNhanhOrderId));
+            log.info(
+                    "Using existing numeric local nhanhOrderId for unresolved add result: orderId={}, nhanhOrderId={}",
+                    order.getId(),
+                    existingNhanhOrderId
+            );
+            return result;
+        }
+
+        Optional<NhanhOrderListItem> matchedOrder = nhanhOrderGateway.findOrderByReference(order, accessToken);
+        if (matchedOrder.isPresent()) {
+            String lookedUpNhanhOrderId = matchedOrder.get().resolveNhanhOrderId();
+            if (lookedUpNhanhOrderId != null && !lookedUpNhanhOrderId.isBlank()) {
+                result.setOrderId(Long.valueOf(lookedUpNhanhOrderId));
+                log.info(
+                        "Reconciled unresolved Nhanh add result via order lookup: orderId={}, lookedUpNhanhOrderId={}",
+                        order.getId(),
+                        lookedUpNhanhOrderId
+                );
+            }
+        }
+        return result;
+    }
+
+    private void updateAttemptPayloadIfChanged(
+            NhanhSyncAttempt attempt,
+            NhanhOrderAddResult previousResult,
+            NhanhOrderAddResult reconciledResult
+    ) {
+        String previousPayload = toJson(previousResult);
+        String updatedPayload = toJson(reconciledResult);
+        if (Objects.equals(previousPayload, updatedPayload)) {
+            return;
+        }
+        attempt.setResponsePayload(updatedPayload);
+        attempt.setCompletedAt(LocalDateTime.now());
+        attempt.setLastMessage(successMessage(attempt.getOperationType(), reconciledResult));
+        nhanhSyncAttemptRepository.save(attempt);
+    }
+
+    private String normalizeRealNhanhOrderId(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || !trimmed.matches("\\d+")) {
+            return null;
+        }
+        return trimmed;
     }
 
     private String defaultText(String preferred, String fallback) {

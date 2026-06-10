@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 public class MockPayOSGateway implements PayOSGateway {
 
     private static final String PROVIDER_PREFIX = "mock-payos";
+    private static final long PAYMENT_TTL_MINUTES = 5;
 
     @Override
     public String providerName() {
@@ -28,7 +29,7 @@ public class MockPayOSGateway implements PayOSGateway {
                 providerReference,
                 checkoutUrl,
                 qrCode,
-                LocalDateTime.now().plusMinutes(30)
+                LocalDateTime.now().plusMinutes(PAYMENT_TTL_MINUTES)
         );
     }
 }

@@ -80,31 +80,42 @@ class OrderQueryServiceTest {
     }
 
     @Test
-    void getMyOrderDetailScopesByAuthenticatedCustomerPhone() {
+    void getMyOrderDetailScopesByAuthenticatedCustomerEmail() {
         Authentication auth = customerAuth();
-        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("0900000001")));
-        when(orderRepository.findCustomerOrderById(1L, "0900000001")).thenReturn(Optional.of(sampleOrder()));
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("customer@example.com")));
+        when(orderRepository.findWithItemsAndRequestById(1L)).thenReturn(Optional.of(sampleOrder()));
 
         OrderResponseDto dto = service.getMyOrderDetail(1L, auth);
 
         assertThat(dto.getOrderCode()).isEqualTo("SOBU-REQ-1");
-        assertThat(dto.getCustomerMobile()).isEqualTo("0900000001");
+        assertThat(dto.getCustomerEmail()).isEqualTo("customer@example.com");
     }
 
     @Test
     void getMyOrderDetailRejectsOtherCustomerOrder() {
         Authentication auth = customerAuth();
-        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("0900000001")));
-        when(orderRepository.findCustomerOrderById(2L, "0900000001")).thenReturn(Optional.empty());
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("customer@example.com")));
+        when(orderRepository.findWithItemsAndRequestById(2L)).thenReturn(Optional.of(sampleOrder("other@example.com")));
 
         assertThrows(IllegalArgumentException.class, () -> service.getMyOrderDetail(2L, auth));
     }
 
     @Test
-    void getMyOrderDetailByNhanhOrderIdScopesByAuthenticatedCustomerPhone() {
+    void getMyOrderDetailAcceptsEquivalentEmailCasing() {
         Authentication auth = customerAuth();
-        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("0900000001")));
-        when(orderRepository.findCustomerOrderByNhanhOrderIdOrCode("NH-123", "0900000001"))
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account(" Customer@Example.com ")));
+        when(orderRepository.findWithItemsAndRequestById(1L)).thenReturn(Optional.of(sampleOrder()));
+
+        OrderResponseDto dto = service.getMyOrderDetail(1L, auth);
+
+        assertThat(dto.getOrderCode()).isEqualTo("SOBU-REQ-1");
+    }
+
+    @Test
+    void getMyOrderDetailByNhanhOrderIdScopesByAuthenticatedCustomerEmail() {
+        Authentication auth = customerAuth();
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("customer@example.com")));
+        when(orderRepository.findWithItemsAndRequestByNhanhOrderIdOrCode("NH-123"))
                 .thenReturn(Optional.of(sampleOrder()));
 
         OrderResponseDto dto = service.getMyOrderDetailByNhanhOrderId(" NH-123 ", auth);
@@ -113,14 +124,33 @@ class OrderQueryServiceTest {
     }
 
     @Test
-    void getMyOrderDetailRequiresCustomerPhone() {
+    void getMyOrderDetailByNhanhOrderIdAcceptsEquivalentEmailCasing() {
         Authentication auth = customerAuth();
-        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account(null)));
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("Customer@Example.com")));
+        when(orderRepository.findWithItemsAndRequestByNhanhOrderIdOrCode("NH-123"))
+                .thenReturn(Optional.of(sampleOrder()));
 
-        assertThrows(AccessDeniedException.class, () -> service.getMyOrderDetail(1L, auth));
+        OrderResponseDto dto = service.getMyOrderDetailByNhanhOrderId("NH-123", auth);
+
+        assertThat(dto.getOrderCode()).isEqualTo("SOBU-REQ-1");
+    }
+
+    @Test
+    void getMyOrderDetailAllowsAccountsWithoutPhone() {
+        Authentication auth = customerAuth();
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("customer@example.com", null)));
+        when(orderRepository.findWithItemsAndRequestById(1L)).thenReturn(Optional.of(sampleOrder()));
+
+        OrderResponseDto dto = service.getMyOrderDetail(1L, auth);
+
+        assertThat(dto.getOrderCode()).isEqualTo("SOBU-REQ-1");
     }
 
     private Order sampleOrder() {
+        return sampleOrder("customer@example.com");
+    }
+
+    private Order sampleOrder(String customerEmail) {
         Request request = Request.builder()
                 .id(10L)
                 .requestCode("REQ-1")
@@ -137,6 +167,7 @@ class OrderQueryServiceTest {
                 .depositAmount(BigDecimal.ZERO)
                 .customerName("Nguyen Van A")
                 .customerMobile("0900000001")
+                .customerEmail(customerEmail)
                 .nhanhOrderId("NH-123")
                 .nhanhOrderCode("SOBU-REQ-1")
                 .build();
@@ -156,9 +187,13 @@ class OrderQueryServiceTest {
         return new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
     }
 
-    private Account account(String phone) {
+    private Account account(String email) {
+        return account(email, "0900000001");
+    }
+
+    private Account account(String email, String phone) {
         return Account.builder()
-                .email("customer@example.com")
+                .email(email)
                 .phone(phone)
                 .role(Role.builder().name("USER").build())
                 .build();

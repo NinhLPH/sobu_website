@@ -14,30 +14,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByOrderCode(String orderCode);
     Optional<Order> findByRequestId(Long requestId);
 
-    @EntityGraph(attributePaths = {"items", "request", "payments"})
+    @EntityGraph(attributePaths = {"items", "request"})
     Optional<Order> findWithItemsAndRequestById(Long id);
 
     @Query("""
             select distinct o from Order o
             left join fetch o.items
             left join fetch o.request
-            where o.id = :orderId
-              and o.customerMobile = :customerMobile
+            where o.nhanhOrderId = :nhanhOrderId or o.nhanhOrderCode = :nhanhOrderId
             """)
-    Optional<Order> findCustomerOrderById(
-            @Param("orderId") Long orderId,
-            @Param("customerMobile") String customerMobile
-    );
-
-    @Query("""
-            select distinct o from Order o
-            left join fetch o.items
-            left join fetch o.request
-            where o.customerMobile = :customerMobile
-              and (o.nhanhOrderId = :nhanhOrderId or o.nhanhOrderCode = :nhanhOrderId)
-            """)
-    Optional<Order> findCustomerOrderByNhanhOrderIdOrCode(
-            @Param("nhanhOrderId") String nhanhOrderId,
-            @Param("customerMobile") String customerMobile
+    Optional<Order> findWithItemsAndRequestByNhanhOrderIdOrCode(
+            @Param("nhanhOrderId") String nhanhOrderId
     );
 }

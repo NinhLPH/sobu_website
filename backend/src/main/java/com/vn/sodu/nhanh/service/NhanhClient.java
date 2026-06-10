@@ -1,5 +1,8 @@
 package com.vn.sodu.nhanh.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhTokenResponse;
 import com.vn.sodu.global.exception.ExternalServiceException;
@@ -25,6 +28,7 @@ public class NhanhClient {
 
     private final RestTemplate restTemplate;
     private final NhanhProperties nhanhProperties;
+    private final ObjectMapper objectMapper;
 
     private static final String ACCESS_TOKEN_URL =
             "https://pos.open.nhanh.vn/v3.0/app/getaccesstoken?appId=%s";
@@ -196,14 +200,19 @@ public class NhanhClient {
         HttpEntity<REQ> request = new HttpEntity<>(body, headers);
 
         Supplier<RESP> call = () -> {
-            ResponseEntity<RESP> response =
+            ResponseEntity<String> response =
                     restTemplate.exchange(
                             url,
                             HttpMethod.POST,
                             request,
-                            responseType
+                            String.class
                     );
-            return response.getBody();
+            String rawBody = response.getBody();
+            logOrderAddRawResponse(apiPath, rawBody);
+            if (rawBody == null || rawBody.isBlank()) {
+                return null;
+            }
+            return deserialize(rawBody, responseType, apiPath);
         };
 
         try {
@@ -212,6 +221,61 @@ public class NhanhClient {
             log.error("Failed to post data to Nhanh {}", apiPath, ex);
             throw new ExternalServiceException("Nhanh API post failed", ex);
         }
+    }
+
+    private void logOrderAddRawResponse(String apiPath, String rawBody) {
+        if (!"/v3.0/order/add".equals(apiPath)) {
+            return;
+        }
+        if (rawBody == null || rawBody.isBlank()) {
+            log.warn("Nhanh order add raw response body is empty");
+            return;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            JsonNode firstData = root.path("data").isArray() && root.path("data").size() > 0
+                    ? root.path("data").get(0)
+                    : null;
+            String rawDataOrderId = textValue(firstData == null ? null : firstData.get("orderId"));
+            String rawDataId = textValue(firstData == null ? null : firstData.get("id"));
+
+            if (rawDataOrderId == null) {
+                log.warn(
+                        "Nhanh order add raw response before parse missing data[0].orderId: dataId={}, body={}",
+                        rawDataId,
+                        rawBody
+                );
+                return;
+            }
+
+            log.info(
+                    "Nhanh order add raw response before parse: dataOrderId={}, dataId={}, body={}",
+                    rawDataOrderId,
+                    rawDataId,
+                    rawBody
+            );
+        } catch (JsonProcessingException ex) {
+            log.warn("Nhanh order add raw response could not be inspected before parse: body={}", rawBody, ex);
+        }
+    }
+
+    private <RESP> RESP deserialize(String rawBody, ParameterizedTypeReference<RESP> responseType, String apiPath) {
+        try {
+            return objectMapper.readValue(
+                    rawBody,
+                    objectMapper.getTypeFactory().constructType(responseType.getType())
+            );
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to deserialize Nhanh response for {}: body={}", apiPath, rawBody, ex);
+            throw new ExternalServiceException("Nhanh API response could not be parsed", ex);
+        }
+    }
+
+    private String textValue(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        return node.isTextual() ? node.textValue() : node.asText();
     }
 
     private <T> T withRetry(Supplier<T> supplier, int maxAttempts, long initialDelayMs) {

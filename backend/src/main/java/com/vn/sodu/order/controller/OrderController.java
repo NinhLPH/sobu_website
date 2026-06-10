@@ -81,7 +81,7 @@ public class OrderController {
     @GetMapping("/me/{orderId}")
     @Operation(
             summary = "Get my order detail",
-            description = "Returns the authenticated customer's own order detail using the account phone binding."
+            description = "Returns the authenticated customer's own order detail using the account email binding."
     )
     public ResponseEntity<ApiResponseDTO<OrderResponseDto>> getMyOrderDetail(
             @Parameter(description = "Internal order identifier", required = true, example = "1")
@@ -95,7 +95,7 @@ public class OrderController {
     @GetMapping("/me/by-nhanh/{nhanhOrderId}")
     @Operation(
             summary = "Get my order by Nhanh order id",
-            description = "Returns the authenticated customer's own order by Nhanh order id or Nhanh order code."
+            description = "Returns the authenticated customer's own order by Nhanh order id or Nhanh order code using the account email binding."
     )
     public ResponseEntity<ApiResponseDTO<OrderResponseDto>> getMyOrderByNhanhOrderId(
             @Parameter(description = "Nhanh order id or code", required = true, example = "123456")
