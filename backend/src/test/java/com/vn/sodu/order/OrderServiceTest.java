@@ -7,6 +7,7 @@ import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
 import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.order.services.OrderService;
 import com.vn.sodu.payment.PaymentType;
+import com.vn.sodu.payment.service.PaymentCheckoutCreationException;
 import com.vn.sodu.payment.service.PaymentService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -162,6 +164,46 @@ class OrderServiceTest {
         assertThat(mappedOrder.getStatus()).isEqualTo(OrderStatus.WAITING_DEPOSIT);
         verify(paymentService).initializeOrderPaymentState(mappedOrder);
         verify(orderRepository).save(mappedOrder);
+        verify(paymentService).createPayment(savedOrder, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
+    }
+
+    @Test
+    void createFromApprovedPreorderContinuesWhenInitialDepositCheckoutFails() {
+        Request request = Request.builder()
+                .id(21L)
+                .customerPhone("0900000003")
+                .type(OrderType.PREORDER)
+                .build();
+        ResolvedOrderCustomer customer = ResolvedOrderCustomer.builder()
+                .fullName("Le Thi C")
+                .phone("0900000003")
+                .build();
+        Order mappedOrder = Order.builder()
+                .request(request)
+                .orderCode("SOBU-REQ-21")
+                .type(OrderType.PREORDER)
+                .depositAmount(new BigDecimal("300.00"))
+                .build();
+        Order savedOrder = Order.builder()
+                .id(121L)
+                .request(request)
+                .orderCode("SOBU-REQ-21")
+                .type(OrderType.PREORDER)
+                .depositAmount(new BigDecimal("300.00"))
+                .status(OrderStatus.WAITING_DEPOSIT)
+                .build();
+
+        when(orderConversionPolicy.getExistingOrder(request)).thenReturn(Optional.empty());
+        when(orderCustomerResolver.resolveByPhone("0900000003")).thenReturn(Optional.of(customer));
+        when(requestToOrderMapper.mapToOrder(request, customer)).thenReturn(mappedOrder);
+        when(orderRepository.save(mappedOrder)).thenReturn(savedOrder);
+        doThrow(new PaymentCheckoutCreationException("PayOS unavailable", new IllegalStateException("PayOS unavailable")))
+                .when(paymentService)
+                .createPayment(savedOrder, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
+
+        Order result = orderService.createFromApprovedRequest(request);
+
+        assertThat(result).isSameAs(savedOrder);
         verify(paymentService).createPayment(savedOrder, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
     }
 }

@@ -16,7 +16,7 @@ public class SmtpEmailService implements EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${app.frontend.base-url:http://localhost:5173}")
+    @Value("${app.frontend.base-url:http://localhost:3000}")
     private String frontendBaseUrl;
 
     @Value("${spring.mail.username:}")
@@ -41,8 +41,9 @@ public class SmtpEmailService implements EmailService {
     @Override
     @Async("mailExecutor")
     public void sendActivationEmail(Account account, String token) {
-        String link = String.format("%s/verify-email?token=%s", frontendBaseUrl, token);
-        String body = String.format("Hello %s,\n\nPlease activate your account by visiting: %s\n\nIf you didn't register, ignore this email.",
+        String link = String.format("%s/activate?token=%s", frontendBaseUrl, token);
+        String body = String.format(
+                "Hello %s,\n\nPlease activate your account by visiting: %s\n\nIf you didn't register, ignore this email.",
                 account.getFullName() != null ? account.getFullName() : account.getEmail(), link);
         try {
             send(account.getEmail(), "Activate your Sobu account", body);

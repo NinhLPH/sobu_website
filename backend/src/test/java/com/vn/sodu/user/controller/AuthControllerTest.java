@@ -73,6 +73,31 @@ class AuthControllerTest {
     }
 
     @Test
+    @DisplayName("POST /auth/login - compatibility alias success")
+    void testLoginAliasSuccess() throws Exception {
+        LoginRequest req = new LoginRequest();
+        req.setEmail("test@example.com");
+        req.setPassword("password123");
+
+        LoginResponse resp = LoginResponse.builder()
+                .accessToken("access-token")
+                .refreshToken("refresh-token")
+                .tokenType("Bearer")
+                .expiresIn(3600L)
+                .build();
+
+        Mockito.when(authService.login(any(LoginRequest.class))).thenReturn(resp);
+
+        mockMvc.perform(post("/auth/login").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.data.expiresIn").value(3600));
+    }
+
+    @Test
     @DisplayName("POST /api/auth/login - failure returns 401")
     void testLoginFailure() throws Exception {
         LoginRequest req = new LoginRequest();

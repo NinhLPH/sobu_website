@@ -30,3 +30,4 @@ backend/src/main/resources/application-dev.properties
 /docs
 .github/copilot-instructions.md
 .github/copilot-instructions.md
+/uploads

@@ -7,6 +7,7 @@ import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.PaymentMethod;
+import com.vn.sodu.payment.service.PaymentCheckoutCreationException;
 import com.vn.sodu.payment.service.PaymentService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
@@ -177,7 +178,15 @@ public class OrderService {
 
     private void createInitialPreorderDepositIfRequired(Order order) {
         if (requiresPreorderDeposit(order)) {
-            paymentService.createPayment(order, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
+            try {
+                paymentService.createPayment(order, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
+            } catch (PaymentCheckoutCreationException ex) {
+                log.warn(
+                        "Failed to create initial preorder deposit checkout for order id={}: {}",
+                        order.getId(),
+                        ex.getMessage()
+                );
+            }
         }
     }
 

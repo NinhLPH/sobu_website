@@ -19,8 +19,8 @@ import static org.mockito.Mockito.verify;
 class SmtpEmailServiceTest {
 
     @Test
-    @DisplayName("Should send activation email to registered address with frontend verify link")
-    void sendActivationEmailUsesRegisteredEmailAndFrontendVerifyLink() {
+    @DisplayName("Should send activation email to registered address with frontend activation link")
+    void sendActivationEmailUsesRegisteredEmailAndFrontendActivationLink() {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         SmtpEmailService service = new SmtpEmailService(mailSender);
         ReflectionTestUtils.setField(service, "frontendBaseUrl", "http://localhost:5173");
@@ -39,7 +39,7 @@ class SmtpEmailServiceTest {
         assertEquals("noreply@sobu.test", message.getFrom());
         assertArrayEquals(new String[]{"newuser@example.com"}, message.getTo());
         assertEquals("Activate your Sobu account", message.getSubject());
-        assertTrue(message.getText().contains("http://localhost:5173/verify-email?token=token-123"));
+        assertTrue(message.getText().contains("http://localhost:5173/activate?token=token-123"));
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.vn.sodu.payment.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PayOSProperties;
 import com.vn.sodu.payment.PaymentStatus;
@@ -198,10 +200,32 @@ public class PayOSWebhookService {
             return value.asText();
         }
         try {
-            return objectMapper.writeValueAsString(value);
+            return objectMapper.writeValueAsString(sortPayOSJsonValue(value));
         } catch (Exception ex) {
             return value.asText("");
         }
+    }
+
+    private JsonNode sortPayOSJsonValue(JsonNode value) {
+        if (value == null || value.isNull() || value.isValueNode()) {
+            return value;
+        }
+        if (value.isArray()) {
+            ArrayNode sortedArray = objectMapper.createArrayNode();
+            value.forEach(item -> sortedArray.add(sortPayOSJsonValue(item)));
+            return sortedArray;
+        }
+        if (value.isObject()) {
+            ObjectNode sortedObject = objectMapper.createObjectNode();
+            List<String> fieldNames = new ArrayList<>();
+            value.fieldNames().forEachRemaining(fieldNames::add);
+            fieldNames.sort(Comparator.naturalOrder());
+            for (String fieldName : fieldNames) {
+                sortedObject.set(fieldName, sortPayOSJsonValue(value.get(fieldName)));
+            }
+            return sortedObject;
+        }
+        return value;
     }
 
     private String hmacSha256Hex(String data, String key) throws Exception {

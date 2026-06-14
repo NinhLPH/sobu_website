@@ -7,6 +7,8 @@ import com.vn.sodu.order.OrderSyncStatus;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.MockPayOSGateway;
 import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PayOSCheckoutSession;
+import com.vn.sodu.payment.PayOSGateway;
 import com.vn.sodu.payment.PayOSProperties;
 import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
@@ -33,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -186,6 +189,7 @@ class PaymentServiceTest {
             }
             return payment;
         });
+        when(orderRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(order));
         when(orderRepository.findById(20L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(20L)).thenReturn(List.of(), List.of(
                 OrderPayment.builder()
@@ -202,6 +206,7 @@ class PaymentServiceTest {
 
         assertThat(payment.getPaymentMethod()).isEqualTo(PaymentMethod.COD);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PROCESSING);
+        assertThat(order.getSyncStatus()).isEqualTo(OrderSyncStatus.PENDING);
         ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().orderId()).isEqualTo(20L);
@@ -257,6 +262,37 @@ class PaymentServiceTest {
     }
 
     @Test
+    void createPaymentRejectsExistingPendingFullPayment() {
+        Order order = Order.builder()
+                .id(16L)
+                .orderCode("SOBU-ORD-16")
+                .type(OrderType.NORMAL)
+                .totalAmount(new BigDecimal("1000"))
+                .depositAmount(BigDecimal.ZERO)
+                .paidAmount(BigDecimal.ZERO)
+                .remainingAmount(new BigDecimal("1000"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment pendingPayment = OrderPayment.builder()
+                .id(56L)
+                .order(order)
+                .paymentCode("SOBU-PAY-PENDING")
+                .type(PaymentType.FULL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("1000"))
+                .provider("PAYOS_MOCK")
+                .expiresAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        when(orderRepository.findById(16L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(16L)).thenReturn(List.of(pendingPayment));
+
+        assertThrows(IllegalStateException.class,
+                () -> paymentService.createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE));
+    }
+
+    @Test
     void createPaymentRejectsWrongPhasePaymentForPreorder() {
         Order order = Order.builder()
                 .id(7L)
@@ -267,7 +303,7 @@ class PaymentServiceTest {
                 .totalAmount(new BigDecimal("1000"))
                 .build();
 
-        when(orderRepository.findById(7L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(7L)).thenReturn(List.of());
 
         assertThrows(IllegalStateException.class,
@@ -288,7 +324,8 @@ class PaymentServiceTest {
                 .paymentStatus(PaymentStatus.PENDING)
                 .build();
 
-        when(orderRepository.findById(8L)).thenReturn(Optional.of(order), Optional.of(order));
+        when(orderRepository.findByIdForUpdate(8L)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(8L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(8L)).thenReturn(List.of(), List.of(
                 OrderPayment.builder()
                         .order(order)
@@ -333,6 +370,7 @@ class PaymentServiceTest {
                 .paymentStatus(PaymentStatus.PENDING)
                 .build();
 
+        when(orderRepository.findByIdForUpdate(18L)).thenReturn(Optional.of(order));
         when(orderRepository.findById(18L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(18L)).thenReturn(List.of(), List.of(
                 OrderPayment.builder()
@@ -365,6 +403,308 @@ class PaymentServiceTest {
     }
 
     @Test
+    void createPreorderFinalPaymentFailsCheckoutAndRestoresDepositPaidStatus() {
+        PayOSGateway failingGateway = new PayOSGateway() {
+            @Override
+            public String providerName() {
+                return "PAYOS_FAIL";
+            }
+
+            @Override
+            public PayOSCheckoutSession createCheckout(Order order, OrderPayment payment) {
+                throw new IllegalStateException("PayOS downtime");
+            }
+        };
+        PaymentService failingPaymentService = new PaymentService(
+                orderPaymentRepository,
+                orderRepository,
+                failingGateway,
+                new PayOSProperties(),
+                paymentCalculationService,
+                eventPublisher
+        );
+
+        Order order = Order.builder()
+                .id(28L)
+                .orderCode("SOBU-PRE-28")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.DEPOSIT_PAID)
+                .totalAmount(new BigDecimal("1000"))
+                .depositAmount(new BigDecimal("300"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("700"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        List<OrderPayment> storedPayments = new ArrayList<>();
+
+        when(orderRepository.findByIdForUpdate(28L)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(28L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(28L))
+                .thenAnswer(invocation -> List.copyOf(storedPayments));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(281L);
+                storedPayments.add(payment);
+            }
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentCheckoutCreationException ex = assertThrows(
+                PaymentCheckoutCreationException.class,
+                () -> failingPaymentService.createPreorderFinalPayment(28L)
+        );
+
+        assertThat(ex).hasMessageContaining("PayOS downtime");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.DEPOSIT_PAID);
+        assertThat(storedPayments).hasSize(1);
+        assertThat(storedPayments.get(0).getType()).isEqualTo(PaymentType.FINAL);
+        assertThat(storedPayments.get(0).getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(storedPayments.get(0).getFailureReason()).isEqualTo("PayOS downtime");
+    }
+
+    @Test
+    void createPaymentFinalOnlineFromDepositPaidFailsCheckoutAndRestoresDepositPaidStatus() {
+        PayOSGateway failingGateway = new PayOSGateway() {
+            @Override
+            public String providerName() {
+                return "PAYOS_FAIL";
+            }
+
+            @Override
+            public PayOSCheckoutSession createCheckout(Order order, OrderPayment payment) {
+                throw new IllegalStateException("Network timeout");
+            }
+        };
+        PaymentService failingPaymentService = new PaymentService(
+                orderPaymentRepository,
+                orderRepository,
+                failingGateway,
+                new PayOSProperties(),
+                paymentCalculationService,
+                eventPublisher
+        );
+
+        Order order = Order.builder()
+                .id(29L)
+                .orderCode("SOBU-PRE-29")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.DEPOSIT_PAID)
+                .totalAmount(new BigDecimal("1200"))
+                .depositAmount(new BigDecimal("300"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("900"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        List<OrderPayment> storedPayments = new ArrayList<>();
+
+        when(orderRepository.findByIdForUpdate(29L)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(29L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(29L))
+                .thenAnswer(invocation -> List.copyOf(storedPayments));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(291L);
+                storedPayments.add(payment);
+            }
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentCheckoutCreationException ex = assertThrows(
+                PaymentCheckoutCreationException.class,
+                () -> failingPaymentService.createPayment(order, PaymentType.FINAL, PaymentMethod.ONLINE)
+        );
+
+        assertThat(ex).hasMessageContaining("Network timeout");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.DEPOSIT_PAID);
+        assertThat(storedPayments).hasSize(1);
+        assertThat(storedPayments.get(0).getStatus()).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
+    void createPaymentRejectsExistingPendingFinalPayment() {
+        Order order = Order.builder()
+                .id(30L)
+                .orderCode("SOBU-PRE-30")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.READY_FOR_FINAL_PAYMENT)
+                .depositAmount(new BigDecimal("300"))
+                .totalAmount(new BigDecimal("1000"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("700"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment pendingFinalPayment = OrderPayment.builder()
+                .id(301L)
+                .order(order)
+                .paymentCode("SOBU-PAY-FINAL-PENDING")
+                .type(PaymentType.FINAL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("700"))
+                .provider("PAYOS_MOCK")
+                .expiresAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        when(orderRepository.findByIdForUpdate(30L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(30L)).thenReturn(List.of(pendingFinalPayment));
+
+        assertThrows(IllegalStateException.class,
+                () -> paymentService.createPayment(order, PaymentType.FINAL, PaymentMethod.ONLINE));
+    }
+
+    @Test
+    void createPaymentAllowsRetryAfterFailedFinalPayment() {
+        Order order = Order.builder()
+                .id(31L)
+                .orderCode("SOBU-PRE-31")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.DEPOSIT_PAID)
+                .depositAmount(new BigDecimal("300"))
+                .totalAmount(new BigDecimal("1000"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("700"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment failedFinalPayment = OrderPayment.builder()
+                .id(311L)
+                .order(order)
+                .paymentCode("SOBU-PAY-FINAL-FAILED")
+                .type(PaymentType.FINAL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.FAILED)
+                .amount(new BigDecimal("700"))
+                .provider("PAYOS_MOCK")
+                .failureReason("Provider error")
+                .build();
+
+        when(orderRepository.findByIdForUpdate(31L)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(31L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(31L)).thenReturn(List.of(failedFinalPayment), List.of(
+                failedFinalPayment,
+                OrderPayment.builder()
+                        .order(order)
+                        .type(PaymentType.FINAL)
+                        .status(PaymentStatus.PENDING)
+                        .amount(new BigDecimal("700"))
+                        .build()
+        ));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(312L);
+            }
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment payment = paymentService.createPayment(order, PaymentType.FINAL, PaymentMethod.ONLINE);
+
+        assertThat(payment.getId()).isEqualTo(312L);
+        assertThat(payment.getCheckoutUrl()).contains(payment.getPaymentCode());
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.READY_FOR_FINAL_PAYMENT);
+    }
+
+    @Test
+    void createPaymentAllowsRetryAfterExpiredFinalPayment() {
+        Order order = Order.builder()
+                .id(32L)
+                .orderCode("SOBU-PRE-32")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.DEPOSIT_PAID)
+                .depositAmount(new BigDecimal("300"))
+                .totalAmount(new BigDecimal("1000"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("700"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment expiredFinalPayment = OrderPayment.builder()
+                .id(321L)
+                .order(order)
+                .paymentCode("SOBU-PAY-FINAL-EXPIRED")
+                .type(PaymentType.FINAL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.EXPIRED)
+                .amount(new BigDecimal("700"))
+                .provider("PAYOS_MOCK")
+                .failureReason("Payment session expired")
+                .build();
+
+        when(orderRepository.findByIdForUpdate(32L)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(32L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(32L)).thenReturn(List.of(expiredFinalPayment), List.of(
+                expiredFinalPayment,
+                OrderPayment.builder()
+                        .order(order)
+                        .type(PaymentType.FINAL)
+                        .status(PaymentStatus.PENDING)
+                        .amount(new BigDecimal("700"))
+                        .build()
+        ));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(322L);
+            }
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment payment = paymentService.createPayment(order, PaymentType.FINAL, PaymentMethod.ONLINE);
+
+        assertThat(payment.getId()).isEqualTo(322L);
+        assertThat(payment.getCheckoutUrl()).contains(payment.getPaymentCode());
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.READY_FOR_FINAL_PAYMENT);
+    }
+
+    @Test
+    void createPaymentLocksOrderForFinalPaymentCreation() {
+        Order order = Order.builder()
+                .id(33L)
+                .orderCode("SOBU-PRE-33")
+                .type(OrderType.PREORDER)
+                .status(OrderStatus.DEPOSIT_PAID)
+                .depositAmount(new BigDecimal("300"))
+                .totalAmount(new BigDecimal("1000"))
+                .paidAmount(new BigDecimal("300"))
+                .remainingAmount(new BigDecimal("700"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+
+        when(orderRepository.findByIdForUpdate(33L)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(33L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(33L)).thenReturn(List.of(), List.of(
+                OrderPayment.builder()
+                        .order(order)
+                        .type(PaymentType.FINAL)
+                        .status(PaymentStatus.PENDING)
+                        .amount(new BigDecimal("700"))
+                        .build()
+        ));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(331L);
+            }
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        paymentService.createPayment(order, PaymentType.FINAL, PaymentMethod.ONLINE);
+
+        verify(orderRepository).findByIdForUpdate(33L);
+        verifyNoMoreInteractions(eventPublisher);
+    }
+
+    @Test
     void markPaymentPaidRecalculatesOrderAndPublishesSyncEventForEligibleOrder() {
         Order order = Order.builder()
                 .id(5L)
@@ -387,7 +727,7 @@ class PaymentServiceTest {
                 .provider("PAYOS_MOCK")
                 .build();
 
-        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-91")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.findByPaymentCodeForUpdate("SOBU-PAY-91")).thenReturn(Optional.of(payment));
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepository.findById(5L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(payment));
@@ -399,6 +739,7 @@ class PaymentServiceTest {
         assertThat(updated.getPaidAt()).isNotNull();
         assertThat(order.getPaidAmount()).isEqualByComparingTo("300.00");
         assertThat(order.getRemainingAmount()).isEqualByComparingTo("0.00");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PROCESSING);
 
         ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
@@ -430,7 +771,7 @@ class PaymentServiceTest {
                 .provider("PAYOS_MOCK")
                 .build();
 
-        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-93")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.findByPaymentCodeForUpdate("SOBU-PAY-93")).thenReturn(Optional.of(payment));
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepository.findById(6L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(6L)).thenReturn(List.of(payment));
@@ -440,6 +781,7 @@ class PaymentServiceTest {
 
         assertThat(updated.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(updated.getOrder().getStatus()).isEqualTo(OrderStatus.DEPOSIT_PAID);
+        assertThat(updated.getOrder().getSyncStatus()).isEqualTo(OrderSyncStatus.PENDING);
         ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().orderId()).isEqualTo(6L);
@@ -470,7 +812,7 @@ class PaymentServiceTest {
                 .provider("PAYOS_MOCK")
                 .build();
 
-        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-94")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.findByPaymentCodeForUpdate("SOBU-PAY-94")).thenReturn(Optional.of(payment));
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepository.findById(12L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(12L)).thenReturn(List.of(
@@ -490,6 +832,7 @@ class PaymentServiceTest {
         assertThat(updated.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(updated.getOrder().getStatus()).isEqualTo(OrderStatus.PROCESSING);
         assertThat(updated.getOrder().getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(updated.getOrder().getSyncStatus()).isEqualTo(OrderSyncStatus.PENDING);
         ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().orderId()).isEqualTo(12L);
@@ -513,7 +856,7 @@ class PaymentServiceTest {
                 .provider("PAYOS_MOCK")
                 .build();
 
-        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-92")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.findByPaymentCodeForUpdate("SOBU-PAY-92")).thenReturn(Optional.of(payment));
 
         OrderPayment updated = paymentService.markPaymentPaid("SOBU-PAY-92");
 
@@ -542,7 +885,7 @@ class PaymentServiceTest {
                 .provider("PAYOS_MOCK")
                 .build();
 
-        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-251")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.findByPaymentCodeForUpdate("SOBU-PAY-251")).thenReturn(Optional.of(payment));
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(25L)).thenReturn(List.of(payment));
@@ -556,7 +899,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void reconcilePendingOnlinePaymentsMarksPaidPaymentAndPublishesSyncOnce() {
+    void reconcilePendingOnlinePaymentsWaitsForWebhookWhenProviderReportsPaid() {
         Order order = Order.builder()
                 .id(41L)
                 .orderCode("SOBU-ORD-41")
@@ -585,16 +928,10 @@ class PaymentServiceTest {
                 eq(PaymentMethod.ONLINE),
                 any()
         )).thenReturn(List.of(payment));
-        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-410")).thenReturn(Optional.of(payment));
-        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(orderRepository.findById(41L)).thenReturn(Optional.of(order));
-        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(41L)).thenReturn(List.of(payment));
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
         paymentService.reconcilePendingOnlinePayments();
 
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
-        verify(eventPublisher).publishEvent(any(OrderReadyForSyncEvent.class));
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -628,7 +965,7 @@ class PaymentServiceTest {
                 eq(PaymentMethod.ONLINE),
                 any()
         )).thenReturn(List.of(payment));
-        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-420")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.findByPaymentCodeForUpdate("SOBU-PAY-420")).thenReturn(Optional.of(payment));
         when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(payment));

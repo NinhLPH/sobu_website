@@ -170,6 +170,78 @@ class PayOSWebhookServiceTest {
     }
 
     @Test
+    void receiveRealPayOSWebhookVerifiesOfficialSampleSignature() {
+        payOSProperties.setGatewayMode("real");
+        payOSProperties.setChecksumKey("1a54716c8f0efb2744fb28b6e38b25da7f67a925d98bc1c18bd8faaecadd7675");
+        OrderPayment payment = OrderPayment.builder()
+                .paymentCode("SOBU-PAY-123")
+                .providerOrderCode(123L)
+                .type(PaymentType.FULL)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("3000.00"))
+                .providerReference("124c33293c43417ab7879e14c8d9eb18")
+                .build();
+        when(orderPaymentRepository.findByProviderOrderCode(123L)).thenReturn(Optional.of(payment));
+
+        webhookService.receive("""
+                {
+                  "code":"00",
+                  "desc":"success",
+                  "success":true,
+                  "data":{
+                    "orderCode":123,
+                    "amount":3000,
+                    "description":"VQRIO123",
+                    "accountNumber":"12345678",
+                    "reference":"TF230204212323",
+                    "transactionDateTime":"2023-02-04 18:25:00",
+                    "currency":"VND",
+                    "paymentLinkId":"124c33293c43417ab7879e14c8d9eb18",
+                    "code":"00",
+                    "desc":"Thành công",
+                    "counterAccountBankId":"",
+                    "counterAccountBankName":"",
+                    "counterAccountName":"",
+                    "counterAccountNumber":"",
+                    "virtualAccountName":"",
+                    "virtualAccountNumber":""
+                  },
+                  "signature":"412e915d2871504ed31be63c8f62a149a4410d34c4c42affc9006ef9917eaa03"
+                }
+                """, new HttpHeaders());
+
+        verify(paymentService).markPaymentPaid("SOBU-PAY-123");
+    }
+
+    @Test
+    void receiveRealPayOSWebhookSortsNestedArrayObjectKeysBeforeVerifyingSignature() {
+        payOSProperties.setGatewayMode("real");
+        OrderPayment payment = OrderPayment.builder()
+                .paymentCode("SOBU-PAY-506")
+                .providerOrderCode(506L)
+                .type(PaymentType.FULL)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("100.00"))
+                .providerReference("link-506")
+                .build();
+        when(orderPaymentRepository.findByProviderOrderCode(506L)).thenReturn(Optional.of(payment));
+        String signature = sign("items=[{\"qty\":1,\"sku\":\"A\"}]&orderCode=506");
+
+        webhookService.receive("""
+                {
+                  "success":true,
+                  "data":{
+                    "orderCode":506,
+                    "items":[{"sku":"A","qty":1}]
+                  },
+                  "signature":"%s"
+                }
+                """.formatted(signature), new HttpHeaders());
+
+        verify(paymentService).markPaymentPaid("SOBU-PAY-506");
+    }
+
+    @Test
     void receiveRealPayOSWebhookRejectsInvalidSignature() {
         payOSProperties.setGatewayMode("real");
 

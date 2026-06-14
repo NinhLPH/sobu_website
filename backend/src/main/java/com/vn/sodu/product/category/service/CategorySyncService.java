@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Scheduled;
 import com.vn.sodu.nhanh.service.NhanhClient;
 
 @Service
@@ -28,6 +29,7 @@ public class CategorySyncService {
     /**
      * Khởi chạy tiến trình đồng bộ danh mục
      */
+    @Scheduled(cron = "${nhanh.sync.cron:0 0 */12 * * *}")
     public void syncCategories() {
         List<NhanhCategoryDTO> categories = fetchAllCategories();
 

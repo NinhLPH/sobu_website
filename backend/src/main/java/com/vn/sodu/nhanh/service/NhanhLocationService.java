@@ -9,6 +9,8 @@ import com.vn.sodu.nhanh.dto.LocationWardDTO;
 import com.vn.sodu.nhanh.dto.NhanhLocationItemDTO;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 
@@ -27,8 +29,8 @@ public class NhanhLocationService {
     private static final String TYPE_CITY = "CITY";
     private static final String TYPE_DISTRICT = "DISTRICT";
     private static final String TYPE_WARD = "WARD";
-    private static final ParameterizedTypeReference<NhanhResponse<List<NhanhLocationItemDTO>>> LOCATION_RESPONSE_TYPE =
-            new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<NhanhResponse<List<NhanhLocationItemDTO>>> LOCATION_RESPONSE_TYPE = new ParameterizedTypeReference<>() {
+    };
 
     private final NhanhClient nhanhClient;
     private final NhanhService nhanhService;
@@ -39,6 +41,7 @@ public class NhanhLocationService {
 
     private volatile CachedLocationData cache;
 
+    @Autowired
     public NhanhLocationService(
             NhanhClient nhanhClient,
             NhanhService nhanhService,
@@ -83,8 +86,7 @@ public class NhanhLocationService {
                             "Nhanh location cache refresh failed. Returning stale cache cachedAt={}, expiresAt={}",
                             current.cachedAt(),
                             current.expiresAt(),
-                            ex
-                    );
+                            ex);
                     return locationMapper.withStale(current.data(), true);
                 }
 
@@ -110,7 +112,8 @@ public class NhanhLocationService {
         int districtCount = 0;
         int wardCount = 0;
 
-        // TODO: Future optimization: Parallel district/ward fetching using bounded ExecutorService if refresh latency becomes an issue.
+        // TODO: Future optimization: Parallel district/ward fetching using bounded
+        // ExecutorService if refresh latency becomes an issue.
         for (NhanhLocationItemDTO cityItem : cityItems) {
             if (!hasId(cityItem)) {
                 continue;
@@ -149,8 +152,7 @@ public class NhanhLocationService {
                 districtCount,
                 wardCount,
                 cachedAt,
-                expiresAt
-        );
+                expiresAt);
         return refreshed;
     }
 
@@ -166,8 +168,7 @@ public class NhanhLocationService {
                 nhanhProperties.getLocation().getPath(),
                 accessToken,
                 Map.of("filters", filters),
-                LOCATION_RESPONSE_TYPE
-        );
+                LOCATION_RESPONSE_TYPE);
 
         if (response == null) {
             throw new ExternalServiceException("Nhanh location response is null");
@@ -195,7 +196,6 @@ public class NhanhLocationService {
     public record CachedLocationData(
             LocationTreeResponse data,
             Instant cachedAt,
-            Instant expiresAt
-    ) {
+            Instant expiresAt) {
     }
 }

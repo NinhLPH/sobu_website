@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.scheduling.annotation.Scheduled;
 import com.vn.sodu.nhanh.service.NhanhClient;
 
 @Service
@@ -28,6 +29,7 @@ public class BrandSyncService {
 
     private static final String BRAND_LIST_PATH = "/v3.0/product/brand";
 
+    @Scheduled(cron = "${nhanh.sync.cron:0 0 */12 * * *}")
     public synchronized void syncBrands() {
         List<NhanhBrandDTO> brands = fetchAllBrands();
 
