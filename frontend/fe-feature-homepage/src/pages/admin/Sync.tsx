@@ -3,6 +3,7 @@ import {useSearchParams} from 'react-router-dom';
 import {RefreshCw, CheckCircle2, AlertCircle, Loader2, Package, ListTree, Award} from 'lucide-react';
 import {AdminSyncService} from '../../service/sync.service';
 import {ToastService} from '../../service/toast.service';
+import {useProductStore} from '../../store/useProductStore';
 
 export default function AdminSync() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -10,11 +11,19 @@ export default function AdminSync() {
     const [oauthStatus, setOauthStatus] = useState<'success' | 'error' | null>(null);
     const [oauthErrorMsg, setOauthErrorMsg] = useState<string | null>(null);
 
-    const [isSyncing, setIsSyncing] = useState<{ [key: string]: boolean }>({
-        products: false,
-        categories: false,
-        brands: false
-    });
+    const {
+        isSyncingProducts,
+        isSyncingCategories,
+        isSyncingBrands,
+        triggerSyncProducts,
+        triggerSyncCategories,
+        triggerSyncBrands
+    } = useProductStore();
+    const isSyncing = {
+        products: isSyncingProducts,
+        categories: isSyncingCategories,
+        brands: isSyncingBrands
+    };
 
     const [syncMessages, setSyncMessages] = useState<{ [key: string]: string | null }>({
         products: null,
@@ -74,26 +83,23 @@ export default function AdminSync() {
     };
 
     const handleSync = async (type: 'products' | 'categories' | 'brands') => {
-        setIsSyncing(prev => ({...prev, [type]: true}));
         setSyncMessages(prev => ({...prev, [type]: null}));
         setSyncErrors(prev => ({...prev, [type]: null}));
 
         try {
             let res: { message: string };
             if (type === 'products') {
-                res = await AdminSyncService.syncProducts();
+                res = await triggerSyncProducts();
             } else if (type === 'categories') {
-                res = await AdminSyncService.syncCategories();
+                res = await triggerSyncCategories();
             } else {
-                res = await AdminSyncService.syncBrands();
+                res = await triggerSyncBrands();
             }
 
             setSyncMessages(prev => ({...prev, [type]: res?.message || 'Đồng bộ dữ liệu thành công!'}));
         } catch (err: any) {
             const errorMsg = 'Có lỗi xảy ra trong quá trình đồng bộ ERP!';
             setSyncErrors(prev => ({...prev, [type]: errorMsg}));
-        } finally {
-            setIsSyncing(prev => ({...prev, [type]: false}));
         }
     };
 

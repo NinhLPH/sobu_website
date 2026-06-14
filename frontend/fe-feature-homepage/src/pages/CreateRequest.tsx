@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { ChevronRight, Plus, Trash2, Upload, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronRight, Plus, Trash2, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
+import ImageUploader from '../components/common/ImageUploader';
 import { useRequestStore } from '../store/useRequestStore';
-import { FileService } from '../service/file.service';
 import { RequestType } from '../enum/union-types';
+import { ToastService } from '../service/toast.service';
+import { createIdempotencyKey } from '../utils/idempotency';
 
 export default function CreateRequest() {
-    const navigate = useNavigate();
     const { createRequestAction, isSubmitting, error, clearError } = useRequestStore();
 
     // Form fields
@@ -20,10 +21,11 @@ export default function CreateRequest() {
     ]);
 
     // Attachments
-    const [attachments, setAttachments] = useState<string[]>([]);
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
     const [uploadingFiles, setUploadingFiles] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [successCreated, setSuccessCreated] = useState(false);
+    const idempotencyKeyRef = useRef(createIdempotencyKey());
 
     const handleAddItem = () => {
         setItems(prev => [...prev, { name: '', quantity: 1, note: '' }]);
@@ -41,34 +43,6 @@ export default function CreateRequest() {
             }
             return item;
         }));
-    };
-
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-
-        setUploadingFiles(true);
-        setUploadError(null);
-        clearError();
-
-        try {
-            const uploadedUrls: string[] = [];
-            for (let i = 0; i < files.length; i++) {
-                const res = await FileService.uploadFile(files[i], 'requests');
-                if (res && res.url) {
-                    uploadedUrls.push(res.url);
-                }
-            }
-            setAttachments(prev => [...prev, ...uploadedUrls]);
-        } catch (err: any) {
-            setUploadError('Tải lên tệp tin thất bại! Vui lòng chọn tệp nhỏ hơn hoặc thử lại.');
-        } finally {
-            setUploadingFiles(false);
-        }
-    };
-
-    const handleRemoveAttachment = (index: number) => {
-        setAttachments(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -91,22 +65,29 @@ export default function CreateRequest() {
         const payload = {
             customerPhone: phone,
             type,
-            customRequirements: requirements ? { note: requirements } : undefined,
+            customRequirements: requirements.trim() || undefined,
             items: validItems.map(item => ({
-                name: item.name,
+                name: item.name.trim(),
                 quantity: item.quantity,
-                note: item.note
+                note: item.note.trim() || undefined
             })),
-            attachments
+            uploadedImageUrls: uploadedImages
         };
 
         try {
-            await createRequestAction(payload);
+            await createRequestAction(payload, idempotencyKeyRef.current);
             setSuccessCreated(true);
+            ToastService.success('Gửi yêu cầu thành công.');
         } catch (err) {
-            console.error('Create request error:', err);
+            // The store exposes the backend error below and through a toast.
         }
     };
+
+    React.useEffect(() => {
+        if (error) {
+            ToastService.error(error);
+        }
+    }, [error]);
 
     if (successCreated) {
         return (
@@ -132,7 +113,8 @@ export default function CreateRequest() {
                                 setPhone('');
                                 setRequirements('');
                                 setItems([{ name: '', quantity: 1, note: '' }]);
-                                setAttachments([]);
+                                setUploadedImages([]);
+                                idempotencyKeyRef.current = createIdempotencyKey();
                             }}
                             className="flex-1 py-3 bg-surface-container text-on-surface border border-outline-variant/30 rounded-2xl text-xs font-black uppercase tracking-widest text-center hover:bg-surface-container-high transition-colors"
                         >
@@ -314,44 +296,13 @@ export default function CreateRequest() {
                             Hình ảnh đính kèm minh họa
                         </label>
                         
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                            {attachments.map((url, idx) => (
-                                <div key={idx} className="relative aspect-square bg-surface-container rounded-xl overflow-hidden group border border-outline-variant/20 p-1">
-                                    <img src={url} alt={`Upload ${idx}`} className="w-full h-full object-contain rounded-lg" />
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRemoveAttachment(idx)}
-                                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 hover:bg-error text-white flex items-center justify-center transition-colors shadow-md z-10"
-                                        title="Xóa ảnh"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            ))}
-
-                            {/* Upload Button */}
-                            <label className="aspect-square bg-surface-container border-2 border-dashed border-outline-variant/30 hover:border-primary/50 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-surface-container-high relative">
-                                <input
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={handleFileUpload}
-                                    disabled={isSubmitting || uploadingFiles}
-                                    className="hidden"
-                                />
-                                {uploadingFiles ? (
-                                    <>
-                                        <Loader2 className="w-6 h-6 text-primary animate-spin mb-1.5" />
-                                        <span className="text-[10px] font-bold text-outline">Đang tải...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Upload className="w-6 h-6 text-outline/80 mb-1.5" />
-                                        <span className="text-[10px] font-bold text-outline">Chọn tệp hình ảnh</span>
-                                    </>
-                                )}
-                            </label>
-                        </div>
+                        <ImageUploader
+                            uploadedUrls={uploadedImages}
+                            onChange={setUploadedImages}
+                            disabled={isSubmitting}
+                            subDirectory="requests"
+                            onUploadingChange={setUploadingFiles}
+                        />
                     </div>
                 </div>
 

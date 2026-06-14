@@ -1,5 +1,6 @@
 export interface ProductModel {
     id: string;
+    nhanhProductId?: string;
     name: string;
     price: number;
     originalPrice?: number;
@@ -38,6 +39,7 @@ export interface ProductUnitDTO {
 
 export interface ProductListItemDTO {
     id: number;
+    nhanhProductId?: string | number;
     name: string;
     code: string;
     price: number;
@@ -51,6 +53,7 @@ export interface ProductListItemDTO {
 
 export interface ProductDetailDTO {
     id: number;
+    nhanhProductId?: string | number;
     name: string;
     code: string;
     description: string;
@@ -71,6 +74,7 @@ export interface ProductDetailDTO {
 export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel => {
     return {
         id: String(dto.id),
+        nhanhProductId: String(dto.nhanhProductId ?? dto.id),
         name: dto.name,
         price: dto.price,
         originalPrice: dto.oldPrice,
@@ -90,6 +94,7 @@ export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel
 export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => {
     return {
         id: String(dto.id),
+        nhanhProductId: String(dto.nhanhProductId ?? dto.id),
         name: dto.name,
         price: dto.price,
         originalPrice: dto.oldPrice,

@@ -28,6 +28,7 @@ export default function LoginPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     const [registerSuccess, setRegisterSuccess] = useState(false);
+    const [registerMessage, setRegisterMessage] = useState('');
     const [localError, setLocalError] = useState<string | null>(null);
 
     // Nếu đã đăng nhập thì đá về trang chủ
@@ -52,11 +53,10 @@ export default function LoginPage() {
         }
 
         try {
-            await loginAction(loginEmail, loginPassword);
+            await loginAction(loginEmail.trim(), loginPassword);
             navigate('/');
-        } catch (err: any) {
-            const msg = 'Tài khoản hoặc mật khẩu không chính xác!';
-            setLocalError(msg);
+        } catch {
+            // The store exposes the backend message through `error`.
         }
     };
 
@@ -76,17 +76,17 @@ export default function LoginPage() {
         }
 
         try {
-            await registerAction({
-                email: regEmail,
+            const account = await registerAction({
+                email: regEmail.trim(),
                 password: regPassword,
-                fullName: regName,
-                phone: regPhone
+                fullName: regName.trim(),
+                phone: regPhone.trim()
             });
 
+            setRegisterMessage(account.message);
             setRegisterSuccess(true);
-        } catch (err: any) {
-            const msg = 'Đăng ký thất bại. Email hoặc Số điện thoại có thể đã tồn tại!';
-            setLocalError(msg);
+        } catch {
+            // The store exposes the backend message through `error`.
         }
     };
 
@@ -151,7 +151,7 @@ export default function LoginPage() {
                             </div>
                             <h3 className="text-lg font-black text-on-surface mb-2">Đăng ký thành công!</h3>
                             <p className="text-sm text-outline mb-4 font-medium">
-                                Vui lòng kiểm tra email của bạn để kích hoạt tài khoản trước khi đăng nhập.
+                                {registerMessage || 'Vui lòng kiểm tra email của bạn để kích hoạt tài khoản trước khi đăng nhập.'}
                             </p>
                             <button
                                 onClick={() => {
@@ -161,6 +161,12 @@ export default function LoginPage() {
                                 className="px-6 py-2.5 bg-primary text-white rounded-xl text-xs font-black uppercase shadow-md"
                             >
                                 Đăng nhập ngay
+                            </button>
+                            <button
+                                onClick={() => navigate(`/verify-email?email=${encodeURIComponent(regEmail)}`)}
+                                className="mt-3 px-6 py-2.5 bg-surface-container text-on-surface rounded-xl text-xs font-black uppercase"
+                            >
+                                Gửi lại email kích hoạt
                             </button>
                         </div>
                     ) : activeTab === 'login' ? (
@@ -172,7 +178,11 @@ export default function LoginPage() {
                                 <div className="relative">
                                     <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-outline/60"/>
                                     <input type="email" value={loginEmail}
-                                           onChange={(e) => setLoginEmail(e.target.value)} disabled={isLoading}
+                                           onChange={(e) => {
+                                               setLoginEmail(e.target.value);
+                                               clearError();
+                                               setLocalError(null);
+                                           }} disabled={isLoading}
                                            className="w-full bg-surface-container rounded-2xl pl-11 pr-4 py-3.5 text-xs font-semibold focus:ring-2 outline-none text-on-surface"
                                            required/>
                                 </div>
@@ -183,7 +193,11 @@ export default function LoginPage() {
                                 <div className="relative">
                                     <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-outline/60"/>
                                     <input type={showPassword ? "text" : "password"} value={loginPassword}
-                                           onChange={(e) => setLoginPassword(e.target.value)} disabled={isLoading}
+                                           onChange={(e) => {
+                                               setLoginPassword(e.target.value);
+                                               clearError();
+                                               setLocalError(null);
+                                           }} disabled={isLoading}
                                            className="w-full bg-surface-container rounded-2xl pl-11 pr-11 py-3.5 text-xs font-semibold focus:ring-2 outline-none text-on-surface"
                                            required/>
                                     <button type="button" onClick={() => setShowPassword(!showPassword)}

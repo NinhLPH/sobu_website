@@ -1,13 +1,13 @@
-import {RequestStatus, RequestType} from "../enum/union-types";
+import { RequestStatus, RequestType } from '../enum/union-types';
 
 export interface RequestItemResponseDto {
     id: number;
-    name: string;
     nhanhProductId?: string;
+    name: string;
     note?: string;
+    metadataJson?: string;
     price: number;
     quantity: number;
-    metadataJson?: any;
 }
 
 export interface RequestAttachmentDto {
@@ -29,26 +29,30 @@ export interface RequestResponseDto {
     status: RequestStatus;
     totalAmount: number;
     depositAmount: number;
-    customRequirements?: any; // JSON Map
-    nhanhOrderId?: string;
-    nhanhOrderCode?: string;
+    customRequirements?: string | null;
+    nhanhOrderId?: string | null;
+    nhanhOrderCode?: string | null;
     items: RequestItemResponseDto[];
     attachments: RequestAttachmentDto[];
     createdAt: string;
     updatedAt: string;
 }
 
+export interface RequestItemDto {
+    nhanhProductId?: string;
+    name: string;
+    note?: string;
+    price?: number;
+    quantity: number;
+    metadataJson?: string;
+}
+
 export interface CreateRequestDto {
     customerPhone: string;
     type: RequestType;
-    customRequirements?: any;
-    items: {
-        name: string;
-        quantity: number;
-        price?: number;
-        note?: string;
-    }[];
-    attachments?: string[];
+    customRequirements?: string;
+    uploadedImageUrls?: string[];
+    items: RequestItemDto[];
 }
 
 export interface ProcessRequestDto {
@@ -57,17 +61,12 @@ export interface ProcessRequestDto {
     depositAmount?: number;
 }
 
-export interface UpdateRequestItemDto {
-    name?: string;
-    quantity?: number;
-    price?: number;
-    note?: string;
-}
-
 export interface UpdateRequestDto {
     customerPhone?: string;
     type?: RequestType;
-    customRequirements?: any;
-    items?: UpdateRequestItemDto[];
-    attachments?: string[] | number[];
+    customRequirements?: string;
+    totalAmount?: number;
+    depositAmount?: number;
+    uploadedImageUrls?: string[];
+    items?: RequestItemDto[];
 }

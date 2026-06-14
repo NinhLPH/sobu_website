@@ -1,37 +1,73 @@
-import apiClient from "../api/api-client";
-import {PageResponse} from "../interface/api-response";
-import {ProcessRequestDto, RequestResponseDto, UpdateRequestDto} from "../interface/customer-request.model";
-import {OrderResponseDto, OrderSyncResultDto} from "../interface/order.model";
-
+import apiClient from '../api/api-client';
+import {ApiResponseDTO, PageResponse} from '../interface/api-response';
+import {
+    ProcessRequestDto,
+    RequestResponseDto,
+    UpdateRequestDto
+} from '../interface/customer-request.model';
+import {
+    AdminOrderQueryParams,
+    OrderPaymentResponseDto,
+    OrderResponseDto,
+    OrderSyncResultDto
+} from '../interface/order.model';
 
 export const AdminWorkflowService = {
-    // --- ADMIN REQUESTS ---
-    getRequests: (params?: any): Promise<PageResponse<RequestResponseDto>> => {
-        return apiClient.get('/api/admin/requests', { params });
+    getAdminRequests: (
+        params?: Record<string, unknown>
+    ): Promise<ApiResponseDTO<PageResponse<RequestResponseDto>>> => {
+        return apiClient.get('/api/admin/requests', {params});
     },
 
-    getRequestDetail: (requestId: string | number): Promise<RequestResponseDto> => {
+    getAdminRequestDetail: (
+        requestId: string | number
+    ): Promise<ApiResponseDTO<RequestResponseDto>> => {
         return apiClient.get(`/api/admin/requests/${requestId}`);
     },
 
-    updateRequest: (requestId: string | number, data: UpdateRequestDto): Promise<RequestResponseDto> => {
+    updateAdminRequest: (
+        requestId: string | number,
+        data: UpdateRequestDto
+    ): Promise<ApiResponseDTO<RequestResponseDto>> => {
         return apiClient.put(`/api/admin/requests/${requestId}`, data);
     },
 
-    processRequest: (requestId: string | number, data: ProcessRequestDto): Promise<RequestResponseDto> => {
+    processRequest: (
+        requestId: string | number,
+        data: ProcessRequestDto
+    ): Promise<ApiResponseDTO<RequestResponseDto>> => {
         return apiClient.post(`/api/admin/requests/${requestId}/process`, data);
     },
 
-    // --- ADMIN ORDERS ---
-    getOrders: (params?: any): Promise<PageResponse<OrderResponseDto>> => {
-        return apiClient.get('/api/admin/orders', { params });
+    getAdminOrders: (
+        params?: AdminOrderQueryParams
+    ): Promise<ApiResponseDTO<PageResponse<OrderResponseDto>>> => {
+        return apiClient.get('/api/admin/orders', {params});
     },
 
-    getOrderDetail: (orderId: string | number): Promise<OrderResponseDto> => {
+    getAdminOrderDetail: (
+        orderId: string | number
+    ): Promise<ApiResponseDTO<OrderResponseDto>> => {
         return apiClient.get(`/api/admin/orders/${orderId}`);
     },
 
-    retryOrderSyncNhanh: (orderId: string | number): Promise<OrderSyncResultDto> => {
+    retryOrderSync: (
+        orderId: string | number
+    ): Promise<ApiResponseDTO<OrderSyncResultDto>> => {
         return apiClient.post(`/api/admin/orders/${orderId}/sync/retry`);
     },
+
+    createPreorderFinalPayment: (
+        orderId: string | number
+    ): Promise<ApiResponseDTO<OrderPaymentResponseDto>> => {
+        return apiClient.post(`/v1/api/admin/payments/orders/${orderId}/final`);
+    },
+
+    confirmMockPayment: (
+        paymentCode: string
+    ): Promise<ApiResponseDTO<OrderPaymentResponseDto>> => {
+        return apiClient.post(
+            `/v1/api/admin/payments/${encodeURIComponent(paymentCode)}/mock/confirm`
+        );
+    }
 };

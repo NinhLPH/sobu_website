@@ -1,6 +1,5 @@
 import {ProductModel} from "../interface/product.model";
 import {CategoryModel} from "../interface/category.model";
-import {Order, OrderItem} from "../interface/order";
 import {ServiceRequest} from "../interface/service-request";
 
 export const mockCategories: CategoryModel[] = [
@@ -161,7 +160,7 @@ export const megaMenuBrands = [
     'Ferrari', 'Lamborghini', 'Porsche', 'McLaren', 'Bugatti', 'Khác...'
 ];
 
-export const mockOrders: Order[] = [
+export const mockOrders = [
     {
         id: 'ORD-001',
         customerName: 'Nguyễn Văn A',

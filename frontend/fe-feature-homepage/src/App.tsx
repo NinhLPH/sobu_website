@@ -1,6 +1,7 @@
 import {BrowserRouter as Router, Routes, Route, Navigate} from 'react-router-dom';
 
 import LoginPage from './pages/LoginPage';
+import ActivateAccount from "./pages/ActivateAccount";
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import Cart from './pages/Cart';
 import Header from "./components/common/Header";
@@ -25,6 +26,7 @@ import RequestDetail from "./pages/RequestDetail";
 import AdminSync from "./pages/admin/Sync";
 import AdminNhanhCallback from "./pages/admin/NhanhCallback";
 import OrderTracking from "./pages/OrderTracking";
+import PaymentResult from "./pages/PaymentResult";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Toast from "./components/common/Toast";
 
@@ -36,6 +38,7 @@ export default function App() {
                 <Routes>
                     <Route path="/" element={<HomePage/>}/>
                     <Route path="/login" element={<LoginPage/>}/>
+                    <Route path="/activate" element={<ActivateAccount/>}/>
                     <Route path="/verify-email" element={<VerifyEmailPage/>}/>
                     <Route path="/products" element={<ProductList/>}/>
                     <Route path="/product/:id" element={<ProductDetail/>}/>
@@ -47,9 +50,12 @@ export default function App() {
 
                     {/* CUSTOMER ORDER TRACKING */}
                     <Route path="/tracking" element={<OrderTracking/>}/>
+                    <Route path="/payment-result" element={<PaymentResult/>}/>
+                    <Route path="/payment/return" element={<PaymentResult/>}/>
+                    <Route path="/payment/cancel" element={<PaymentResult/>}/>
 
                     {/* CUSTOMER LOGGED IN PRIVATE ROUTES */}
-                    <Route element={<ProtectedRoute allowedRoles={['USER', 'ADMIN']} />}>
+                    <Route element={<ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']} />}>
                         <Route path="/cart" element={<Cart/>}/>
                         <Route path="/requests" element={<MyRequests/>}/>
                         <Route path="/requests/new" element={<CreateRequest/>}/>
@@ -57,7 +63,7 @@ export default function App() {
                     </Route>
 
                     {/* ADMIN WORKFLOWS */}
-                    <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+                    <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'STAFF']} />}>
                         <Route path="/admin" element={<AdminLayout/>}>
                             <Route index element={<Navigate to="/admin/products" replace/>}/>
                             <Route path="products" element={<AdminProducts/>}/>

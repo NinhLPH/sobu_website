@@ -1,15 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, ArrowLeft, Loader2, Save, Trash2, Plus, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Loader2, Save, Trash2, Plus, CheckCircle2, AlertCircle, PackageCheck } from 'lucide-react';
+import ImageUploader from '../components/common/ImageUploader';
 import { useRequestStore } from '../store/useRequestStore';
-import { FileService } from '../service/file.service';
 import { formatCurrency } from '../util/format';
 import { RequestType } from '../enum/union-types';
+import { ToastService } from '../service/toast.service';
 
 export default function RequestDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { currentRequestDetail, getRequestDetail, updateRequestAction, isLoading, isSubmitting, error, clearError } = useRequestStore();
+    const {
+        currentRequestDetail,
+        getRequestDetail,
+        updateRequestAction,
+        isLoading,
+        isSubmitting,
+        error,
+        clearError,
+        clearCurrentDetail
+    } = useRequestStore();
 
     // Local form states (synced from currentRequestDetail)
     const [phone, setPhone] = useState('');
@@ -27,14 +37,17 @@ export default function RequestDetail() {
         if (id) {
             getRequestDetail(id, 'user');
         }
-    }, [id, getRequestDetail]);
+        return () => {
+            clearCurrentDetail();
+        };
+    }, [id, getRequestDetail, clearCurrentDetail]);
 
     // Populate local states when API detail resolves
     useEffect(() => {
         if (currentRequestDetail) {
             setPhone(currentRequestDetail.customerPhone || '');
             setType(currentRequestDetail.type || 'NORMAL');
-            setRequirements(currentRequestDetail.customRequirements?.note || '');
+            setRequirements(currentRequestDetail.customRequirements || '');
             setItems(currentRequestDetail.items?.map(item => ({
                 name: item.name,
                 quantity: item.quantity,
@@ -45,6 +58,12 @@ export default function RequestDetail() {
             setLocalError(null);
         }
     }, [currentRequestDetail]);
+
+    useEffect(() => {
+        if (error) {
+            ToastService.error(error);
+        }
+    }, [error]);
 
     if (isLoading) {
         return (
@@ -68,7 +87,9 @@ export default function RequestDetail() {
         );
     }
 
-    const isPending = currentRequestDetail.status === 'PENDING';
+    const isEditable = !['APPROVED', 'REJECTED', 'CANCELLED'].includes(
+        currentRequestDetail.status
+    );
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -108,17 +129,17 @@ export default function RequestDetail() {
 
     // Item list handlers (only allowed if pending)
     const handleAddItem = () => {
-        if (!isPending) return;
+        if (!isEditable) return;
         setItems(prev => [...prev, { name: '', quantity: 1, note: '' }]);
     };
 
     const handleRemoveItem = (index: number) => {
-        if (!isPending || items.length === 1) return;
+        if (!isEditable || items.length === 1) return;
         setItems(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleItemChange = (index: number, field: string, value: any) => {
-        if (!isPending) return;
+        if (!isEditable) return;
         setItems(prev => prev.map((item, i) => {
             if (i === index) {
                 return { ...item, [field]: value };
@@ -127,39 +148,9 @@ export default function RequestDetail() {
         }));
     };
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!isPending) return;
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-
-        setUploadingFiles(true);
-        setLocalError(null);
-        setSuccessMessage(null);
-
-        try {
-            const uploadedUrls: string[] = [];
-            for (let i = 0; i < files.length; i++) {
-                const res = await FileService.uploadFile(files[i], 'requests');
-                if (res && res.url) {
-                    uploadedUrls.push(res.url);
-                }
-            }
-            setAttachments(prev => [...prev, ...uploadedUrls]);
-        } catch (err: any) {
-            setLocalError('Tải tệp hình ảnh lên thất bại!');
-        } finally {
-            setUploadingFiles(false);
-        }
-    };
-
-    const handleRemoveAttachment = (index: number) => {
-        if (!isPending) return;
-        setAttachments(prev => prev.filter((_, i) => i !== index));
-    };
-
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!isPending || !id) return;
+        if (!isEditable || !id) return;
 
         clearError();
         setLocalError(null);
@@ -179,20 +170,21 @@ export default function RequestDetail() {
         const payload = {
             customerPhone: phone,
             type,
-            customRequirements: requirements ? { note: requirements } : null,
+            customRequirements: requirements.trim(),
             items: validItems.map(item => ({
-                name: item.name,
+                name: item.name.trim(),
                 quantity: item.quantity,
-                note: item.note
+                note: item.note.trim() || undefined
             })),
-            attachments
+            uploadedImageUrls: attachments
         };
 
         try {
             await updateRequestAction(id, payload);
             setSuccessMessage('Lưu thông tin thay đổi yêu cầu thành công!');
+            ToastService.success('Cập nhật yêu cầu thành công.');
         } catch (err) {
-            console.error('Update request error:', err);
+            // The store exposes conflict and validation messages to the UI.
         }
     };
 
@@ -246,11 +238,26 @@ export default function RequestDetail() {
                 </div>
             )}
 
+            {currentRequestDetail.status === 'APPROVED' &&
+                (currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId) && (
+                <div className="mb-6 flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-green-900">
+                    <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-green-700">
+                            Yêu cầu đã được duyệt thành đơn hàng
+                        </p>
+                        <p className="mt-1 text-sm font-bold">
+                            Mã đơn: {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Read-only / Status lock notice */}
-            {!isPending && (
+            {!isEditable && (
                 <div className="mb-6 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-medium leading-relaxed">
-                    <span className="font-black text-indigo-700 uppercase tracking-wide block mb-1">🔒 Trạng thái yêu cầu đã được khóa:</span>
-                    Yêu cầu hiện đang ở trạng thái **{getStatusText(currentRequestDetail.status)}** và đang được ban quản lý xử lý.
+                    <span className="font-black text-indigo-700 uppercase tracking-wide block mb-1">Trạng thái yêu cầu đã được khóa:</span>
+                    Yêu cầu hiện đang ở trạng thái <strong>{getStatusText(currentRequestDetail.status)}</strong> và đang được ban quản lý xử lý.
                     Bạn không thể chỉnh sửa thông tin yêu cầu lúc này.
                 </div>
             )}
@@ -270,7 +277,7 @@ export default function RequestDetail() {
                                     type="tel"
                                     value={phone}
                                     onChange={(e) => setPhone(e.target.value)}
-                                    disabled={!isPending || isSubmitting}
+                                    disabled={!isEditable || isSubmitting}
                                     className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
                                     required
                                 />
@@ -280,7 +287,7 @@ export default function RequestDetail() {
                                 <select
                                     value={type}
                                     onChange={(e) => setType(e.target.value as RequestType)}
-                                    disabled={!isPending || isSubmitting}
+                                    disabled={!isEditable || isSubmitting}
                                     className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
                                 >
                                     <option value="NORMAL">Tìm hàng thông thường (Normal)</option>
@@ -296,7 +303,7 @@ export default function RequestDetail() {
                     <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 space-y-4">
                         <div className="flex justify-between items-center border-b border-surface-container/80 pb-3">
                             <h2 className="text-xs font-black text-on-surface uppercase tracking-wider">2. Danh sách sản phẩm mong muốn</h2>
-                            {isPending && (
+                            {isEditable && (
                                 <button
                                     type="button"
                                     onClick={handleAddItem}
@@ -318,7 +325,7 @@ export default function RequestDetail() {
                                                 type="text"
                                                 value={item.name}
                                                 onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                                                disabled={!isPending || isSubmitting}
+                                                disabled={!isEditable || isSubmitting}
                                                 className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
                                                 required
                                             />
@@ -330,7 +337,7 @@ export default function RequestDetail() {
                                                 min="1"
                                                 value={item.quantity}
                                                 onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
-                                                disabled={!isPending || isSubmitting}
+                                                disabled={!isEditable || isSubmitting}
                                                 className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
                                                 required
                                             />
@@ -341,12 +348,12 @@ export default function RequestDetail() {
                                                 type="text"
                                                 value={item.note}
                                                 onChange={(e) => handleItemChange(index, 'note', e.target.value)}
-                                                disabled={!isPending || isSubmitting}
+                                                disabled={!isEditable || isSubmitting}
                                                 className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
                                             />
                                         </div>
                                     </div>
-                                    {isPending && items.length > 1 && (
+                                    {isEditable && items.length > 1 && (
                                         <button
                                             type="button"
                                             onClick={() => handleRemoveItem(index)}
@@ -370,53 +377,24 @@ export default function RequestDetail() {
                             <textarea
                                 value={requirements}
                                 onChange={(e) => setRequirements(e.target.value)}
-                                disabled={!isPending || isSubmitting}
+                                disabled={!isEditable || isSubmitting}
                                 className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed min-h-[120px]"
                             />
                         </div>
 
                         <div>
                             <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">Hình ảnh đính kèm minh họa</label>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                {attachments.map((url, idx) => (
-                                    <div key={idx} className="relative aspect-square bg-surface-container rounded-xl overflow-hidden border border-outline-variant/20 p-1 group">
-                                        <img src={url} alt={`Attachment ${idx}`} className="w-full h-full object-contain rounded-lg" />
-                                        {isPending && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveAttachment(idx)}
-                                                className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 hover:bg-error text-white flex items-center justify-center transition-colors shadow-md z-10"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-
-                                {isPending && (
-                                    <label className="aspect-square bg-surface-container border-2 border-dashed border-outline-variant/30 hover:border-primary/50 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-surface-container-high relative">
-                                        <input
-                                            type="file"
-                                            multiple
-                                            accept="image/*"
-                                            onChange={handleFileUpload}
-                                            disabled={isSubmitting || uploadingFiles}
-                                            className="hidden"
-                                        />
-                                        {uploadingFiles ? (
-                                            <>
-                                                <Loader2 className="w-6 h-6 text-primary animate-spin mb-1.5" />
-                                                <span className="text-[10px] font-bold text-outline">Đang tải...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Upload className="w-6 h-6 text-outline/80 mb-1.5" />
-                                                <span className="text-[10px] font-bold text-outline">Chọn tệp ảnh</span>
-                                            </>
-                                        )}
-                                    </label>
-                                )}
-                            </div>
+                            <ImageUploader
+                                uploadedUrls={attachments}
+                                onChange={(urls) => {
+                                    setAttachments(urls);
+                                    setLocalError(null);
+                                    setSuccessMessage(null);
+                                }}
+                                disabled={!isEditable || isSubmitting}
+                                subDirectory="requests"
+                                onUploadingChange={setUploadingFiles}
+                            />
                         </div>
                     </div>
                 </div>
@@ -443,16 +421,18 @@ export default function RequestDetail() {
                                 <span className="text-outline">Loại yêu cầu gốc:</span>
                                 <span className="text-on-surface font-black uppercase">{getTypeLabel(currentRequestDetail.type)}</span>
                             </div>
-                            {currentRequestDetail.nhanhOrderCode && (
+                            {(currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId) && (
                                 <div className="flex justify-between py-2 border-b border-surface-container-low font-bold">
                                     <span className="text-outline">Mã Đơn hàng Nhanh:</span>
-                                    <span className="text-primary font-black">{currentRequestDetail.nhanhOrderCode}</span>
+                                    <span className="text-primary font-black">
+                                        {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
+                                    </span>
                                 </div>
                             )}
                         </div>
 
                         {/* Save Action if pending */}
-                        {isPending ? (
+                        {isEditable ? (
                             <button
                                 type="submit"
                                 disabled={isSubmitting || uploadingFiles}
@@ -467,7 +447,7 @@ export default function RequestDetail() {
                             </button>
                         ) : (
                             <div className="p-4 bg-surface-container rounded-2xl text-[10px] text-outline font-bold leading-relaxed text-center uppercase tracking-wider">
-                                🚫 Đã chốt & Khóa cập nhật
+                                Đã chốt và khóa cập nhật
                             </div>
                         )}
                     </div>

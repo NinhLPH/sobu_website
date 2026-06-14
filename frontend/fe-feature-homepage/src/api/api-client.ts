@@ -1,10 +1,14 @@
 import axios from 'axios';
-import { authStorage } from '../utils/auth-storage';
+import {authStorage} from '../utils/auth-storage';
 
-const BASE_URL = 'http://localhost:8081';
+export const BASE_URL = 'http://localhost:8081';
 
 const PUBLIC_ROUTES = [
-    '/api/auth',
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/refresh-token',
+    '/api/auth/resend-activation',
+    '/api/auth/activate',
     '/api/public',
     '/api/v1/public',
     '/api/nhanh'
@@ -14,13 +18,17 @@ const isPublicRoute = (url: string): boolean => {
     return PUBLIC_ROUTES.some(route => url.startsWith(route));
 };
 
-const RAW_RESPONSE_ROUTES = [
-    '/api/public/products',
-    '/api/v1/public/products'
+const WRAPPED_RESPONSE_ROUTES = [
+    '/api/auth',
+    '/api/requests',
+    '/api/orders',
+    '/api/admin/requests',
+    '/api/admin/orders',
+    '/v1/api/admin/payments'
 ];
 
-const isRawResponseRoute = (url: string): boolean => {
-    return RAW_RESPONSE_ROUTES.some(route => url.startsWith(route));
+const isWrappedResponseRoute = (url: string): boolean => {
+    return WRAPPED_RESPONSE_ROUTES.some(route => url.startsWith(route));
 };
 
 const apiClient = axios.create({
@@ -50,7 +58,7 @@ apiClient.interceptors.response.use(
     (response) => {
         const url = response.config.url || '';
 
-        if (isRawResponseRoute(url)) {
+        if (isWrappedResponseRoute(url)) {
             return response.data;
         }
 
@@ -62,19 +70,30 @@ apiClient.interceptors.response.use(
     },
     async (error) => {
         const originalRequest = error.config;
+        if (!originalRequest) {
+            return Promise.reject(error);
+        }
 
-        const isLoginRequest = originalRequest.url?.includes('/login');
-        const isLogoutRequest = originalRequest.url?.includes('/logout');
+        const requestUrl = originalRequest.url || '';
+        const isLoginRequest = requestUrl.includes('/login');
+        const isLogoutRequest = requestUrl.includes('/logout');
+        const isRefreshRequest = requestUrl.includes('/refresh-token');
+        const isPublicRequest = isPublicRoute(requestUrl);
 
         if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
+            if (isPublicRequest) {
+                return Promise.reject(error);
+            }
 
-            if (isLoginRequest) {
+            if (isLoginRequest || isRefreshRequest) {
+                if (isRefreshRequest) {
+                    authStorage.clear();
+                }
                 return Promise.reject(error);
             }
 
             if (isLogoutRequest) {
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('refreshToken');
+                authStorage.clear();
                 window.location.href = '/login';
                 return Promise.reject(error);
             }
@@ -83,10 +102,23 @@ apiClient.interceptors.response.use(
             try {
                 const refreshToken = authStorage.getRefreshToken();
                 // Gọi API refresh token
-                const res = await axios.post(`${BASE_URL}/api/auth/refresh-token`, { refreshToken });
+                const res = await axios.post(`${BASE_URL}/api/auth/refresh-token`, {refreshToken});
 
-                const newAccessToken = res.data.data.accessToken;
-                authStorage.setAccessToken(newAccessToken);
+                const session = res.data.data;
+                const newAccessToken = session.accessToken;
+
+                if (session.account && session.refreshToken) {
+                    authStorage.setSession(
+                        session.accessToken,
+                        session.refreshToken,
+                        session.account
+                    );
+                } else {
+                    authStorage.setAccessToken(session.accessToken);
+                    if (session.refreshToken) {
+                        authStorage.setRefreshToken(session.refreshToken);
+                    }
+                }
 
                 originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
                 return apiClient(originalRequest);

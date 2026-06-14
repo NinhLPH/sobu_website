@@ -1,25 +1,42 @@
 import { useEffect, useState } from 'react';
-import { Search, ShieldAlert, CheckCircle, SlidersHorizontal, Loader2, FileText, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, ShieldAlert, CheckCircle, SlidersHorizontal, Loader2, FileText, CheckCircle2, ChevronLeft, ChevronRight, PackageCheck } from 'lucide-react';
 import { useRequestStore } from '../../store/useRequestStore';
 import { formatCurrency } from '../../util/format';
 import { RequestStatus } from '../../enum/union-types';
+import { ToastService } from '../../service/toast.service';
+import { getPublicImageUrl } from '../../utils/file-url';
+
+const allowedTransitions: Record<RequestStatus, RequestStatus[]> = {
+    PENDING: ['REVIEWING', 'SOURCING', 'REJECTED', 'CANCELLED'],
+    REVIEWING: ['SOURCING', 'WAITING_CUSTOMER', 'APPROVED', 'REJECTED', 'CANCELLED'],
+    SOURCING: ['REVIEWING', 'WAITING_CUSTOMER', 'APPROVED', 'REJECTED', 'CANCELLED'],
+    WAITING_CUSTOMER: ['REVIEWING', 'SOURCING', 'APPROVED', 'REJECTED', 'CANCELLED'],
+    APPROVED: ['CANCELLED'],
+    REJECTED: [],
+    CANCELLED: []
+};
 
 export default function AdminRequests() {
     const { 
         adminRequests, 
+        adminRequestsPage,
         currentRequestDetail, 
         fetchAdminRequests, 
         getRequestDetail, 
         processRequestAction, 
         isLoading, 
         isSubmitting, 
-        clearError 
+        error,
+        clearError,
+        clearCurrentDetail
     } = useRequestStore();
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('ALL');
     const [typeFilter, setTypeFilter] = useState<string>('ALL');
+    const [page, setPage] = useState(0);
 
     // Process Form states (inside Modal)
     const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
@@ -29,8 +46,20 @@ export default function AdminRequests() {
     const [processError, setProcessError] = useState<string | null>(null);
 
     useEffect(() => {
-        fetchAdminRequests();
-    }, [fetchAdminRequests]);
+        fetchAdminRequests({ page, size: 10 });
+    }, [fetchAdminRequests, page]);
+
+    useEffect(() => {
+        return () => {
+            clearCurrentDetail();
+        };
+    }, [clearCurrentDetail]);
+
+    useEffect(() => {
+        if (error) {
+            ToastService.error(error);
+        }
+    }, [error]);
 
     // Handle selecting request detail
     const handleSelectRequest = (id: string | number) => {
@@ -48,8 +77,7 @@ export default function AdminRequests() {
 
         const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
         
-        // Exclude NORMAL request type from the requests flow entirely, as it goes to standard orders
-        const matchesType = typeFilter === 'ALL' ? r.type !== 'NORMAL' : r.type === typeFilter;
+        const matchesType = typeFilter === 'ALL' || r.type === typeFilter;
 
         return matchesSearch && matchesStatus && matchesType;
     });
@@ -92,7 +120,9 @@ export default function AdminRequests() {
 
     const handleOpenProcessModal = () => {
         if (!currentRequestDetail) return;
-        setProcessAction(currentRequestDetail.status);
+        const transitions = allowedTransitions[currentRequestDetail.status];
+        if (transitions.length === 0) return;
+        setProcessAction(transitions[0]);
         setProcessNote('');
         setProcessDeposit(currentRequestDetail.depositAmount > 0 ? currentRequestDetail.depositAmount.toString() : '');
         setProcessError(null);
@@ -106,21 +136,43 @@ export default function AdminRequests() {
         setProcessError(null);
         clearError();
 
-        const depositVal = processDeposit ? parseFloat(processDeposit) : undefined;
+        const requiresDeposit = processAction === 'WAITING_CUSTOMER' || processAction === 'APPROVED';
+        const depositInput = processDeposit.trim();
+
+        if (requiresDeposit && !depositInput) {
+            setProcessError('Vui lòng nhập số tiền cọc cho trạng thái đã chọn.');
+            return;
+        }
+
+        const depositVal = depositInput ? Number(depositInput) : undefined;
+        if (depositVal !== undefined && (!Number.isFinite(depositVal) || depositVal < 0)) {
+            setProcessError('Tiền cọc phải là số lớn hơn hoặc bằng 0.');
+            return;
+        }
 
         try {
-            await processRequestAction(currentRequestDetail.id, {
+            const processedRequest = await processRequestAction(currentRequestDetail.id, {
                 targetStatus: processAction,
-                note: processNote,
-                depositAmount: depositVal
+                note: processNote.trim() || undefined,
+                depositAmount: requiresDeposit ? depositVal : undefined
             });
             setIsProcessModalOpen(false);
-            // Refresh list
-            fetchAdminRequests();
+            ToastService.success(
+                processedRequest.status === 'APPROVED'
+                    ? 'Đã duyệt yêu cầu và tạo đơn hàng.'
+                    : 'Đã cập nhật trạng thái yêu cầu.'
+            );
+            await fetchAdminRequests({ page, size: 10 });
         } catch (err: any) {
-            setProcessError(err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi xử lý yêu cầu!');
+            const message = err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi xử lý yêu cầu!';
+            setProcessError(message);
         }
     };
+
+    const transitions = currentRequestDetail
+        ? allowedTransitions[currentRequestDetail.status]
+        : [];
+    const requiresDeposit = processAction === 'WAITING_CUSTOMER' || processAction === 'APPROVED';
 
     return (
         <div className="pt-6 space-y-6 flex flex-col md:flex-row gap-6 relative">
@@ -173,6 +225,7 @@ export default function AdminRequests() {
                             className="bg-surface-container rounded-lg px-3 py-1.5 text-xs font-bold text-on-surface cursor-pointer outline-none border-none"
                         >
                             <option value="ALL">Tất cả loại</option>
+                            <option value="NORMAL">Thông thường (NORMAL)</option>
                             <option value="PREORDER">Pre-order (PREORDER)</option>
                             <option value="FINDING">Tìm hàng (FINDING)</option>
                             <option value="CUSTOM">Ráp độ custom (CUSTOM)</option>
@@ -180,8 +233,14 @@ export default function AdminRequests() {
                     </div>
                 </div>
 
+                {error && (
+                    <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">
+                        {error}
+                    </div>
+                )}
+
                 {/* List contents */}
-                {isLoading && !currentRequestDetail ? (
+                {isLoading && adminRequests.length === 0 ? (
                     <div className="py-24 flex flex-col items-center justify-center bg-white rounded-2xl border border-outline-variant/30 shadow-sm">
                         <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
                         <p className="text-outline text-xs font-bold">Đang tải danh sách yêu cầu...</p>
@@ -228,6 +287,34 @@ export default function AdminRequests() {
                                 <p className="text-xs text-outline/80">Vui lòng thử thay đổi từ khóa hoặc bộ lọc trạng thái.</p>
                             </div>
                         )}
+
+                        {adminRequestsPage.totalPages > 1 && (
+                            <div className="flex items-center justify-between rounded-xl border border-outline-variant/30 bg-white px-4 py-3 shadow-sm">
+                                <span className="text-xs font-bold text-outline">
+                                    Trang {adminRequestsPage.pageNumber + 1}/{adminRequestsPage.totalPages}
+                                </span>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((current) => Math.max(0, current - 1))}
+                                        disabled={!adminRequestsPage.hasPrevious || isLoading}
+                                        className="rounded-lg bg-surface-container p-2 text-on-surface disabled:opacity-40"
+                                        aria-label="Trang trước"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPage((current) => current + 1)}
+                                        disabled={!adminRequestsPage.hasNext || isLoading}
+                                        className="rounded-lg bg-surface-container p-2 text-on-surface disabled:opacity-40"
+                                        aria-label="Trang sau"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -267,11 +354,11 @@ export default function AdminRequests() {
                                 </div>
                             </div>
 
-                            {currentRequestDetail.customRequirements?.note && (
+                            {currentRequestDetail.customRequirements && (
                                 <div>
                                     <p className="text-[10px] text-outline font-black uppercase mb-1">Yêu cầu chi tiết từ khách</p>
                                     <p className="p-3 bg-surface-container rounded-xl text-on-surface-variant leading-relaxed">
-                                        {currentRequestDetail.customRequirements.note}
+                                        {currentRequestDetail.customRequirements}
                                     </p>
                                 </div>
                             )}
@@ -284,13 +371,17 @@ export default function AdminRequests() {
                                         {currentRequestDetail.attachments.map((att, idx) => (
                                             <a 
                                                 key={idx} 
-                                                href={att.url} 
+                                                href={getPublicImageUrl(att.url)}
                                                 target="_blank" 
                                                 rel="noopener noreferrer"
                                                 className="aspect-square bg-surface-container rounded-lg overflow-hidden border border-outline-variant/20 p-0.5 flex items-center justify-center hover:scale-105 transition-transform"
                                                 title="Mở ảnh gốc"
                                             >
-                                                <img src={att.url} alt={`Attach ${idx}`} className="w-full h-full object-contain rounded-md" />
+                                                <img
+                                                    src={getPublicImageUrl(att.url)}
+                                                    alt={`Attach ${idx}`}
+                                                    className="w-full h-full object-contain rounded-md"
+                                                />
                                             </a>
                                         ))}
                                     </div>
@@ -313,14 +404,49 @@ export default function AdminRequests() {
                                 </div>
                             </div>
 
+                            {currentRequestDetail.status === 'APPROVED' &&
+                                (currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId) && (
+                                <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-green-900">
+                                    <div className="flex items-start gap-2">
+                                        <PackageCheck className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-wide text-green-700">
+                                                Đã tạo đơn hàng
+                                            </p>
+                                            <p className="mt-1 font-black">
+                                                {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Link
+                                        to="/admin/orders"
+                                        className="mt-3 inline-flex text-[10px] font-black uppercase text-primary hover:underline"
+                                    >
+                                        Xem danh sách đơn hàng
+                                    </Link>
+                                </div>
+                            )}
+
                             {/* Process Action Trigger */}
-                            <button
-                                onClick={handleOpenProcessModal}
-                                className="w-full py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-2xl text-xs font-black uppercase tracking-widest text-center shadow-md hover:scale-102 transition-transform mt-2 cursor-pointer flex items-center justify-center gap-1.5"
-                            >
-                                <CheckCircle2 className="w-4 h-4" /> Duyệt & xử lý đơn
-                            </button>
+                            {transitions.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={handleOpenProcessModal}
+                                    className="w-full py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-2xl text-xs font-black uppercase tracking-widest text-center shadow-md hover:scale-102 transition-transform mt-2 cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                    <CheckCircle2 className="w-4 h-4" /> Cập nhật trạng thái
+                                </button>
+                            ) : (
+                                <div className="rounded-xl bg-surface-container p-3 text-center text-[10px] font-black uppercase text-outline">
+                                    Yêu cầu đã kết thúc xử lý
+                                </div>
+                            )}
                         </div>
+                    </div>
+                ) : isLoading ? (
+                    <div className="bg-white p-8 rounded-2xl border border-outline-variant/30 shadow-sm text-center py-20 sticky top-28">
+                        <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-primary" />
+                        <p className="text-xs font-bold text-outline">Đang tải chi tiết yêu cầu...</p>
                     </div>
                 ) : (
                     <div className="bg-white p-8 rounded-2xl border border-outline-variant/30 shadow-sm text-center py-20 sticky top-28 flex flex-col items-center justify-center">
@@ -366,29 +492,43 @@ export default function AdminRequests() {
                             <label className="block text-[10px] font-black text-outline uppercase tracking-wider mb-2">Chuyển trạng thái yêu cầu</label>
                             <select
                                 value={processAction}
-                                onChange={(e) => setProcessAction(e.target.value as RequestStatus)}
+                                onChange={(e) => {
+                                    setProcessAction(e.target.value as RequestStatus);
+                                    setProcessError(null);
+                                }}
                                 className="w-full bg-surface-container rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent text-on-surface cursor-pointer"
                             >
-                                <option value="PENDING">Chờ duyệt (PENDING)</option>
-                                <option value="REVIEWING">Đang xem xét (REVIEWING)</option>
-                                <option value="SOURCING">Đang tìm nguồn (SOURCING)</option>
-                                <option value="WAITING_CUSTOMER">Chờ khách hàng (WAITING_CUSTOMER)</option>
-                                <option value="APPROVED">Duyệt & Đồng ý (APPROVED)</option>
-                                <option value="REJECTED">Từ chối (REJECTED)</option>
-                                <option value="CANCELLED">Hủy yêu cầu (CANCELLED)</option>
+                                {transitions.map((status) => (
+                                    <option key={status} value={status}>
+                                        {getStatusText(status)} ({status})
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
-                        <div>
-                            <label className="block text-[10px] font-black text-outline tracking-wider mb-2 uppercase">Số tiền cọc đề xuất (VND)</label>
-                            <input
-                                type="number"
-                                value={processDeposit}
-                                onChange={(e) => setProcessDeposit(e.target.value)}
-                                placeholder="Ví dụ: 500000"
-                                className="w-full bg-surface-container rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent text-on-surface placeholder:text-outline/40"
-                            />
-                        </div>
+                        {requiresDeposit && (
+                            <div>
+                                <label className="block text-[10px] font-black text-outline tracking-wider mb-2 uppercase">
+                                    Số tiền cọc (VND)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="1000"
+                                    value={processDeposit}
+                                    onChange={(e) => {
+                                        setProcessDeposit(e.target.value);
+                                        setProcessError(null);
+                                    }}
+                                    placeholder="Ví dụ: 500000"
+                                    required
+                                    className="w-full bg-surface-container rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent text-on-surface placeholder:text-outline/40"
+                                />
+                                <p className="mt-1.5 text-[10px] font-semibold text-outline">
+                                    Tiền cọc sẽ được cập nhật trước khi backend chuyển yêu cầu thành đơn hàng.
+                                </p>
+                            </div>
+                        )}
 
                         <div>
                             <label className="block text-[10px] font-black text-outline tracking-wider mb-2 uppercase">Ghi chú xử lý / Phản hồi khách</label>
