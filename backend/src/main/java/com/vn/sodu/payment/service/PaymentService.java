@@ -9,13 +9,17 @@ import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PayOSCheckoutSession;
 import com.vn.sodu.payment.PayOSGateway;
+import com.vn.sodu.payment.PayOSPaymentStatusSnapshot;
+import com.vn.sodu.payment.PayOSProperties;
 import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.repo.OrderPaymentRepository;
 import com.vn.sodu.request.OrderType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +28,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 
 @Service
@@ -36,6 +41,7 @@ public class PaymentService {
     private final OrderPaymentRepository orderPaymentRepository;
     private final OrderRepository orderRepository;
     private final PayOSGateway payOSGateway;
+    private final PayOSProperties payOSProperties;
     private final PaymentCalculationService paymentCalculationService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -124,11 +130,7 @@ public class PaymentService {
                 savedPayment.setExpiresAt(session.expiresAt());
                 savedPayment = orderPaymentRepository.save(savedPayment);
             } catch (RuntimeException ex) {
-                savedPayment.setStatus(PaymentStatus.FAILED);
-                savedPayment.setFailureReason(ex.getMessage());
-                savedPayment = orderPaymentRepository.save(savedPayment);
-                recalculateOrderPaymentState(managedOrder);
-                return savedPayment;
+                return markPaymentFailedAfterCheckoutError(managedOrder, savedPayment, ex);
             }
         }
 
@@ -201,6 +203,60 @@ public class PaymentService {
         Order updatedOrder = recalculateOrderPaymentState(payment.getOrder());
         savedPayment.setOrder(updatedOrder);
         return savedPayment;
+    }
+
+    @Transactional
+    public OrderPayment markPaymentExpired(String paymentCode, String reason) {
+        if (paymentCode == null || paymentCode.isBlank()) {
+            throw new IllegalArgumentException("Payment code is required");
+        }
+
+        OrderPayment payment = orderPaymentRepository.findByPaymentCode(paymentCode.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentCode));
+
+        if (payment.getStatus() == PaymentStatus.PAID || payment.getStatus() == PaymentStatus.EXPIRED) {
+            return payment;
+        }
+
+        payment.setStatus(PaymentStatus.EXPIRED);
+        payment.setFailureReason(reason == null || reason.isBlank() ? "Payment session expired" : reason);
+        OrderPayment savedPayment = orderPaymentRepository.save(payment);
+        Order updatedOrder = recalculateOrderPaymentState(payment.getOrder());
+        savedPayment.setOrder(updatedOrder);
+        return savedPayment;
+    }
+
+    @Scheduled(
+            initialDelayString = "#{@payOSProperties.reconciliation.initialDelayMs}",
+            fixedDelayString = "#{@payOSProperties.reconciliation.fixedDelayMs}"
+    )
+    public void reconcilePendingOnlinePayments() {
+        if (!payOSProperties.getReconciliation().isEnabled()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime staleCutoff = now.minusSeconds(Math.max(0L, payOSProperties.getReconciliation().getStaleAfterSeconds()));
+        int batchSize = Math.max(1, payOSProperties.getReconciliation().getBatchSize());
+        List<OrderPayment> candidates = orderPaymentRepository.findByStatusInAndPaymentMethodOrderByCreatedAtAsc(
+                EnumSet.of(PaymentStatus.PENDING, PaymentStatus.FAILED),
+                PaymentMethod.ONLINE,
+                PageRequest.of(0, batchSize)
+        );
+
+        for (OrderPayment payment : candidates) {
+            if (payment == null || payment.getProviderOrderCode() == null) {
+                continue;
+            }
+            if (!isReconciliationCandidate(payment, staleCutoff, now)) {
+                continue;
+            }
+            try {
+                reconcilePayment(payment, now);
+            } catch (RuntimeException ignored) {
+                // Transient provider lookup issues should not mutate local state.
+            }
+        }
     }
 
     @Transactional
@@ -424,6 +480,40 @@ public class PaymentService {
         return payment.getType() == PaymentType.FINAL
                 && order.getStatus() == OrderStatus.PROCESSING
                 && order.getPaymentStatus() == PaymentStatus.PAID;
+    }
+
+    private OrderPayment markPaymentFailedAfterCheckoutError(Order managedOrder, OrderPayment payment, RuntimeException ex) {
+        payment.setStatus(PaymentStatus.FAILED);
+        payment.setFailureReason(ex.getMessage());
+        OrderPayment savedPayment = orderPaymentRepository.save(payment);
+        recalculateOrderPaymentState(managedOrder);
+        return savedPayment;
+    }
+
+    private boolean isReconciliationCandidate(OrderPayment payment, LocalDateTime staleCutoff, LocalDateTime now) {
+        if (payment.getCreatedAt() != null && payment.getCreatedAt().isAfter(staleCutoff)) {
+            return payment.getExpiresAt() != null && !payment.getExpiresAt().isAfter(now);
+        }
+        return true;
+    }
+
+    private void reconcilePayment(OrderPayment payment, LocalDateTime now) {
+        PayOSPaymentStatusSnapshot snapshot = payOSGateway.getPaymentStatus(payment.getProviderOrderCode());
+        if (snapshot == null) {
+            if (payment.getExpiresAt() != null && !payment.getExpiresAt().isAfter(now)) {
+                markPaymentExpired(payment.getPaymentCode(), "Payment session expired");
+            }
+            return;
+        }
+
+        if (snapshot.status() == PaymentStatus.PAID) {
+            markPaymentPaid(payment.getPaymentCode());
+            return;
+        }
+
+        if (snapshot.status() == PaymentStatus.EXPIRED) {
+            markPaymentExpired(payment.getPaymentCode(), "Payment session expired");
+        }
     }
 
     private String generateUniquePaymentCode() {

@@ -186,6 +186,22 @@ public class NhanhClient {
             String accessToken,
             REQ body,
             ParameterizedTypeReference<RESP> responseType) {
+        return postWithAuthorization(apiPath, accessToken, body, responseType);
+    }
+
+    public <REQ, RESP> RESP postWithBearerAuthorization(
+            String apiPath,
+            String accessToken,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
+        return postWithAuthorization(apiPath, bearer(accessToken), body, responseType);
+    }
+
+    private <REQ, RESP> RESP postWithAuthorization(
+            String apiPath,
+            String authorizationHeader,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
 
         String url = UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
                 .replacePath(apiPath)
@@ -195,7 +211,7 @@ public class NhanhClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("Authorization", accessToken);
+        headers.set("Authorization", authorizationHeader);
 
         HttpEntity<REQ> request = new HttpEntity<>(body, headers);
 
@@ -221,6 +237,13 @@ public class NhanhClient {
             log.error("Failed to post data to Nhanh {}", apiPath, ex);
             throw new ExternalServiceException("Nhanh API post failed", ex);
         }
+    }
+
+    private String bearer(String accessToken) {
+        if (accessToken != null && accessToken.startsWith("Bearer ")) {
+            return accessToken;
+        }
+        return "Bearer " + accessToken;
     }
 
     private void logOrderAddRawResponse(String apiPath, String rawBody) {

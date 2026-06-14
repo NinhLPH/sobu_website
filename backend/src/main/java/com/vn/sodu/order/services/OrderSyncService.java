@@ -7,6 +7,7 @@ import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderListItem;
+import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.order.NhanhSyncStage;
 import com.vn.sodu.order.Order;
@@ -26,6 +27,8 @@ import com.vn.sodu.request.Request;
 import com.vn.sodu.request.repo.RequestRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -33,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -44,10 +48,12 @@ import java.util.Objects;
 public class OrderSyncService {
 
     private static final int MAX_SYNC_ERROR_LENGTH = 1000;
+    private static final int[] RETRY_DELAYS_MINUTES = {5, 15, 30, 60, 180};
 
     private final OrderRepository orderRepository;
     private final OrderPaymentRepository orderPaymentRepository;
     private final RequestRepo requestRepo;
+    private final NhanhProperties nhanhProperties;
     private final NhanhService nhanhService;
     private final NhanhOrderGateway nhanhOrderGateway;
     private final NhanhSyncAttemptRepository nhanhSyncAttemptRepository;
@@ -78,14 +84,43 @@ public class OrderSyncService {
                 case NHANH_ADD_NORMAL, NHANH_ADD_PREORDER_DEPOSIT -> syncAdd(order, target, accessToken);
                 case NHANH_EDIT_PREORDER_FINAL -> syncEdit(order, target, accessToken);
             }
+        } catch (SyncFailureException ex) {
+            transactionTemplate.executeWithoutResult(status -> markFailed(orderId, ex.getMessage(), ex.isExhausted()));
         } catch (Exception ex) {
-            transactionTemplate.executeWithoutResult(status -> markFailed(orderId, ex));
+            transactionTemplate.executeWithoutResult(status -> markFailed(orderId, messageOf(ex), false));
         }
     }
 
     public Order retryOrderSync(Long orderId) {
         syncOrderToNhanh(orderId, null);
         return loadOrder(orderId);
+    }
+
+    @Scheduled(
+            initialDelayString = "#{@nhanhProperties.sync.recovery.initialDelayMs}",
+            fixedDelayString = "#{@nhanhProperties.sync.recovery.fixedDelayMs}"
+    )
+    public void recoverOrderSyncs() {
+        if (!nhanhProperties.getSync().getRecovery().isEnabled()) {
+            return;
+        }
+        int batchSize = Math.max(1, nhanhProperties.getSync().getRecovery().getBatchSize());
+        List<Order> candidates = orderRepository.findBySyncStatusInOrderByUpdatedAtAsc(
+                EnumSet.of(OrderSyncStatus.PENDING, OrderSyncStatus.FAILED, OrderSyncStatus.NEED_RECONCILE),
+                PageRequest.of(0, batchSize)
+        );
+
+        for (Order candidate : candidates) {
+            if (candidate == null || candidate.getId() == null) {
+                continue;
+            }
+            Order order = loadOrder(candidate.getId());
+            SyncTarget target = resolveSyncTarget(order, null);
+            if (target == null || !isReadyForScheduledRetry(order, target)) {
+                continue;
+            }
+            syncOrderToNhanh(order.getId(), target.payment().getPaymentCode());
+        }
     }
 
     private void syncAdd(Order order, SyncTarget target, String accessToken) {
@@ -109,6 +144,10 @@ public class OrderSyncService {
             NhanhOrderAddResult reconciledResult = reconcileAddResult(order, result, accessToken);
             String responsePayload = toJson(reconciledResult);
             attempt.setStatus(NhanhSyncAttemptStatus.SUCCESS);
+            attempt.setRetryCount(0);
+            attempt.setNextRetryAt(null);
+            attempt.setLastError(null);
+            attempt.setLastAttemptAt(LocalDateTime.now());
             attempt.setResponsePayload(responsePayload);
             attempt.setLastMessage(successMessage(target.operationType(), reconciledResult));
             attempt.setCompletedAt(LocalDateTime.now());
@@ -116,11 +155,7 @@ public class OrderSyncService {
             NhanhOrderAddResult finalResult = reconciledResult;
             transactionTemplate.executeWithoutResult(status -> markAddResult(order.getId(), target.stage(), finalResult));
         } catch (Exception ex) {
-            attempt.setStatus(NhanhSyncAttemptStatus.FAILED);
-            attempt.setLastMessage(truncate(messageOf(ex)));
-            attempt.setCompletedAt(LocalDateTime.now());
-            nhanhSyncAttemptRepository.save(attempt);
-            throw ex;
+            throw buildSyncFailure(attempt, ex);
         }
     }
 
@@ -140,17 +175,17 @@ public class OrderSyncService {
         try {
             NhanhOrderEditResult result = nhanhOrderGateway.editOrder(request, accessToken);
             attempt.setStatus(NhanhSyncAttemptStatus.SUCCESS);
+            attempt.setRetryCount(0);
+            attempt.setNextRetryAt(null);
+            attempt.setLastError(null);
+            attempt.setLastAttemptAt(LocalDateTime.now());
             attempt.setResponsePayload(toJson(result));
             attempt.setLastMessage(successMessage(target.operationType(), null));
             attempt.setCompletedAt(LocalDateTime.now());
             nhanhSyncAttemptRepository.save(attempt);
             transactionTemplate.executeWithoutResult(status -> markEditSynced(order.getId(), target.stage(), target.payment()));
         } catch (Exception ex) {
-            attempt.setStatus(NhanhSyncAttemptStatus.FAILED);
-            attempt.setLastMessage(truncate(messageOf(ex)));
-            attempt.setCompletedAt(LocalDateTime.now());
-            nhanhSyncAttemptRepository.save(attempt);
-            throw ex;
+            throw buildSyncFailure(attempt, ex);
         }
     }
 
@@ -393,15 +428,54 @@ public class OrderSyncService {
         return normalizeRealNhanhOrderId(order.getNhanhOrderId());
     }
 
-    private void markFailed(Long orderId, Exception ex) {
+    private void markFailed(Long orderId, String message, boolean exhausted) {
         Order order = loadOrder(orderId);
-        String message = truncate(messageOf(ex));
-        order.setSyncStatus(OrderSyncStatus.FAILED);
-        order.setSyncError(message);
+        String truncated = truncate(message);
+        order.setSyncStatus(exhausted ? OrderSyncStatus.DEAD : OrderSyncStatus.FAILED);
+        order.setSyncError(truncated);
         order.setLastSyncAt(LocalDateTime.now());
-        order.setLastSyncMessage(message);
+        order.setLastSyncMessage(truncated);
         orderRepository.save(order);
-        log.warn("Nhanh order sync failed for order id={}, code={}: {}", order.getId(), order.getOrderCode(), message);
+        log.warn("Nhanh order sync failed for order id={}, code={}: {}", order.getId(), order.getOrderCode(), truncated);
+    }
+
+    private boolean isReadyForScheduledRetry(Order order, SyncTarget target) {
+        if (order == null || target == null || target.payment() == null || target.payment().getId() == null) {
+            return false;
+        }
+        String baseKey = buildBaseKey(target.operationType(), order.getId(), target.payment().getId());
+        Optional<NhanhSyncAttempt> latestAttempt = nhanhSyncAttemptRepository.findTopByBaseKeyOrderByCreatedAtDesc(baseKey);
+        if (latestAttempt.isEmpty()) {
+            return true;
+        }
+        NhanhSyncAttempt attempt = latestAttempt.get();
+        if (attempt.getStatus() == NhanhSyncAttemptStatus.SUCCESS || attempt.getStatus() == NhanhSyncAttemptStatus.DEAD) {
+            return false;
+        }
+        return attempt.getNextRetryAt() == null || !attempt.getNextRetryAt().isAfter(LocalDateTime.now());
+    }
+
+    private SyncFailureException buildSyncFailure(NhanhSyncAttempt attempt, Exception ex) {
+        String message = truncate(messageOf(ex));
+        int nextRetryCount = (attempt.getRetryCount() == null ? 0 : attempt.getRetryCount()) + 1;
+        boolean exhausted = nextRetryCount >= nhanhProperties.getSync().getRecovery().getMaxRetries();
+        attempt.setRetryCount(nextRetryCount);
+        attempt.setLastAttemptAt(LocalDateTime.now());
+        attempt.setLastError(message);
+        attempt.setLastMessage(message);
+        attempt.setCompletedAt(LocalDateTime.now());
+        attempt.setNextRetryAt(exhausted ? null : LocalDateTime.now().plusMinutes(delayMinutesForAttempt(nextRetryCount)));
+        attempt.setStatus(exhausted ? NhanhSyncAttemptStatus.DEAD : NhanhSyncAttemptStatus.FAILED);
+        nhanhSyncAttemptRepository.save(attempt);
+        return new SyncFailureException(message, exhausted, ex);
+    }
+
+    private long delayMinutesForAttempt(int retryCount) {
+        int index = Math.max(1, retryCount) - 1;
+        if (index >= RETRY_DELAYS_MINUTES.length) {
+            index = RETRY_DELAYS_MINUTES.length - 1;
+        }
+        return RETRY_DELAYS_MINUTES[index];
     }
 
     private Order loadOrder(Long orderId) {
@@ -576,5 +650,18 @@ public class OrderSyncService {
     }
 
     private record SyncTarget(OrderPayment payment, NhanhSyncOperationType operationType, NhanhSyncStage stage) {
+    }
+
+    private static final class SyncFailureException extends RuntimeException {
+        private final boolean exhausted;
+
+        private SyncFailureException(String message, boolean exhausted, Throwable cause) {
+            super(message, cause);
+            this.exhausted = exhausted;
+        }
+
+        private boolean isExhausted() {
+            return exhausted;
+        }
     }
 }

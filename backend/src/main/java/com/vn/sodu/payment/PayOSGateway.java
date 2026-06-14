@@ -9,4 +9,8 @@ public interface PayOSGateway {
     }
 
     PayOSCheckoutSession createCheckout(Order order, OrderPayment payment);
+
+    default PayOSPaymentStatusSnapshot getPaymentStatus(Long providerOrderCode) {
+        return null;
+    }
 }

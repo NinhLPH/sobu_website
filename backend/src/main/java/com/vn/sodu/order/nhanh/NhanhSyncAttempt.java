@@ -61,6 +61,16 @@ public class NhanhSyncAttempt {
     @Column(columnDefinition = "TEXT")
     private String lastMessage;
 
+    @Column(columnDefinition = "TEXT")
+    private String lastError;
+
+    @Builder.Default
+    private Integer retryCount = 0;
+
+    private LocalDateTime nextRetryAt;
+
+    private LocalDateTime lastAttemptAt;
+
     private LocalDateTime completedAt;
 
     @CreationTimestamp

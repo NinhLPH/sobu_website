@@ -38,11 +38,23 @@ public class NhanhProperties {
     private Sync sync = new Sync();
     private Webhooks webhooks = new Webhooks();
     private Accounting accounting = new Accounting();
+    private Location location = new Location();
 
     @Getter
     @Setter
     public static class Sync {
         private String cron = "0 0 * * * *";
+        private Recovery recovery = new Recovery();
+    }
+
+    @Getter
+    @Setter
+    public static class Recovery {
+        private boolean enabled = true;
+        private long initialDelayMs = 120_000L;
+        private long fixedDelayMs = 300_000L;
+        private int batchSize = 50;
+        private int maxRetries = 5;
     }
 
     @Getter
@@ -55,5 +67,13 @@ public class NhanhProperties {
     @Setter
     public static class Accounting {
         private Long accountId;
+    }
+
+    @Getter
+    @Setter
+    public static class Location {
+        private String path = "/v3.0/shipping/location";
+        private String version = "v1";
+        private long cacheTtlHours = 24;
     }
 }

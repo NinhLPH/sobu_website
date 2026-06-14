@@ -184,4 +184,48 @@ class NhanhClientTest {
         assertEquals(654321L, response.getData().get(0).getOrderId());
         assertEquals("654321", response.getData().get(0).resolveNhanhOrderId());
     }
+
+    @Test
+    @DisplayName("Should build bearer-authorized location request")
+    void testPostWithBearerAuthorizationRequestShape() {
+        String rawResponse = """
+                {
+                  "code": 1,
+                  "data": [
+                    {
+                      "id": 254,
+                      "name": "Ha Noi"
+                    }
+                  ]
+                }
+                """;
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(rawResponse));
+
+        NhanhResponse<List<Map<String, Object>>> response = nhanhClient.postWithBearerAuthorization(
+                "/v3.0/shipping/location",
+                "token",
+                Map.of("filters", Map.of(
+                        "locationVersion", "v1",
+                        "type", "CITY"
+                )),
+                new ParameterizedTypeReference<NhanhResponse<List<Map<String, Object>>>>() {}
+        );
+
+        assertNotNull(response);
+        assertEquals(1, response.getCode());
+        assertEquals(1, response.getData().size());
+
+        ArgumentCaptor<String> urlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<HttpEntity> requestCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).exchange(urlCaptor.capture(), eq(HttpMethod.POST), requestCaptor.capture(), eq(String.class));
+
+        assertEquals("https://pos.open.nhanh.vn/v3.0/shipping/location?appId=77323&businessId=224003", urlCaptor.getValue());
+        assertEquals("Bearer token", requestCaptor.getValue().getHeaders().getFirst("Authorization"));
+        Map<?, ?> body = (Map<?, ?>) requestCaptor.getValue().getBody();
+        Map<?, ?> filters = (Map<?, ?>) body.get("filters");
+        assertEquals("v1", filters.get("locationVersion"));
+        assertEquals("CITY", filters.get("type"));
+    }
 }

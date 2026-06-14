@@ -6,6 +6,7 @@ import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderListItem;
+import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.order.nhanh.NhanhOrderGateway;
 import com.vn.sodu.order.nhanh.NhanhSyncAttemptRepository;
@@ -38,6 +39,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -84,11 +86,14 @@ class OrderSyncServiceTest {
             return callback.doInTransaction(null);
         }).when(transactionTemplate).execute(any());
         lenient().when(nhanhSyncAttemptRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+        lenient().when(nhanhSyncAttemptRepository.findTopByBaseKeyOrderByCreatedAtDesc(any())).thenReturn(Optional.empty());
         lenient().when(nhanhSyncAttemptRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        NhanhProperties nhanhProperties = new NhanhProperties();
         orderSyncService = new OrderSyncService(
                 orderRepository,
                 orderPaymentRepository,
                 requestRepo,
+                nhanhProperties,
                 nhanhService,
                 nhanhOrderGateway,
                 nhanhSyncAttemptRepository,
@@ -338,6 +343,26 @@ class OrderSyncServiceTest {
 
         verify(order, never()).setPayments(any());
         verifyNoInteractions(orderPaymentRepository);
+    }
+
+    @Test
+    void recoverOrderSyncsRetriesEligibleFailedNormalOrder() {
+        Order order = normalOrder();
+        OrderPayment fullPayment = addPaidPayment(order, 111L, "SOBU-PAY-111", PaymentType.FULL, "300.00");
+        NhanhOrderAddResult result = new NhanhOrderAddResult();
+        result.setId(222333L);
+        order.setSyncStatus(OrderSyncStatus.FAILED);
+
+        when(orderRepository.findBySyncStatusInOrderByUpdatedAtAsc(anyCollection(), any())).thenReturn(List.of(order));
+        when(orderRepository.findWithItemsAndRequestById(1L)).thenReturn(Optional.of(order));
+        when(nhanhService.getValidAccessToken()).thenReturn("token");
+        when(nhanhOrderGateway.buildAddRequest(order, fullPayment)).thenReturn(new NhanhOrderAddRequest());
+        when(nhanhOrderGateway.createOrder(any(NhanhOrderAddRequest.class), eq("token"))).thenReturn(result);
+
+        orderSyncService.recoverOrderSyncs();
+
+        assertThat(order.getSyncStatus()).isEqualTo(OrderSyncStatus.SYNCED);
+        verify(orderRepository).save(order);
     }
 
     private Order normalOrder() {

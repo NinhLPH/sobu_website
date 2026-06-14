@@ -7,4 +7,6 @@ import java.util.Optional;
 public interface NhanhSyncAttemptRepository extends JpaRepository<NhanhSyncAttempt, Long> {
 
     Optional<NhanhSyncAttempt> findByIdempotencyKey(String idempotencyKey);
+
+    Optional<NhanhSyncAttempt> findTopByBaseKeyOrderByCreatedAtDesc(String baseKey);
 }

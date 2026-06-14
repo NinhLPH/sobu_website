@@ -4,5 +4,6 @@ public enum OrderSyncStatus {
     PENDING,
     SYNCED,
     NEED_RECONCILE,
-    FAILED
+    FAILED,
+    DEAD
 }

@@ -6,7 +6,9 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Pageable;
 
+import java.util.Collection;
 import java.util.Optional;
 
 @Repository
@@ -26,4 +28,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findWithItemsAndRequestByNhanhOrderIdOrCode(
             @Param("nhanhOrderId") String nhanhOrderId
     );
+
+    java.util.List<Order> findBySyncStatusInOrderByUpdatedAtAsc(Collection<com.vn.sodu.order.OrderSyncStatus> statuses, Pageable pageable);
 }

@@ -7,6 +7,7 @@ import com.vn.sodu.order.OrderSyncStatus;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.MockPayOSGateway;
 import com.vn.sodu.payment.OrderPayment;
+import com.vn.sodu.payment.PayOSProperties;
 import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -47,14 +49,18 @@ class PaymentServiceTest {
 
     private PaymentCalculationService paymentCalculationService;
     private PaymentService paymentService;
+    private MockPayOSGateway payOSGateway;
 
     @BeforeEach
     void setUp() {
         paymentCalculationService = new PaymentCalculationService();
+        payOSGateway = new MockPayOSGateway();
+        PayOSProperties payOSProperties = new PayOSProperties();
         paymentService = new PaymentService(
                 orderPaymentRepository,
                 orderRepository,
-                new MockPayOSGateway(),
+                payOSGateway,
+                payOSProperties,
                 paymentCalculationService,
                 eventPublisher
         );
@@ -547,5 +553,90 @@ class PaymentServiceTest {
         assertThat(failed.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(failed.getFailureReason()).isEqualTo("Payment cancelled by customer");
         assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
+    void reconcilePendingOnlinePaymentsMarksPaidPaymentAndPublishesSyncOnce() {
+        Order order = Order.builder()
+                .id(41L)
+                .orderCode("SOBU-ORD-41")
+                .type(OrderType.NORMAL)
+                .syncStatus(OrderSyncStatus.PENDING)
+                .totalAmount(new BigDecimal("500"))
+                .remainingAmount(new BigDecimal("500"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment payment = OrderPayment.builder()
+                .id(410L)
+                .order(order)
+                .paymentCode("SOBU-PAY-410")
+                .providerOrderCode(410L)
+                .type(PaymentType.FULL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("500"))
+                .provider("PAYOS_MOCK")
+                .createdAt(LocalDateTime.now().minusMinutes(10))
+                .build();
+        payOSGateway.markPaid(410L);
+
+        when(orderPaymentRepository.findByStatusInAndPaymentMethodOrderByCreatedAtAsc(
+                any(),
+                eq(PaymentMethod.ONLINE),
+                any()
+        )).thenReturn(List.of(payment));
+        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-410")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findById(41L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(41L)).thenReturn(List.of(payment));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        paymentService.reconcilePendingOnlinePayments();
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        verify(eventPublisher).publishEvent(any(OrderReadyForSyncEvent.class));
+    }
+
+    @Test
+    void reconcilePendingOnlinePaymentsMarksExpiredPaymentWithoutPublishingSync() {
+        Order order = Order.builder()
+                .id(42L)
+                .orderCode("SOBU-ORD-42")
+                .type(OrderType.NORMAL)
+                .syncStatus(OrderSyncStatus.PENDING)
+                .totalAmount(new BigDecimal("500"))
+                .remainingAmount(new BigDecimal("500"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        OrderPayment payment = OrderPayment.builder()
+                .id(420L)
+                .order(order)
+                .paymentCode("SOBU-PAY-420")
+                .providerOrderCode(420L)
+                .type(PaymentType.FULL)
+                .paymentMethod(PaymentMethod.ONLINE)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("500"))
+                .provider("PAYOS_MOCK")
+                .createdAt(LocalDateTime.now().minusMinutes(10))
+                .expiresAt(LocalDateTime.now().minusMinutes(1))
+                .build();
+        payOSGateway.markExpired(420L);
+
+        when(orderPaymentRepository.findByStatusInAndPaymentMethodOrderByCreatedAtAsc(
+                any(),
+                eq(PaymentMethod.ONLINE),
+                any()
+        )).thenReturn(List.of(payment));
+        when(orderPaymentRepository.findByPaymentCode("SOBU-PAY-420")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(payment));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        paymentService.reconcilePendingOnlinePayments();
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
+        verifyNoInteractions(eventPublisher);
     }
 }

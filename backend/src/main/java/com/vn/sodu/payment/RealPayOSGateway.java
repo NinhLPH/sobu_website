@@ -8,6 +8,8 @@ import vn.payos.PayOS;
 import vn.payos.exception.PayOSException;
 import vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest;
 import vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse;
+import vn.payos.model.v2.paymentRequests.PaymentLink;
+import vn.payos.model.v2.paymentRequests.PaymentLinkStatus;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -60,6 +62,29 @@ public class RealPayOSGateway implements PayOSGateway {
         }
     }
 
+    @Override
+    public PayOSPaymentStatusSnapshot getPaymentStatus(Long providerOrderCode) {
+        validateConfig();
+        if (providerOrderCode == null) {
+            return null;
+        }
+        try {
+            PaymentLink paymentLink = payOS().paymentRequests().get(providerOrderCode);
+            if (paymentLink == null) {
+                return null;
+            }
+            return new PayOSPaymentStatusSnapshot(
+                    providerOrderCode,
+                    toLocalStatus(paymentLink.getStatus()),
+                    paymentLink.getId(),
+                    null,
+                    paymentLink.getStatus() == null ? null : paymentLink.getStatus().getValue()
+            );
+        } catch (PayOSException ex) {
+            throw new IllegalStateException("PayOS payment status lookup failed: " + ex.getMessage(), ex);
+        }
+    }
+
     private PayOS payOS() {
         return new PayOS(properties.getClientId(), properties.getApiKey(), properties.getChecksumKey());
     }
@@ -95,6 +120,17 @@ public class RealPayOSGateway implements PayOSGateway {
 
     private long buildExpiredAtEpochSeconds() {
         return Instant.now().plusSeconds(PAYMENT_TTL_SECONDS).getEpochSecond();
+    }
+
+    private PaymentStatus toLocalStatus(PaymentLinkStatus status) {
+        if (status == null) {
+            return PaymentStatus.PENDING;
+        }
+        return switch (status) {
+            case PAID -> PaymentStatus.PAID;
+            case CANCELLED, EXPIRED, FAILED -> PaymentStatus.EXPIRED;
+            case PENDING, PROCESSING, UNDERPAID -> PaymentStatus.PENDING;
+        };
     }
 
     private String buildCancelCallbackUrl(OrderPayment payment) {

@@ -18,4 +18,15 @@ public class PayOSProperties {
     private String cancelUrl = "http://localhost:3000/payment/cancel";
     private String webhookUrl = "http://localhost:8081/api/payos/webhooks/callback";
     private String gatewayMode = "mock";
+    private Reconciliation reconciliation = new Reconciliation();
+
+    @Getter
+    @Setter
+    public static class Reconciliation {
+        private boolean enabled = true;
+        private long initialDelayMs = 60_000L;
+        private long fixedDelayMs = 60_000L;
+        private long staleAfterSeconds = 120L;
+        private int batchSize = 50;
+    }
 }
