@@ -1,22 +1,66 @@
 import { create } from 'zustand';
 import { CustomerService } from '../service/custom.service';
 import { AdminWorkflowService } from '../service/admin.service';
-import { RequestResponseDto, CreateRequestDto, UpdateRequestDto, ProcessRequestDto } from '../interface/customer-request.model';
+import {
+    CreateRequestDto,
+    ProcessRequestDto,
+    RequestResponseDto,
+    UpdateRequestDto
+} from '../interface/customer-request.model';
+import { PageResponse } from '../interface/api-response';
+import { createIdempotencyKey } from '../utils/idempotency';
+
+type RequestRole = 'user' | 'admin';
+type RequestPage = Omit<PageResponse<RequestResponseDto>, 'content'>;
+
+const emptyPage: RequestPage = {
+    pageNumber: 0,
+    pageSize: 10,
+    totalElements: 0,
+    totalPages: 0,
+    first: true,
+    last: true,
+    hasNext: false,
+    hasPrevious: false
+};
+
+const getErrorMessage = (error: any, fallback: string) => {
+    const backendMessage = error?.response?.data?.message || error?.response?.data?.error;
+    if (backendMessage) {
+        return backendMessage;
+    }
+    if (error?.response?.status === 409) {
+        return 'Yêu cầu đã bị khóa hoặc trạng thái chuyển đổi không còn hợp lệ.';
+    }
+    return error?.message || fallback;
+};
 
 interface RequestState {
     myRequests: RequestResponseDto[];
     adminRequests: RequestResponseDto[];
+    myRequestsPage: RequestPage;
+    adminRequestsPage: RequestPage;
     currentRequestDetail: RequestResponseDto | null;
     isLoading: boolean;
     isSubmitting: boolean;
     error: string | null;
 
-    fetchMyRequests: (params?: any) => Promise<void>;
-    fetchAdminRequests: (params?: any) => Promise<void>;
-    getRequestDetail: (id: string | number, role: 'user' | 'admin') => Promise<void>;
-    createRequestAction: (data: CreateRequestDto) => Promise<RequestResponseDto>;
-    updateRequestAction: (id: string | number, data: UpdateRequestDto) => Promise<RequestResponseDto>;
-    processRequestAction: (id: string | number, data: ProcessRequestDto) => Promise<RequestResponseDto>;
+    fetchMyRequests: (params?: Record<string, unknown>) => Promise<void>;
+    fetchAdminRequests: (params?: Record<string, unknown>) => Promise<void>;
+    getRequestDetail: (id: string | number, role: RequestRole) => Promise<void>;
+    createRequestAction: (
+        data: CreateRequestDto,
+        idempotencyKey?: string
+    ) => Promise<RequestResponseDto>;
+    updateRequestAction: (
+        id: string | number,
+        data: UpdateRequestDto,
+        role?: RequestRole
+    ) => Promise<RequestResponseDto>;
+    processRequestAction: (
+        id: string | number,
+        data: ProcessRequestDto
+    ) => Promise<RequestResponseDto>;
     clearError: () => void;
     clearCurrentDetail: () => void;
 }
@@ -24,6 +68,8 @@ interface RequestState {
 export const useRequestStore = create<RequestState>((set) => ({
     myRequests: [],
     adminRequests: [],
+    myRequestsPage: emptyPage,
+    adminRequestsPage: emptyPage,
     currentRequestDetail: null,
     isLoading: false,
     isSubmitting: false,
@@ -32,63 +78,121 @@ export const useRequestStore = create<RequestState>((set) => ({
     fetchMyRequests: async (params) => {
         set({ isLoading: true, error: null });
         try {
-            const data = await CustomerService.getMyRequests(params);
-            const list = data && 'content' in data ? (data as any).content : (Array.isArray(data) ? data : []);
-            set({ myRequests: list, isLoading: false });
-        } catch (err: any) {
-            set({ error: err?.message || 'Không thể tải danh sách yêu cầu của tôi!', isLoading: false });
+            const response = await CustomerService.getMyRequests(params);
+            const { content, ...page } = response.data;
+            set({
+                myRequests: content,
+                myRequestsPage: {
+                    ...page,
+                    first: page.first ?? page.pageNumber === 0,
+                    last: page.last ?? page.pageNumber + 1 >= page.totalPages,
+                    hasNext: page.hasNext ?? page.pageNumber + 1 < page.totalPages,
+                    hasPrevious: page.hasPrevious ?? page.pageNumber > 0
+                },
+                isLoading: false
+            });
+        } catch (error) {
+            set({
+                error: getErrorMessage(error, 'Không thể tải danh sách yêu cầu của bạn.'),
+                isLoading: false
+            });
         }
     },
 
     fetchAdminRequests: async (params) => {
         set({ isLoading: true, error: null });
         try {
-            const data = await AdminWorkflowService.getRequests(params);
-            const list = data && 'content' in data ? (data as any).content : (Array.isArray(data) ? data : []);
-            set({ adminRequests: list, isLoading: false });
-        } catch (err: any) {
-            set({ error: err?.message || 'Không thể tải danh sách yêu cầu của quản trị!', isLoading: false });
+            const response = await AdminWorkflowService.getAdminRequests(params);
+            const { content, ...page } = response.data;
+            set({
+                adminRequests: content,
+                adminRequestsPage: {
+                    ...page,
+                    first: page.first ?? page.pageNumber === 0,
+                    last: page.last ?? page.pageNumber + 1 >= page.totalPages,
+                    hasNext: page.hasNext ?? page.pageNumber + 1 < page.totalPages,
+                    hasPrevious: page.hasPrevious ?? page.pageNumber > 0
+                },
+                isLoading: false
+            });
+        } catch (error) {
+            set({
+                error: getErrorMessage(error, 'Không thể tải danh sách yêu cầu.'),
+                isLoading: false
+            });
         }
     },
 
     getRequestDetail: async (id, role) => {
         set({ isLoading: true, error: null, currentRequestDetail: null });
         try {
-            let detail: RequestResponseDto;
-            if (role === 'admin') {
-                detail = await AdminWorkflowService.getRequestDetail(id);
-            } else {
-                detail = await CustomerService.getMyRequestDetail(id);
-            }
-            set({ currentRequestDetail: detail, isLoading: false });
-        } catch (err: any) {
-            set({ error: err?.message || 'Không thể tải chi tiết yêu cầu!', isLoading: false });
+            const response = role === 'admin'
+                ? await AdminWorkflowService.getAdminRequestDetail(id)
+                : await CustomerService.getRequestDetail(id);
+            set({ currentRequestDetail: response.data, isLoading: false });
+        } catch (error) {
+            set({
+                error: getErrorMessage(error, 'Không thể tải chi tiết yêu cầu.'),
+                isLoading: false
+            });
         }
     },
 
-    createRequestAction: async (data) => {
+    createRequestAction: async (data, idempotencyKey) => {
         set({ isSubmitting: true, error: null });
         try {
-            const response = await CustomerService.createRequest(data);
-            set({ isSubmitting: false });
-            return response;
-        } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || 'Tạo yêu cầu thất bại!';
-            set({ error: msg, isSubmitting: false });
-            throw err;
+            const response = await CustomerService.createRequest(
+                data,
+                idempotencyKey || createIdempotencyKey()
+            );
+            set((state) => ({
+                myRequests: [response.data, ...state.myRequests],
+                myRequestsPage: {
+                    ...state.myRequestsPage,
+                    totalElements: state.myRequestsPage.totalElements + 1
+                },
+                currentRequestDetail: response.data,
+                isSubmitting: false
+            }));
+            return response.data;
+        } catch (error) {
+            const message = getErrorMessage(error, 'Tạo yêu cầu thất bại.');
+            set({
+                error: message,
+                isSubmitting: false
+            });
+            throw new Error(message);
         }
     },
 
-    updateRequestAction: async (id, data) => {
+    updateRequestAction: async (id, data, role = 'user') => {
         set({ isSubmitting: true, error: null });
         try {
-            const response = await CustomerService.updateRequest(id, data);
-            set({ currentRequestDetail: response, isSubmitting: false });
-            return response;
-        } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || 'Cập nhật yêu cầu thất bại!';
-            set({ error: msg, isSubmitting: false });
-            throw err;
+            const response = role === 'admin'
+                ? await AdminWorkflowService.updateAdminRequest(id, data)
+                : await CustomerService.updateRequest(id, data);
+            set((state) => ({
+                currentRequestDetail: response.data,
+                myRequests: role === 'user'
+                    ? state.myRequests.map((request) =>
+                        request.id === response.data.id ? response.data : request
+                    )
+                    : state.myRequests,
+                adminRequests: role === 'admin'
+                    ? state.adminRequests.map((request) =>
+                        request.id === response.data.id ? response.data : request
+                    )
+                    : state.adminRequests,
+                isSubmitting: false
+            }));
+            return response.data;
+        } catch (error) {
+            const message = getErrorMessage(error, 'Cập nhật yêu cầu thất bại.');
+            set({
+                error: message,
+                isSubmitting: false
+            });
+            throw new Error(message);
         }
     },
 
@@ -96,15 +200,24 @@ export const useRequestStore = create<RequestState>((set) => ({
         set({ isSubmitting: true, error: null });
         try {
             const response = await AdminWorkflowService.processRequest(id, data);
-            set({ currentRequestDetail: response, isSubmitting: false });
-            return response;
-        } catch (err: any) {
-            const msg = err?.response?.data?.message || err?.message || 'Xử lý yêu cầu thất bại!';
-            set({ error: msg, isSubmitting: false });
-            throw err;
+            set((state) => ({
+                currentRequestDetail: response.data,
+                adminRequests: state.adminRequests.map((request) =>
+                    request.id === response.data.id ? response.data : request
+                ),
+                isSubmitting: false
+            }));
+            return response.data;
+        } catch (error) {
+            const message = getErrorMessage(error, 'Xử lý yêu cầu thất bại.');
+            set({
+                error: message,
+                isSubmitting: false
+            });
+            throw new Error(message);
         }
     },
 
     clearError: () => set({ error: null }),
-    clearCurrentDetail: () => set({ currentRequestDetail: null }),
+    clearCurrentDetail: () => set({ currentRequestDetail: null })
 }));

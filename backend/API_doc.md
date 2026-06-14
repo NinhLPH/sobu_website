@@ -20,7 +20,6 @@ Most authenticated and admin endpoints return this wrapper:
   "statusCode": 200,
   "message": "OK",
   "data": {},
-  "error": null,
   "timestamp": "2026-05-26T10:00:00"
 }
 ```
@@ -42,9 +41,13 @@ Most authenticated and admin endpoints return this wrapper:
 These public catalog endpoints return raw objects or raw page responses instead of `ApiResponseDTO`:
 
 - `GET /api/public/products`
+- `GET /api/public/products/all`
 - `GET /api/public/products/search`
 - `POST /api/public/products/search`
 - `GET /api/public/products/{id}`
+- `GET /api/public/categories`
+- `GET /api/public/brands`
+- `GET /api/public/files/**`
 - Their `/api/v1/public/...` aliases
 
 ### Route Aliases
@@ -360,13 +363,27 @@ Register a new account.
 
 #### HTTP Status
 
-`200 OK`
+`201 Created`
 
 ```json
 {
   "success": true,
-  "message": "Register successful",
-  "data": {}
+  "statusCode": 201,
+  "message": "Registration successful",
+  "data": {
+    "id": 1,
+    "email": "user@example.com",
+    "fullName": "Nguyen Van A",
+    "phone": "0901234567",
+    "role": {
+      "id": 2,
+      "name": "CUSTOMER",
+      "description": "Customer account"
+    },
+    "status": "INACTIVE",
+    "message": "Registration successful. Please check your email to activate your account."
+  },
+  "timestamp": "2026-06-11T10:00:00"
 }
 ```
 
@@ -381,6 +398,88 @@ Uses the common error responses. Typical statuses: `400`, `409`, `500`.
 ### Notes
 
 * Account activation may be required before login.
+
+## Endpoint
+
+**Resend Activation Email**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/auth/resend-activation`
+
+### Description
+
+Resend the activation email for an inactive account.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| email | String | Yes | Valid account email |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Activation email sent",
+  "timestamp": "2026-06-11T10:00:00"
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `404`, `500`.
+
+### Business Rules
+
+* Requests are limited to once every 60 seconds.
+* The account must exist and still require activation.
+
+### Notes
+
+* This endpoint is public.
 
 ## Endpoint
 
@@ -441,8 +540,22 @@ No request body.
 ```json
 {
   "success": true,
+  "statusCode": 200,
   "message": "Account activated",
-  "data": {}
+  "data": {
+    "id": 1,
+    "email": "user@example.com",
+    "fullName": "Nguyen Van A",
+    "phone": "0901234567",
+    "role": {
+      "id": 2,
+      "name": "CUSTOMER",
+      "description": "Customer account"
+    },
+    "status": "ACTIVE",
+    "message": "Account activated"
+  },
+  "timestamp": "2026-06-11T10:00:00"
 }
 ```
 
@@ -506,7 +619,19 @@ Authorization: Bearer <access_token>
 
 ### Request Body
 
-No request body.
+Optional request body:
+
+```json
+{
+  "refreshToken": "eyJ..."
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| refreshToken | String | No | Refresh token to invalidate together with the access token |
 
 ### Success Response
 
@@ -532,7 +657,7 @@ Uses the common error responses. Typical statuses: `401`, `500`.
 
 ### Notes
 
-* Token invalidation behavior depends on backend implementation.
+* The access token is read from the `Authorization` header; the refresh token is read from the optional body.
 
 ## Endpoint
 
@@ -587,8 +712,10 @@ No request body.
 ```json
 {
   "success": true,
+  "statusCode": 200,
   "message": "OK",
-  "data": "Auth service is healthy"
+  "data": "Auth service is running",
+  "timestamp": "2026-06-11T10:00:00"
 }
 ```
 
@@ -644,9 +771,10 @@ Get paginated public product list for storefront pages.
 | --------- | ---- | -------- | ----------- |
 | page | Integer | No | Page number, default `0` |
 | pageSize | Integer | No | Page size, default `20` |
-| q | String | No | Search keyword |
-| sortBy | String | No | Sort field |
-| sortDirection | String | No | `ASC` or `DESC` |
+| q | String | No | Search keyword; mapped to `search` |
+| search | String | No | Search keyword; `q` is also accepted |
+| sortBy | String | No | Sort field, default `id` |
+| sortDirection | String | No | `ASC` or `DESC`, default `DESC` |
 | categoryId | Long | No | Filter by category |
 | brandId | Long | No | Filter by brand |
 | minPrice | Number | No | Minimum price |
@@ -674,9 +802,11 @@ No request body.
   "content": [
     {
       "id": 1,
+      "externalId": 10001,
       "name": "Ao so mi",
       "code": "SP001",
       "price": 250000,
+      "status": "ACTIVE",
       "avatarImage": "/api/public/files/products/a.jpg",
       "brandName": "Sobu",
       "categoryName": "Ao",
@@ -686,7 +816,11 @@ No request body.
   "pageNumber": 0,
   "pageSize": 20,
   "totalElements": 100,
-  "totalPages": 5
+  "totalPages": 5,
+  "first": true,
+  "last": false,
+  "hasNext": true,
+  "hasPrevious": false
 }
 ```
 
@@ -756,8 +890,15 @@ No request body.
 [
   {
     "id": 1,
+    "externalId": 10001,
     "name": "Ao so mi",
-    "price": 250000
+    "code": "SP001",
+    "price": 250000,
+    "status": "ACTIVE",
+    "avatarImage": "/api/public/files/products/a.jpg",
+    "brandName": "Sobu",
+    "categoryName": "Ao",
+    "stockAvailable": 12
   }
 ]
 ```
@@ -833,18 +974,39 @@ No request body.
 ```json
 {
   "id": 123,
+  "externalId": 100123,
   "name": "Ao hoodie",
+  "otherName": "Hoodie",
   "code": "SP123",
+  "barcode": "8930000000123",
+  "status": "ACTIVE",
   "description": "Cotton hoodie",
   "content": "Product content",
   "price": 350000,
+  "wholesalePrice": 300000,
   "oldPrice": 390000,
+  "vat": 10,
   "avatarImage": "/api/public/files/products/hoodie.jpg",
   "brandName": "Sobu",
   "categoryName": "Ao",
   "stockAvailable": 10,
   "stockRemain": 10,
-  "images": []
+  "units": [
+    {
+      "id": 1,
+      "name": "Cai",
+      "quantity": 1,
+      "price": 350000
+    }
+  ],
+  "attributes": [
+    {
+      "name": "color",
+      "value": "black"
+    }
+  ],
+  "images": [],
+  "updatedAt": "2026-06-11T10:00:00"
 }
 ```
 
@@ -1101,7 +1263,13 @@ No request body.
 [
   {
     "id": 1,
-    "name": "Ao"
+    "parentId": null,
+    "code": "AO",
+    "name": "Ao",
+    "order": 1,
+    "image": "/api/public/files/categories/ao.jpg",
+    "status": 1,
+    "children": []
   }
 ]
 ```
@@ -1172,7 +1340,10 @@ No request body.
 [
   {
     "id": 1,
-    "name": "Sobu"
+    "parentId": null,
+    "code": "SOBU",
+    "name": "Sobu",
+    "status": 1
   }
 ]
 ```
@@ -1861,6 +2032,7 @@ Create a new customer request such as normal, preorder, finding, or custom.
 | ------ | ---- | -------- | ----------- |
 | Content-Type | String | Yes | `application/json` |
 | Authorization | String | Yes | Bearer token |
+| Idempotency-Key | String | No | Makes retries return the original create-request response; conflicting payloads return `409` |
 
 ### Path Parameters
 
@@ -1911,17 +2083,30 @@ Create a new customer request such as normal, preorder, finding, or custom.
 
 #### HTTP Status
 
-`200 OK`
+`201 Created`
 
 ```json
 {
   "success": true,
-  "message": "Created successfully",
+  "statusCode": 201,
+  "message": "Request created",
   "data": {
     "id": 123,
     "requestCode": "REQ-001",
-    "status": "PENDING"
-  }
+    "customerPhone": "0901234567",
+    "type": "CUSTOM",
+    "status": "PENDING",
+    "totalAmount": 700000,
+    "depositAmount": 0,
+    "customRequirements": "Tim hang mau den, chat lieu cotton",
+    "nhanhOrderId": null,
+    "nhanhOrderCode": null,
+    "items": [],
+    "attachments": [],
+    "createdAt": "2026-06-11T10:00:00",
+    "updatedAt": "2026-06-11T10:00:00"
+  },
+  "timestamp": "2026-06-11T10:00:00"
 }
 ```
 
@@ -1984,7 +2169,11 @@ Update an existing customer request when its status still allows editing.
 ```json
 {
   "customerPhone": "0901234567",
+  "type": "CUSTOM",
   "customRequirements": "Cap nhat ghi chu",
+  "totalAmount": 700000,
+  "depositAmount": 200000,
+  "uploadedImageUrls": [],
   "items": []
 }
 ```
@@ -1994,7 +2183,11 @@ Update an existing customer request when its status still allows editing.
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
 | customerPhone | String | No | Customer phone |
+| type | String | No | `NORMAL`, `PREORDER`, `FINDING`, `CUSTOM` |
 | customRequirements | String | No | Updated custom note |
+| totalAmount | Number | No | Updated total amount, must be greater than or equal to `0` |
+| depositAmount | Number | No | Updated deposit amount, must be greater than or equal to `0` |
+| uploadedImageUrls | Array<String> | No | Replacement uploaded image URL list |
 | items | Array<Object> | No | Updated item list |
 
 ### Success Response
@@ -2054,6 +2247,7 @@ Create a normal catalog order for authenticated customers.
 | ------ | ---- | -------- | ----------- |
 | Content-Type | String | Yes | `application/json` |
 | Authorization | String | Yes | Bearer token |
+| Idempotency-Key | String | No | Makes retries return the original create-order response; conflicting payloads return `409` |
 
 ### Path Parameters
 
@@ -2078,10 +2272,20 @@ Create a normal catalog order for authenticated customers.
   "customerCityName": "Ha Noi",
   "customerDistrictName": "Cau Giay",
   "customerWardName": "Dich Vong",
+  "customerCityId": 1,
+  "customerDistrictId": 10,
+  "customerWardId": 100,
+  "carrierId": 5,
+  "carrierServiceId": 2,
+  "shippingFee": 30000,
   "description": "Giao gio hanh chinh",
   "items": [
     {
-      "productId": 1,
+      "nhanhProductId": "10001",
+      "name": "Ao hoodie",
+      "note": "Size L",
+      "price": 350000,
+      "discount": 0,
       "quantity": 2
     }
   ]
@@ -2099,11 +2303,14 @@ Create a normal catalog order for authenticated customers.
 | customerCityName | String | No | City name |
 | customerDistrictName | String | No | District name |
 | customerWardName | String | No | Ward name |
+| customerCityId | Long | No | Nhanh city/province ID |
+| customerDistrictId | Long | No | Nhanh district ID |
+| customerWardId | Long | No | Nhanh ward ID |
 | carrierId | Long | No | Carrier ID |
 | carrierServiceId | Long | No | Carrier service ID |
 | shippingFee | Number | No | Shipping fee |
 | description | String | No | Order note |
-| items | Array<Object> | Yes | Order items |
+| items | Array<Object> | Yes | Order items containing required `nhanhProductId`, `name`, `price`, `quantity`; optional `note`, `discount` |
 
 ### Success Response
 
@@ -2118,7 +2325,19 @@ Create a normal catalog order for authenticated customers.
   "data": {
     "id": 1,
     "orderCode": "ORD-001",
-    "status": "PENDING"
+    "requestId": null,
+    "requestCode": null,
+    "type": "NORMAL",
+    "status": "NEW",
+    "syncStatus": "PENDING",
+    "nhanhSyncStage": "NONE",
+    "totalAmount": 730000,
+    "depositAmount": 0,
+    "shippingFee": 30000,
+    "paidAmount": 0,
+    "remainingAmount": 730000,
+    "paymentStatus": "PENDING",
+    "items": []
   }
 }
 ```
@@ -2346,10 +2565,23 @@ No request body.
   "message": "Payments retrieved",
   "data": [
     {
+      "id": 1,
+      "orderId": 10,
       "paymentCode": "PAY-001",
       "type": "DEPOSIT",
       "paymentMethod": "ONLINE",
-      "status": "PENDING"
+      "status": "PENDING",
+      "amount": 300000,
+      "provider": "PAYOS",
+      "providerReference": null,
+      "providerOrderCode": 100001,
+      "checkoutUrl": "https://pay.payos.vn/web/...",
+      "qrCode": "000201...",
+      "failureReason": null,
+      "expiresAt": "2026-06-11T10:15:00",
+      "paidAt": null,
+      "createdAt": "2026-06-11T10:00:00",
+      "updatedAt": "2026-06-11T10:00:00"
     }
   ]
 }
@@ -2395,6 +2627,7 @@ Create a payment checkout session for the authenticated customer's order.
 | ------ | ---- | -------- | ----------- |
 | Content-Type | String | Yes | `application/json` |
 | Authorization | String | Yes | Bearer token |
+| Idempotency-Key | String | No | Makes retries return the original create-payment response; conflicting payloads return `409` |
 
 ### Path Parameters
 
@@ -2433,13 +2666,28 @@ Create a payment checkout session for the authenticated customer's order.
 ```json
 {
   "success": true,
+  "statusCode": 201,
   "message": "Payment created",
   "data": {
+    "id": 1,
+    "orderId": 10,
     "paymentCode": "PAY-001",
     "type": "DEPOSIT",
     "paymentMethod": "ONLINE",
-    "status": "PENDING"
-  }
+    "status": "PENDING",
+    "amount": 300000,
+    "provider": "PAYOS",
+    "providerReference": null,
+    "providerOrderCode": 100001,
+    "checkoutUrl": "https://pay.payos.vn/web/...",
+    "qrCode": "000201...",
+    "failureReason": null,
+    "expiresAt": "2026-06-11T10:15:00",
+    "paidAt": null,
+    "createdAt": "2026-06-11T10:00:00",
+    "updatedAt": "2026-06-11T10:00:00"
+  },
+  "timestamp": "2026-06-11T10:00:00"
 }
 ```
 
@@ -2511,9 +2759,17 @@ No request body.
 ```json
 {
   "success": true,
-  "message": "Retrieved successfully",
+  "message": "Orders retrieved",
   "data": {
-    "content": []
+    "content": [],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 0,
+    "totalPages": 0,
+    "first": true,
+    "last": true,
+    "hasNext": false,
+    "hasPrevious": false
   }
 }
 ```
@@ -2738,7 +2994,8 @@ Move a request to a new business status as admin or staff.
 ```json
 {
   "targetStatus": "APPROVED",
-  "note": "Da xac nhan voi khach"
+  "note": "Da xac nhan voi khach",
+  "depositAmount": 300000
 }
 ```
 
@@ -2748,6 +3005,7 @@ Move a request to a new business status as admin or staff.
 | ----- | ---- | -------- | ----------- |
 | targetStatus | String | Yes | Target request status |
 | note | String | No | Internal processing note |
+| depositAmount | Number | No | Optional deposit override applied before an approved request converts to an order |
 
 ### Success Response
 
@@ -2758,7 +3016,8 @@ Move a request to a new business status as admin or staff.
 ```json
 {
   "success": true,
-  "message": "Processed successfully",
+  "statusCode": 200,
+  "message": "Request processed",
   "data": {
     "id": 123,
     "status": "APPROVED"
@@ -2986,14 +3245,17 @@ No request body.
 ```json
 {
   "success": true,
-  "message": "Sync retried",
+  "message": "Order sync retry completed",
   "data": {
     "orderId": 1,
     "orderCode": "ORD-001",
     "syncStatus": "SYNCED",
+    "nhanhSyncStage": "NORMAL_ORDER_CREATED",
     "nhanhOrderId": "123456",
     "nhanhOrderCode": "NH001",
-    "syncError": null
+    "syncError": null,
+    "lastSyncMessage": "Order synchronized",
+    "lastSyncAt": "2026-06-11T10:00:00"
   }
 }
 ```
@@ -4240,7 +4502,7 @@ No request body.
 `200 OK`
 
 ```json
-"https://open.nhanh.vn/oauth/authorize?..."
+"https://nhanh.vn/oauth?version=3.0&appId=...&returnLink=..."
 ```
 
 ### Error Responses
@@ -4254,6 +4516,237 @@ Typical statuses: `500`.
 ### Notes
 
 * Intended for integration/admin tooling, not end-user shopping flow.
+
+## Endpoint
+
+**Receive Nhanh Webhook**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/nhanh/webhooks`
+
+### Description
+
+Receive and record a webhook callback from Nhanh.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | No | Depends on the callback sent by Nhanh |
+| Any webhook headers | String | No | All request headers are forwarded to the webhook service |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+Raw request body. The body may be absent.
+
+Example:
+
+```json
+{
+  "event": "order.update",
+  "data": {}
+}
+```
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```text
+OK
+```
+
+### Error Responses
+
+The controller is designed to acknowledge recorded callbacks with `200`. Unexpected unhandled failures may return `500`.
+
+### Business Rules
+
+* The raw body and headers are passed to `NhanhWebhookService`.
+* The endpoint is public so Nhanh can call it without a JWT.
+
+### Notes
+
+* Equivalent aliases: `/api/nhanh/webhooks/` and `/api/nhanh/webhooks/callback`.
+* Response is raw text, not `ApiResponseDTO`.
+
+## Endpoint
+
+**Receive PayOS Webhook**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/payos/webhooks`
+
+### Description
+
+Receive a PayOS payment callback, record the raw payload, and apply payment confirmation when applicable.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | No | Usually `application/json` |
+| PayOS webhook headers | String | No | All request headers are forwarded to the webhook service |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+Raw PayOS callback body. The body may be absent.
+
+Example:
+
+```json
+{
+  "code": "00",
+  "success": true,
+  "data": {}
+}
+```
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```text
+OK
+```
+
+### Error Responses
+
+Unexpected unhandled failures may return `500`.
+
+### Business Rules
+
+* Payment status is updated only when the callback can be matched and validated by `PayOSWebhookService`.
+* The endpoint is public so PayOS can call it without a JWT.
+
+### Notes
+
+* Equivalent aliases: `/api/payos/webhooks/` and `/api/payos/webhooks/callback`.
+* Response is raw text, not `ApiResponseDTO`.
+
+## Endpoint
+
+**Cancel PayOS Payment**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/payos/payments/cancel`
+
+### Description
+
+Mark a payment as failed after checkout cancellation and redirect the browser.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| paymentCode | String | Yes | Internal payment code to mark as failed |
+| redirect | String | No | Redirect target; defaults to `/` |
+
+Example:
+
+```http
+GET /api/payos/payments/cancel?paymentCode=PAY-001&redirect=https%3A%2F%2Fshop.example.com%2Fpayment-result
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`302 Found`
+
+```http
+Location: https://shop.example.com/payment-result?paymentCode=PAY-001&status=FAILED
+```
+
+### Error Responses
+
+Typical statuses: `400`, `404`, `500`.
+
+### Business Rules
+
+* The payment is marked failed with reason `Payment cancelled by customer`.
+* The redirect URL receives `paymentCode` and `status=FAILED` query parameters.
+
+### Notes
+
+* Response has no JSON body.
 
 ## Endpoint
 

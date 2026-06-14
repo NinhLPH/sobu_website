@@ -1,7 +1,8 @@
 export type RequestType = 'NORMAL' | 'PREORDER' | 'FINDING' | 'CUSTOM';
 export type RequestStatus = 'PENDING' | 'REVIEWING' | 'SOURCING' | 'WAITING_CUSTOMER' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type OrderStatus =
-    'NEW'
+    'PENDING'
+    | 'NEW'
     | 'WAITING_DEPOSIT'
     | 'DEPOSIT_PAID'
     | 'READY_FOR_FINAL_PAYMENT'

@@ -17,13 +17,13 @@ export default function ProductDetail() {
     const [mainImage, setMainImage] = useState('');
     const [loadingDetail, setLoadingDetail] = useState(true);
 
-    const { products, fetchProducts } = useProductStore();
+    const { products, productsLoaded, fetchProducts } = useProductStore();
 
     useEffect(() => {
-        if (!products || products.length === 0) {
+        if (!productsLoaded) {
             fetchProducts();
         }
-    }, [products, fetchProducts]);
+    }, [productsLoaded, fetchProducts]);
 
     useEffect(() => {
         if (!id) return;

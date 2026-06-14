@@ -40,7 +40,14 @@ export default function Header() {
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
     
     // Fetch categories and brands from useProductStore to avoid mockData
-    const { categories, brands, fetchCategories, fetchBrands } = useProductStore();
+    const {
+        categories,
+        brands,
+        categoriesLoaded,
+        brandsLoaded,
+        fetchCategories,
+        fetchBrands
+    } = useProductStore();
     
     const [activeParentId, setActiveParentId] = useState<number | null>(null);
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
@@ -67,13 +74,13 @@ export default function Header() {
     }, []);
 
     useEffect(() => {
-        if (!categories || categories.length === 0) {
+        if (!categoriesLoaded) {
             fetchCategories();
         }
-        if (!brands || brands.length === 0) {
+        if (!brandsLoaded) {
             fetchBrands();
         }
-    }, [categories, brands, fetchCategories, fetchBrands]);
+    }, [categoriesLoaded, brandsLoaded, fetchCategories, fetchBrands]);
 
     const mainCategories = useMemo(() => {
         return categories?.filter(cat => {

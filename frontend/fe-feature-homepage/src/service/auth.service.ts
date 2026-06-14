@@ -1,43 +1,63 @@
-import {LoginResponse, RegisterResponse} from "../interface/api-response";
-import apiClient from "../api/api-client";
-import {Login, Register} from "../interface/auth.model";
-import { authStorage } from "../utils/auth-storage";
+import apiClient from '../api/api-client';
+import {
+    ActivateAccountResponse,
+    ApiResponseDTO,
+    ApiResponseWithoutDataDTO,
+    LoginResponse,
+    RefreshTokenResponse,
+    RegisterResponse
+} from '../interface/api-response';
+import {
+    LoginRequest,
+    LogoutRequest,
+    RefreshTokenRequest,
+    RegisterRequest,
+    ResendActivationRequest
+} from '../interface/auth.model';
+import { authStorage } from '../utils/auth-storage';
 
 export const AuthService = {
-    login: (data: Login): Promise<LoginResponse> => {
+    login: (
+        data: LoginRequest
+    ): Promise<ApiResponseDTO<LoginResponse>> => {
         return apiClient.post('/api/auth/login', data);
     },
 
-    register: (data: Register): Promise<RegisterResponse> => {
+    register: (
+        data: RegisterRequest
+    ): Promise<ApiResponseDTO<RegisterResponse>> => {
         return apiClient.post('/api/auth/register', data);
     },
 
-    refreshToken: (refreshToken: string): Promise<LoginResponse> => {
-        return apiClient.post('/api/auth/refresh-token', { refreshToken });
+    resendActivation: (
+        data: ResendActivationRequest
+    ): Promise<ApiResponseWithoutDataDTO> => {
+        return apiClient.post('/api/auth/resend-activation', data);
     },
 
-    activate: (token: string): Promise<any> => {
+    activateAccount: (
+        token: string
+    ): Promise<ApiResponseDTO<ActivateAccountResponse>> => {
         return apiClient.get('/api/auth/activate', { params: { token } });
     },
 
-    resendActivationEmail: (email: string): Promise<any> => {
-        return apiClient.post('/api/auth/resend-activation', { email });
+    refreshToken: (
+        data: RefreshTokenRequest
+    ): Promise<ApiResponseDTO<RefreshTokenResponse>> => {
+        return apiClient.post('/api/auth/refresh-token', data);
     },
 
-    logout: (): Promise<any> => {
+    logout: (
+        data: LogoutRequest = { refreshToken: authStorage.getRefreshToken() || undefined }
+    ): Promise<ApiResponseWithoutDataDTO> => {
         const accessToken = authStorage.getAccessToken();
-        const refreshToken = authStorage.getRefreshToken();
 
-        return apiClient.post(
-            '/api/auth/logout',
-            { refreshToken },
-            accessToken
-                ? {
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
-                }
-                : undefined
-        );
-    },
+        if (!accessToken) {
+            return Promise.reject(new Error('Access token is required to log out.'));
+        }
+
+        return apiClient.post('/api/auth/logout', data, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+    }
 };

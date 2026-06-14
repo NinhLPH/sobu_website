@@ -72,6 +72,11 @@ export const authStorage = {
         getLocalStorage()?.removeItem(ACCESS_TOKEN_KEY);
     },
 
+    setRefreshToken: (refreshToken: string) => {
+        getSessionStorage()?.setItem(REFRESH_TOKEN_KEY, refreshToken);
+        getLocalStorage()?.removeItem(REFRESH_TOKEN_KEY);
+    },
+
     clear: () => {
         const sessionStorage = getSessionStorage();
 

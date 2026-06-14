@@ -1,427 +1,556 @@
-import {useEffect, useState} from 'react';
-import {useParams, Link} from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import {
+    AlertCircle,
     ArrowLeft,
-    User,
+    Banknote,
+    CheckCircle2,
+    CreditCard,
+    Loader2,
     MapPin,
     Package,
     RefreshCw,
-    AlertCircle,
-    CheckCircle2,
-    Loader2
+    User
 } from 'lucide-react';
-import {AdminWorkflowService} from '../../service/admin.service';
-import {OrderResponseDto} from '../../interface/order.model';
-import {formatCurrency} from "../../util/format";
+import { useAdminStore } from '../../store/useAdminStore';
+import { formatCurrency } from '../../util/format';
+
+const getStatusColor = (status?: string) => {
+    switch (status) {
+        case 'PENDING':
+        case 'NEW':
+            return 'border-amber-200 bg-amber-100 text-amber-800';
+        case 'WAITING_DEPOSIT':
+            return 'border-yellow-200 bg-yellow-100 text-yellow-800';
+        case 'DEPOSIT_PAID':
+            return 'border-cyan-200 bg-cyan-100 text-cyan-800';
+        case 'READY_FOR_FINAL_PAYMENT':
+            return 'border-indigo-200 bg-indigo-100 text-indigo-800';
+        case 'PROCESSING':
+            return 'border-blue-200 bg-blue-100 text-blue-800';
+        case 'SHIPPED':
+            return 'border-purple-200 bg-purple-100 text-purple-800';
+        case 'DELIVERED':
+            return 'border-green-200 bg-green-100 text-green-800';
+        case 'CANCELLED':
+            return 'border-red-200 bg-red-100 text-red-800';
+        default:
+            return 'border-gray-200 bg-gray-100 text-gray-800';
+    }
+};
+
+const getStatusText = (status?: string) => {
+    switch (status) {
+        case 'PENDING':
+        case 'NEW':
+            return 'Mới';
+        case 'WAITING_DEPOSIT':
+            return 'Chờ đặt cọc';
+        case 'DEPOSIT_PAID':
+            return 'Đã nhận cọc';
+        case 'READY_FOR_FINAL_PAYMENT':
+            return 'Chờ thanh toán cuối';
+        case 'PROCESSING':
+            return 'Đang xử lý';
+        case 'SHIPPED':
+            return 'Đang giao';
+        case 'DELIVERED':
+            return 'Đã giao';
+        case 'CANCELLED':
+            return 'Đã hủy';
+        default:
+            return status || 'Chưa cập nhật';
+    }
+};
+
+const getSyncStatusColor = (status?: string) => {
+    switch (status) {
+        case 'SYNCED':
+            return 'border-green-200 bg-green-50 text-green-700';
+        case 'FAILED':
+            return 'border-red-200 bg-red-50 text-red-700';
+        case 'PENDING':
+            return 'border-amber-200 bg-amber-50 text-amber-700';
+        default:
+            return 'border-gray-200 bg-gray-50 text-gray-700';
+    }
+};
+
+const getSyncStatusText = (status?: string) => {
+    switch (status) {
+        case 'SYNCED':
+            return 'Đã đồng bộ';
+        case 'FAILED':
+            return 'Đồng bộ thất bại';
+        case 'PENDING':
+            return 'Chờ đồng bộ';
+        default:
+            return status || 'Chưa cập nhật';
+    }
+};
 
 export default function AdminOrderDetail() {
-    const {id} = useParams();
-    const [order, setOrder] = useState<OrderResponseDto | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRetrying, setIsRetrying] = useState(false);
-    const [actionError, setActionError] = useState<string | null>(null);
-    const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
-    const fetchOrderDetail = async () => {
-        if (!id) return;
-        setIsLoading(true);
-        setActionError(null);
-        try {
-            const data = await AdminWorkflowService.getOrderDetail(id);
-            setOrder(data);
-        } catch (err: any) {
-            console.error('Error fetching admin order detail:', err);
-            setActionError('Không thể tải thông tin chi tiết đơn hàng!');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const { id } = useParams();
+    const [manualPaymentCode, setManualPaymentCode] = useState('');
+    const {
+        currentOrderDetail: order,
+        adminPayments,
+        fetchOrderDetail,
+        retryOrderSync,
+        createPreorderFinalPayment,
+        confirmMockPayment,
+        clearCurrentOrder,
+        clearOrdersError,
+        clearOrderActionMessage,
+        isOrderDetailLoading,
+        isRetryingOrderSync,
+        isCreatingFinalPayment,
+        confirmingPaymentCode,
+        ordersError,
+        orderActionMessage
+    } = useAdminStore();
 
     useEffect(() => {
-        fetchOrderDetail();
-        // fetchOrderDetail depends only on the route param and local state setters in this screen.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id]);
+        if (id) {
+            fetchOrderDetail(id);
+        }
+        return () => {
+            clearCurrentOrder();
+        };
+    }, [id, fetchOrderDetail, clearCurrentOrder]);
 
     const handleRetrySync = async () => {
-        if (!id) return;
-        setIsRetrying(true);
-        setActionError(null);
-        setActionSuccess(null);
+        if (!id) {
+            return;
+        }
+        clearOrdersError();
+        clearOrderActionMessage();
         try {
-            const res = await AdminWorkflowService.retryOrderSyncNhanh(id);
-            if (res.syncStatus === 'SYNCED') {
-                setActionSuccess('Đồng bộ đơn hàng lên Nhanh.vn thành công!');
-            } else {
-                setActionError(res.lastSyncMessage || res.syncError || 'Đồng bộ thất bại. Vui lòng kiểm tra lại cấu hình Nhanh.vn!');
-            }
-            // Cập nhật state cục bộ từ kết quả trả về, không reload trang hay gọi API fetch lại
-            setOrder(prev => prev ? {
-                ...prev,
-                syncStatus: res.syncStatus,
-                nhanhSyncStage: res.nhanhSyncStage,
-                nhanhOrderId: res.nhanhOrderId,
-                nhanhOrderCode: res.nhanhOrderCode,
-                syncError: res.syncError,
-                lastSyncMessage: res.lastSyncMessage,
-                lastSyncAt: res.lastSyncAt
-            } : null);
-        } catch (err: any) {
-            setActionError(err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi đồng bộ đơn hàng!');
-        } finally {
-            setIsRetrying(false);
+            await retryOrderSync(id);
+        } catch {
+            // The admin store exposes the backend message through ordersError.
         }
     };
 
-    if (isLoading && !order) {
+    const handleCreateFinalPayment = async () => {
+        if (!id) {
+            return;
+        }
+        clearOrdersError();
+        clearOrderActionMessage();
+        try {
+            const payment = await createPreorderFinalPayment(id);
+            setManualPaymentCode(payment.paymentCode);
+        } catch {
+            // The admin store exposes the backend message through ordersError.
+        }
+    };
+
+    const handleConfirmPayment = async (paymentCode: string) => {
+        const normalizedCode = paymentCode.trim();
+        if (!normalizedCode) {
+            return;
+        }
+        clearOrdersError();
+        clearOrderActionMessage();
+        try {
+            await confirmMockPayment(normalizedCode);
+            setManualPaymentCode('');
+        } catch {
+            // The admin store exposes the backend message through ordersError.
+        }
+    };
+
+    if (isOrderDetailLoading && !order) {
         return (
-            <div className="py-24 flex flex-col items-center justify-center">
-                <Loader2 className="w-10 h-10 text-primary animate-spin mb-4"/>
-                <p className="text-outline text-xs font-bold">Đang tải chi tiết đơn hàng...</p>
+            <div className="flex flex-col items-center justify-center py-24">
+                <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
+                <p className="text-xs font-bold text-outline">Đang tải chi tiết đơn hàng...</p>
             </div>
         );
     }
 
     if (!order) {
         return (
-            <div
-                className="p-8 text-center text-on-surface-variant flex flex-col items-center justify-center min-h-[50vh]">
-                <AlertCircle className="w-12 h-12 text-error mb-4"/>
-                <h2 className="text-lg font-black text-on-surface uppercase">Không tìm thấy đơn hàng</h2>
-                <Link to="/admin/orders" className="text-primary font-bold hover:underline mt-4 inline-block">
+            <div className="flex min-h-[50vh] flex-col items-center justify-center p-8 text-center">
+                <AlertCircle className="mb-4 h-12 w-12 text-error" />
+                <h2 className="text-lg font-black uppercase text-on-surface">
+                    Không thể hiển thị đơn hàng
+                </h2>
+                {ordersError && (
+                    <p className="mt-2 text-xs font-bold text-error">{ordersError}</p>
+                )}
+                <Link to="/admin/orders" className="mt-4 font-bold text-primary hover:underline">
                     Quay lại danh sách đơn hàng
                 </Link>
             </div>
         );
     }
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'NEW':
-                return 'bg-amber-100 text-amber-800 border-amber-200';
-            case 'WAITING_DEPOSIT':
-                return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-            case 'DEPOSIT_PAID':
-                return 'bg-cyan-100 text-cyan-800 border-cyan-200';
-            case 'READY_FOR_FINAL_PAYMENT':
-                return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-            case 'PROCESSING':
-                return 'bg-blue-100 text-blue-800 border-blue-200';
-            case 'SHIPPED':
-                return 'bg-purple-100 text-purple-800 border-purple-200';
-            case 'DELIVERED':
-                return 'bg-green-100 text-green-800 border-green-200';
-            case 'CANCELLED':
-                return 'bg-red-100 text-red-800 border-red-200';
-            default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
-        }
-    };
-
-    const getStatusText = (status: string) => {
-        switch (status) {
-            case 'NEW':
-                return 'Mới';
-            case 'WAITING_DEPOSIT':
-                return 'Chờ đặt cọc';
-            case 'DEPOSIT_PAID':
-                return 'Đã nhận cọc';
-            case 'READY_FOR_FINAL_PAYMENT':
-                return 'Chờ thanh toán cuối';
-            case 'PROCESSING':
-                return 'Đang xử lý';
-            case 'SHIPPED':
-                return 'Đang giao';
-            case 'DELIVERED':
-                return 'Đã giao';
-            case 'CANCELLED':
-                return 'Đã hủy';
-            default:
-                return status;
-        }
-    };
-
-    const getSyncStatusColor = (sync: string) => {
-        switch (sync) {
-            case 'SYNCED':
-                return 'bg-green-50 text-green-700 border-green-200';
-            case 'FAILED':
-                return 'bg-red-50 text-red-700 border-red-200';
-            case 'PENDING':
-                return 'bg-amber-50 text-amber-700 border-amber-200';
-            default:
-                return 'bg-gray-50 text-gray-700 border-gray-200';
-        }
-    };
-
-    const getSyncStatusText = (sync: string) => {
-        switch (sync) {
-            case 'SYNCED':
-                return 'Đã đồng bộ thành công';
-            case 'FAILED':
-                return 'Lỗi đồng bộ ERP';
-            case 'PENDING':
-                return 'Chờ đồng bộ';
-            default:
-                return sync;
-        }
-    };
-
-    const getNhanhStageText = (stage?: string) => {
-        switch (stage) {
-            case 'NORMAL_ORDER_CREATED':
-                return 'Normal order created on Nhanh';
-            case 'PREORDER_DEPOSIT_CREATED':
-                return 'Preorder deposit created on Nhanh';
-            case 'PREORDER_FINAL_UPDATED':
-                return 'Preorder final payment updated on Nhanh';
-            case 'NONE':
-                return 'Not synced to Nhanh yet';
-            default:
-                return stage || 'Not synced to Nhanh yet';
-        }
-    };
+    const totalAmount = order.totalAmount ?? 0;
+    const shippingFee = order.shippingFee ?? 0;
+    const paidAmount = order.paidAmount ?? order.depositAmount ?? 0;
+    const remainingAmount = order.remainingAmount ?? Math.max(0, totalAmount - paidAmount);
 
     return (
         <div className="space-y-6">
-            {/* Header Title Bar */}
             <div className="flex items-center gap-4">
-                <Link to="/admin/orders"
-                      className="p-2 bg-white rounded-full border border-outline-variant/30 hover:bg-surface-variant transition-colors"
-                      title="Quay lại">
-                    <ArrowLeft className="w-5 h-5 text-on-surface"/>
+                <Link
+                    to="/admin/orders"
+                    className="rounded-full border border-outline-variant/30 bg-white p-2 transition-colors hover:bg-surface-variant"
+                    aria-label="Quay lại danh sách đơn hàng"
+                >
+                    <ArrowLeft className="h-5 w-5 text-on-surface" />
                 </Link>
                 <div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">Chi tiết đơn hàng
-                            #{order.orderCode || order.id}</h1>
-                        <span
-                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${getStatusColor(order.status)}`}>
+                        <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface">
+                            Chi tiết đơn #{order.orderCode || order.id}
+                        </h1>
+                        <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-wider ${getStatusColor(order.status)}`}>
                             {getStatusText(order.status)}
                         </span>
                     </div>
-                    {order.nhanhOrderCode && (
-                        <p className="text-[10px] text-outline font-bold mt-1">Mã đơn Nhanh.vn: <strong
-                            className="text-on-surface">{order.nhanhOrderCode}</strong></p>
+                    {(order.nhanhOrderCode || order.nhanhOrderId) && (
+                        <p className="mt-1 text-[10px] font-bold text-outline">
+                            Nhanh.vn:{' '}
+                            <strong className="text-on-surface">
+                                {order.nhanhOrderCode || order.nhanhOrderId}
+                            </strong>
+                        </p>
                     )}
                 </div>
             </div>
 
-            {/* Success / Error Alerts */}
-            {actionSuccess && (
-                <div
-                    className="p-4 bg-green-50 border border-green-200 rounded-2xl text-green-800 text-xs font-bold flex gap-3 items-center">
-                    <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0"/>
-                    <span>{actionSuccess}</span>
+            {orderActionMessage && (
+                <div className="flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-xs font-bold text-green-800">
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                    {orderActionMessage}
                 </div>
             )}
 
-            {actionError && (
-                <div
-                    className="p-4 bg-error/10 border border-error/20 rounded-2xl text-error text-xs font-bold flex gap-3 items-start">
-                    <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5"/>
-                    <span>{actionError}</span>
+            {ordersError && (
+                <div className="flex items-start gap-3 rounded-2xl border border-error/20 bg-error/10 p-4 text-xs font-bold text-error">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                    {ordersError}
                 </div>
             )}
 
-            {/* Sync Alert details if FAILED */}
             {order.syncStatus === 'FAILED' && (order.lastSyncMessage || order.syncError) && (
-                <div
-                    className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-800 text-xs font-medium leading-relaxed">
-                    <span className="font-black text-red-600 uppercase tracking-wide block mb-1">❌ Chi tiết lỗi đồng bộ ERP Nhanh.vn:</span>
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium leading-relaxed text-red-800">
+                    <span className="mb-1 block font-black uppercase tracking-wide text-red-600">
+                        Chi tiết lỗi đồng bộ
+                    </span>
                     {order.lastSyncMessage || order.syncError}
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <div className="space-y-6 lg:col-span-2">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                        <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
+                            <Package className="h-5 w-5 text-primary" />
+                            <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
+                                Sản phẩm
+                            </h2>
+                        </header>
+                        <div className="overflow-x-auto p-4">
+                            {order.items && order.items.length > 0 ? (
+                                <table className="w-full text-left text-xs">
+                                    <thead className="text-[10px] font-bold uppercase tracking-wider text-outline">
+                                        <tr>
+                                            <th className="pb-3">Sản phẩm</th>
+                                            <th className="pb-3 text-center">Nhanh ID</th>
+                                            <th className="pb-3 text-center">SL</th>
+                                            <th className="pb-3 text-right">Đơn giá</th>
+                                            <th className="pb-3 text-right">Thành tiền</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-outline-variant/20 font-bold">
+                                        {order.items.map((item) => (
+                                            <tr key={item.id}>
+                                                <td className="py-3 text-on-surface">{item.name}</td>
+                                                <td className="py-3 text-center text-outline">
+                                                    {item.nhanhProductId || 'N/A'}
+                                                </td>
+                                                <td className="py-3 text-center">{item.quantity}</td>
+                                                <td className="py-3 text-right">
+                                                    {formatCurrency(item.price)}
+                                                </td>
+                                                <td className="py-3 text-right font-black text-primary">
+                                                    {formatCurrency(item.price * item.quantity)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <p className="py-6 text-center text-xs font-bold text-outline">
+                                    API chưa trả chi tiết sản phẩm.
+                                </p>
+                            )}
 
-                {/* Left Side: Product table & Sync */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
-                        <div
-                            className="p-4 border-b border-outline-variant/20 bg-surface-container-lowest flex items-center gap-2">
-                            <Package className="w-5 h-5 text-primary"/>
-                            <h2 className="font-black text-on-surface uppercase tracking-wider text-xs">Danh sách sản
-                                phẩm</h2>
-                        </div>
-                        <div className="p-4">
-                            <table className="w-full text-xs text-left">
-                                <thead className="text-outline uppercase text-[10px] tracking-wider font-bold">
-                                <tr>
-                                    <th className="pb-3">Sản phẩm</th>
-                                    <th className="pb-3 text-center">Nhanh SKU</th>
-                                    <th className="pb-3 text-center">SL</th>
-                                    <th className="pb-3 text-right">Đơn giá</th>
-                                    <th className="pb-3 text-right">Thành tiền</th>
-                                </tr>
-                                </thead>
-                                <tbody className="divide-y divide-outline-variant/20 font-bold">
-                                {order.items?.map(item => (
-                                    <tr key={item.id}>
-                                        <td className="py-3 font-bold text-on-surface">{item.name}</td>
-                                        <td className="py-3 text-center text-outline">{item.nhanhProductId || 'N/A'}</td>
-                                        <td className="py-3 text-center text-on-surface">{item.quantity}</td>
-                                        <td className="py-3 text-right text-on-surface">{formatCurrency(item.price)}</td>
-                                        <td className="py-3 text-right font-black text-primary">{formatCurrency(item.price * item.quantity)}</td>
-                                    </tr>
-                                ))}
-                                </tbody>
-                            </table>
-
-                            <div
-                                className="mt-6 pt-4 border-t border-outline-variant/20 w-full sm:w-1/2 sm:ml-auto space-y-2 text-xs font-bold">
+                            <div className="ml-auto mt-6 w-full space-y-2 border-t border-outline-variant/20 pt-4 text-xs font-bold sm:w-1/2">
                                 <div className="flex justify-between text-outline">
-                                    <span>Tạm tính (Chi phí gốc):</span>
-                                    <span className="text-on-surface">{formatCurrency(order.totalAmount)}</span>
+                                    <span>Tổng đơn:</span>
+                                    <span className="text-on-surface">{formatCurrency(totalAmount)}</span>
                                 </div>
                                 <div className="flex justify-between text-outline">
                                     <span>Phí vận chuyển:</span>
-                                    <span className="text-on-surface">{formatCurrency(order.shippingFee || 0)}</span>
+                                    <span className="text-on-surface">{formatCurrency(shippingFee)}</span>
                                 </div>
                                 <div className="flex justify-between text-outline">
-                                    <span>Đã cọc (Deposit):</span>
-                                    <span className="text-on-surface">{formatCurrency(order.paidAmount || order.depositAmount || 0)}</span>
+                                    <span>Đã thanh toán:</span>
+                                    <span className="text-on-surface">{formatCurrency(paidAmount)}</span>
                                 </div>
-                                <div
-                                    className="flex justify-between font-black text-primary text-base pt-2 border-t border-outline-variant/20">
-                                    <span>Tổng thanh toán còn lại:</span>
-                                    <span>{formatCurrency(order.remainingAmount || 0)}</span>
+                                <div className="flex justify-between border-t border-outline-variant/20 pt-2 text-base font-black text-primary">
+                                    <span>Còn lại:</span>
+                                    <span>{formatCurrency(remainingAmount)}</span>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    {/* ERP Nhanh.vn Sync Card details */}
-                    <div
-                        className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden p-6 space-y-4">
-                        <div className="flex justify-between items-center border-b border-surface-container pb-3">
+                    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
+                        <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
                             <div className="flex items-center gap-2">
-                                <RefreshCw className="w-5 h-5 text-primary"/>
-                                <h3 className="font-black text-on-surface uppercase tracking-wider text-xs">Đồng bộ tích
-                                    hợp ERP Nhanh.vn</h3>
+                                <CreditCard className="h-5 w-5 text-primary" />
+                                <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
+                                    Lịch sử thanh toán
+                                </h2>
                             </div>
-                            <span
-                                className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${getSyncStatusColor(order.syncStatus)}`}>
+                            <span className="text-[9px] font-black uppercase text-outline">
+                                {adminPayments.length} giao dịch trong phiên
+                            </span>
+                        </div>
+
+                        {order.type === 'PREORDER' && order.status === 'DEPOSIT_PAID' && (
+                            <button
+                                type="button"
+                                onClick={handleCreateFinalPayment}
+                                disabled={isCreatingFinalPayment || Boolean(confirmingPaymentCode)}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-[10px] font-black uppercase tracking-wider text-white disabled:opacity-50"
+                            >
+                                {isCreatingFinalPayment
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <CreditCard className="h-4 w-4" />}
+                                {isCreatingFinalPayment
+                                    ? 'Đang tạo thanh toán cuối...'
+                                    : 'Tạo thanh toán đợt cuối'}
+                            </button>
+                        )}
+
+                        <div className="rounded-xl bg-surface-container/50 p-4">
+                            <label className="text-[10px] font-black uppercase text-outline">
+                                Xác nhận thanh toán thủ công
+                            </label>
+                            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                                <input
+                                    type="text"
+                                    value={manualPaymentCode}
+                                    onChange={(event) => setManualPaymentCode(event.target.value)}
+                                    disabled={Boolean(confirmingPaymentCode)}
+                                    placeholder="Nhập paymentCode"
+                                    className="min-w-0 flex-1 rounded-xl border border-outline-variant/20 bg-white px-3 py-2.5 text-xs font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => handleConfirmPayment(manualPaymentCode)}
+                                    disabled={!manualPaymentCode.trim() || Boolean(confirmingPaymentCode)}
+                                    className="flex items-center justify-center gap-2 rounded-xl bg-on-surface px-4 py-2.5 text-[10px] font-black uppercase text-white disabled:opacity-50"
+                                >
+                                    {confirmingPaymentCode
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <Banknote className="h-4 w-4" />}
+                                    Xác nhận đã nhận tiền
+                                </button>
+                            </div>
+                        </div>
+
+                        {adminPayments.length > 0 ? (
+                            <div className="space-y-3">
+                                {adminPayments.map(payment => (
+                                    <div
+                                        key={payment.id}
+                                        className="flex flex-col justify-between gap-3 rounded-xl border border-outline-variant/20 p-4 text-xs sm:flex-row sm:items-center"
+                                    >
+                                        <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="font-black text-on-surface">
+                                                    {payment.type} · {formatCurrency(payment.amount)}
+                                                </span>
+                                                <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${
+                                                    payment.status === 'PAID'
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : payment.status === 'PENDING'
+                                                            ? 'bg-amber-100 text-amber-700'
+                                                            : 'bg-red-100 text-red-700'
+                                                }`}>
+                                                    {payment.status}
+                                                </span>
+                                            </div>
+                                            <p className="mt-1 font-medium text-outline">
+                                                {payment.paymentCode} · {payment.paymentMethod}
+                                            </p>
+                                        </div>
+                                        {payment.status === 'PENDING' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleConfirmPayment(payment.paymentCode)}
+                                                disabled={Boolean(confirmingPaymentCode)}
+                                                className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 px-3 py-2 text-[9px] font-black uppercase text-primary disabled:opacity-50"
+                                            >
+                                                {confirmingPaymentCode === payment.paymentCode
+                                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                    : <Banknote className="h-3.5 w-3.5" />}
+                                                Xác nhận
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="rounded-xl border border-dashed border-outline-variant/30 p-4 text-xs font-medium leading-relaxed text-outline">
+                                Backend hiện chưa có API Admin để tải lịch sử thanh toán cũ.
+                                Các giao dịch vừa tạo hoặc xác nhận trong màn hình này sẽ xuất hiện tại đây.
+                            </p>
+                        )}
+                    </section>
+
+                    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
+                        <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
+                            <div className="flex items-center gap-2">
+                                <RefreshCw className="h-5 w-5 text-primary" />
+                                <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
+                                    Đồng bộ Nhanh.vn
+                                </h2>
+                            </div>
+                            <span className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
                                 {getSyncStatusText(order.syncStatus)}
                             </span>
                         </div>
-                        <p className="text-xs text-outline/80 leading-relaxed font-semibold">
-                            Đơn hàng được ghi nhận đồng bộ trực tiếp lên hệ thống ERP Nhanh.vn để phân bổ kho hàng, theo
-                            dõi đơn giao và in hóa đơn vận chuyển.
-                        </p>
 
-                        {/* Nhanh.vn details list */}
-                        <div
-                            className="bg-surface-container/30 rounded-xl p-4 space-y-3 font-bold border border-outline-variant/10 text-xs">
-                            <div className="flex justify-between items-center">
-                                <span className="text-outline">Trạng thái đồng bộ:</span>
-                                <span
-                                    className={`px-2 py-0.5 rounded text-[10px] uppercase font-black tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
-                                    {order.syncStatus}
+                        <div className="space-y-3 rounded-xl border border-outline-variant/10 bg-surface-container/30 p-4 text-xs font-bold">
+                            <div className="flex justify-between gap-4">
+                                <span className="text-outline">Milestone:</span>
+                                <span className="text-right text-on-surface">
+                                    {order.nhanhSyncStage || 'NONE'}
                                 </span>
                             </div>
-                            <div className="flex justify-between items-center gap-4">
-                                <span className="text-outline">Milestone đồng bộ:</span>
-                                <span className="text-on-surface text-right">{getNhanhStageText(order.nhanhSyncStage)}</span>
+                            <div className="flex justify-between gap-4">
+                                <span className="text-outline">Nhanh ID:</span>
+                                <span className="select-all text-on-surface">
+                                    {order.nhanhOrderId || 'Chưa kết nối'}
+                                </span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-outline">ID hệ thống Nhanh:</span>
-                                <span
-                                    className="text-on-surface select-all">{order.nhanhOrderId || 'Chưa kết nối'}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-outline">Mã đơn Nhanh:</span>
-                                <span
-                                    className="text-on-surface select-all">{order.nhanhOrderCode || 'Chưa kết nối'}</span>
+                            <div className="flex justify-between gap-4">
+                                <span className="text-outline">Nhanh code:</span>
+                                <span className="select-all text-on-surface">
+                                    {order.nhanhOrderCode || 'Chưa kết nối'}
+                                </span>
                             </div>
                             {order.lastSyncAt && (
-                                <div className="flex justify-between items-center">
+                                <div className="flex justify-between gap-4">
                                     <span className="text-outline">Lần sync cuối:</span>
-                                    <span className="text-on-surface">{new Date(order.lastSyncAt).toLocaleString('vi-VN')}</span>
-                                </div>
-                            )}
-                            {(order.lastSyncMessage || order.syncError) && (
-                                <div className="pt-2 border-t border-outline-variant/20">
-                                    <span className="text-error uppercase text-[10px] tracking-wide block mb-1">Lý do lỗi đồng bộ:</span>
-                                    <p className="text-[11px] text-error leading-relaxed font-semibold bg-error/5 p-2.5 rounded-lg border border-error/10">
-                                        {order.lastSyncMessage || order.syncError}
-                                    </p>
+                                    <span className="text-on-surface">
+                                        {new Date(order.lastSyncAt).toLocaleString('vi-VN')}
+                                    </span>
                                 </div>
                             )}
                         </div>
 
                         {order.syncStatus === 'FAILED' && (
                             <button
+                                type="button"
                                 onClick={handleRetrySync}
-                                disabled={isRetrying}
-                                className="w-full py-3 bg-gradient-to-br from-primary to-primary-container text-white rounded-2xl text-xs font-black uppercase tracking-widest text-center shadow-md hover:scale-102 transition-transform cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none"
+                                disabled={isRetryingOrderSync}
+                                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                {isRetrying ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin"/>
-                                        <span>Đang gửi đồng bộ lên Nhanh.vn...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <RefreshCw className="w-4 h-4"/>
-                                        <span>Retry Đồng Bộ</span>
-                                    </>
-                                )}
+                                {isRetryingOrderSync
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <RefreshCw className="h-4 w-4" />}
+                                {isRetryingOrderSync ? 'Đang đồng bộ lại...' : 'Retry đồng bộ'}
                             </button>
                         )}
-                    </div>
+                    </section>
                 </div>
 
-                {/* Right Side: Customer info & delivery */}
-                <div className="space-y-6">
-                    <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
-                        <div
-                            className="p-4 border-b border-outline-variant/20 bg-surface-container-lowest flex items-center gap-2">
-                            <User className="w-5 h-5 text-primary"/>
-                            <h2 className="font-black text-on-surface uppercase tracking-wider text-xs">Thông tin khách
-                                hàng</h2>
-                        </div>
-                        <div className="p-6 text-xs space-y-4 font-bold">
+                <aside className="space-y-6">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                        <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
+                            <User className="h-5 w-5 text-primary" />
+                            <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
+                                Khách hàng
+                            </h2>
+                        </header>
+                        <div className="space-y-4 p-6 text-xs font-bold">
                             <div>
-                                <p className="text-[10px] text-outline uppercase mb-1">Họ tên khách</p>
-                                <p className="font-black text-on-surface text-sm">{order.customerName || 'N/A'}</p>
+                                <p className="mb-1 text-[10px] uppercase text-outline">Họ tên</p>
+                                <p className="text-sm font-black text-on-surface">
+                                    {order.customerName || 'N/A'}
+                                </p>
                             </div>
                             <div>
-                                <p className="text-[10px] text-outline uppercase mb-1">Số điện thoại</p>
-                                <p className="text-on-surface font-black">{order.customerMobile}</p>
+                                <p className="mb-1 text-[10px] uppercase text-outline">Điện thoại</p>
+                                <p className="font-black text-on-surface">
+                                    {order.customerMobile || 'N/A'}
+                                </p>
                             </div>
+                            {order.customerEmail && (
+                                <div>
+                                    <p className="mb-1 text-[10px] uppercase text-outline">Email</p>
+                                    <p className="break-all text-on-surface">{order.customerEmail}</p>
+                                </div>
+                            )}
                             {order.requestCode && (
                                 <div>
-                                    <p className="text-[10px] text-outline uppercase mb-1">Liên kết mã yêu cầu</p>
-                                    <Link to={`/admin/requests`} className="text-primary font-black hover:underline">
+                                    <p className="mb-1 text-[10px] uppercase text-outline">Yêu cầu liên quan</p>
+                                    <Link to="/admin/requests" className="font-black text-primary hover:underline">
                                         #{order.requestCode}
                                     </Link>
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </section>
 
-                    <div className="bg-white rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
-                        <div
-                            className="p-4 border-b border-outline-variant/20 bg-surface-container-lowest flex items-center gap-2">
-                            <MapPin className="w-5 h-5 text-primary"/>
-                            <h2 className="font-black text-on-surface uppercase tracking-wider text-xs">Thông tin giao
-                                hàng</h2>
-                        </div>
-                        <div className="p-6 text-xs space-y-4 font-bold">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                        <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
+                            <MapPin className="h-5 w-5 text-primary" />
+                            <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
+                                Giao hàng
+                            </h2>
+                        </header>
+                        <div className="space-y-4 p-6 text-xs font-bold">
                             <div>
-                                <p className="text-[10px] text-outline uppercase mb-1">Địa chỉ nhận hàng</p>
-                                <p className="text-on-surface leading-relaxed font-semibold">{order.customerAddress || 'Nhận tại SOBU Workshop'}</p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] text-outline uppercase mb-1">Thời gian đặt</p>
-                                <p className="text-on-surface font-semibold">
-                                    {order.createdAt ? new Date(order.createdAt).toLocaleString('vi-VN') : 'N/A'}
+                                <p className="mb-1 text-[10px] uppercase text-outline">Địa chỉ</p>
+                                <p className="font-semibold leading-relaxed text-on-surface">
+                                    {[
+                                        order.customerAddress,
+                                        order.customerWardName,
+                                        order.customerDistrictName,
+                                        order.customerCityName
+                                    ].filter(Boolean).join(', ') || 'Chưa cập nhật'}
                                 </p>
                             </div>
+                            <div>
+                                <p className="mb-1 text-[10px] uppercase text-outline">Thời gian đặt</p>
+                                <p className="font-semibold text-on-surface">
+                                    {order.createdAt
+                                        ? new Date(order.createdAt).toLocaleString('vi-VN')
+                                        : 'N/A'}
+                                </p>
+                            </div>
+                            {order.description && (
+                                <div>
+                                    <p className="mb-1 text-[10px] uppercase text-outline">Ghi chú</p>
+                                    <p className="font-semibold leading-relaxed text-on-surface">
+                                        {order.description}
+                                    </p>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                </div>
+                    </section>
+                </aside>
             </div>
         </div>
     );
