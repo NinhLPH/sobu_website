@@ -2,12 +2,15 @@ import { create } from 'zustand';
 import { CartItem, ProductModel } from '../interface/product.model';
 import {
     CreateNormalOrderDto,
+    OrderShippingLocationDto,
     OrderResponseDto
 } from '../interface/order.model';
 import { CustomerService } from '../service/custom.service';
 import { createIdempotencyKey } from '../utils/idempotency';
 
-type CheckoutDetails = Omit<CreateNormalOrderDto, 'items'>;
+type CheckoutDetails =
+    Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
+    & OrderShippingLocationDto;
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message ||
@@ -90,6 +93,22 @@ export const useCartStore = create<CartState>((set, get) => ({
         const items = get().items;
         if (items.length === 0) {
             const message = 'Giỏ hàng đang trống.';
+            set({ checkoutError: message });
+            throw new Error(message);
+        }
+
+        const hasValidShippingLocation = [
+            details.customerCityName,
+            details.customerDistrictName,
+            details.customerWardName
+        ].every((name) => name.trim().length > 0) && [
+            details.customerCityId,
+            details.customerDistrictId,
+            details.customerWardId
+        ].every((id) => Number.isInteger(id) && id > 0);
+
+        if (!hasValidShippingLocation) {
+            const message = 'Vui lòng chọn đầy đủ tỉnh/thành phố, quận/huyện và phường/xã.';
             set({ checkoutError: message });
             throw new Error(message);
         }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
+import { useLocationStore } from '../store/useLocationStore';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { ToastService } from '../service/toast.service';
 import { formatCurrency } from '../utils/format';
@@ -23,8 +24,16 @@ interface CheckoutForm {
     customerCityName: string;
     customerDistrictName: string;
     customerWardName: string;
+    customerCityId: number | null;
+    customerDistrictId: number | null;
+    customerWardId: number | null;
     description: string;
 }
+
+type CheckoutTextField = Exclude<
+    keyof CheckoutForm,
+    'customerCityId' | 'customerDistrictId' | 'customerWardId'
+>;
 
 const initialCheckoutForm: CheckoutForm = {
     customerName: '',
@@ -34,6 +43,9 @@ const initialCheckoutForm: CheckoutForm = {
     customerCityName: '',
     customerDistrictName: '',
     customerWardName: '',
+    customerCityId: null,
+    customerDistrictId: null,
+    customerWardId: null,
     description: ''
 };
 
@@ -115,11 +127,22 @@ export default function Cart() {
         createPayment,
         isCreatingPayment
     } = usePaymentStore();
+    const {
+        locationTree,
+        locationsLoaded,
+        isLoading: isLocationsLoading,
+        error: locationError,
+        fetchLocations
+    } = useLocationStore();
     const { subtotal, itemCount } = getTotals();
     const { isAuthenticated, user } = useAuthStore();
     const navigate = useNavigate();
     const [form, setForm] = useState<CheckoutForm>(initialCheckoutForm);
     const [validationError, setValidationError] = useState<string | null>(null);
+
+    useEffect(() => {
+        void fetchLocations();
+    }, [fetchLocations]);
 
     useEffect(() => {
         if (!user) {
@@ -134,10 +157,63 @@ export default function Cart() {
     }, [user]);
 
     const updateField = (
-        field: keyof CheckoutForm,
+        field: CheckoutTextField,
         value: string
     ) => {
         setForm((current) => ({ ...current, [field]: value }));
+        setValidationError(null);
+        clearCheckoutError();
+    };
+
+    const cities = locationTree?.cities ?? [];
+    const selectedCity = cities.find((city) => city.cityId === form.customerCityId);
+    const districts = selectedCity?.districts ?? [];
+    const selectedDistrict = districts.find(
+        (district) => district.districtId === form.customerDistrictId
+    );
+    const wards = selectedDistrict?.wards ?? [];
+
+    const handleCityChange = (event: ChangeEvent<HTMLSelectElement>) => {
+        const cityId = event.target.value ? Number(event.target.value) : null;
+        const city = cities.find((item) => item.cityId === cityId);
+
+        setForm((current) => ({
+            ...current,
+            customerCityId: city?.cityId ?? null,
+            customerCityName: city?.cityName ?? '',
+            customerDistrictId: null,
+            customerDistrictName: '',
+            customerWardId: null,
+            customerWardName: ''
+        }));
+        setValidationError(null);
+        clearCheckoutError();
+    };
+
+    const handleDistrictChange = (event: ChangeEvent<HTMLSelectElement>) => {
+        const districtId = event.target.value ? Number(event.target.value) : null;
+        const district = districts.find((item) => item.districtId === districtId);
+
+        setForm((current) => ({
+            ...current,
+            customerDistrictId: district?.districtId ?? null,
+            customerDistrictName: district?.districtName ?? '',
+            customerWardId: null,
+            customerWardName: ''
+        }));
+        setValidationError(null);
+        clearCheckoutError();
+    };
+
+    const handleWardChange = (event: ChangeEvent<HTMLSelectElement>) => {
+        const wardId = event.target.value ? Number(event.target.value) : null;
+        const ward = wards.find((item) => item.wardId === wardId);
+
+        setForm((current) => ({
+            ...current,
+            customerWardId: ward?.wardId ?? null,
+            customerWardName: ward?.wardName ?? ''
+        }));
         setValidationError(null);
         clearCheckoutError();
     };
@@ -157,15 +233,32 @@ export default function Cart() {
             return;
         }
 
+        if (
+            form.customerCityId === null ||
+            form.customerDistrictId === null ||
+            form.customerWardId === null ||
+            !form.customerCityName ||
+            !form.customerDistrictName ||
+            !form.customerWardName
+        ) {
+            setValidationError(
+                'Vui lòng chọn đầy đủ tỉnh/thành phố, quận/huyện và phường/xã.'
+            );
+            return;
+        }
+
         try {
             const order = await submitOrder({
                 customerName: form.customerName.trim(),
                 customerMobile: form.customerMobile.trim(),
                 customerEmail: form.customerEmail.trim() || undefined,
                 customerAddress: form.customerAddress.trim() || undefined,
-                customerCityName: form.customerCityName.trim() || undefined,
-                customerDistrictName: form.customerDistrictName.trim() || undefined,
-                customerWardName: form.customerWardName.trim() || undefined,
+                customerCityName: form.customerCityName,
+                customerDistrictName: form.customerDistrictName,
+                customerWardName: form.customerWardName,
+                customerCityId: form.customerCityId,
+                customerDistrictId: form.customerDistrictId,
+                customerWardId: form.customerWardId,
                 shippingFee: 0,
                 description: form.description.trim() || undefined
             });
@@ -245,9 +338,9 @@ export default function Cart() {
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-10 lg:grid-cols-12">
                 <div className="space-y-8 lg:col-span-7">
-                    {(validationError || checkoutError) && (
+                    {(validationError || checkoutError || locationError) && (
                         <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">
-                            {validationError || checkoutError}
+                            {validationError || checkoutError || locationError}
                         </div>
                     )}
 
@@ -299,31 +392,79 @@ export default function Cart() {
                                 className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                             />
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                <input
-                                    type="text"
-                                    value={form.customerCityName}
-                                    onChange={(event) => updateField('customerCityName', event.target.value)}
-                                    disabled={isSubmitting || isCreatingPayment}
-                                    placeholder="Tỉnh / Thành phố"
+                                <select
+                                    value={form.customerCityId ?? ''}
+                                    onChange={handleCityChange}
+                                    disabled={
+                                        isSubmitting ||
+                                        isCreatingPayment ||
+                                        isLocationsLoading ||
+                                        !locationsLoaded
+                                    }
                                     className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                />
-                                <input
-                                    type="text"
-                                    value={form.customerDistrictName}
-                                    onChange={(event) => updateField('customerDistrictName', event.target.value)}
-                                    disabled={isSubmitting || isCreatingPayment}
-                                    placeholder="Quận / Huyện"
+                                    required
+                                >
+                                    <option value="">
+                                        {isLocationsLoading ? 'Đang tải...' : 'Tỉnh / Thành phố *'}
+                                    </option>
+                                    {cities.map((city) => (
+                                        <option key={city.cityId} value={city.cityId}>
+                                            {city.cityName}
+                                        </option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={form.customerDistrictId ?? ''}
+                                    onChange={handleDistrictChange}
+                                    disabled={
+                                        isSubmitting ||
+                                        isCreatingPayment ||
+                                        !selectedCity
+                                    }
                                     className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                />
-                                <input
-                                    type="text"
-                                    value={form.customerWardName}
-                                    onChange={(event) => updateField('customerWardName', event.target.value)}
-                                    disabled={isSubmitting || isCreatingPayment}
-                                    placeholder="Phường / Xã"
+                                    required
+                                >
+                                    <option value="">Quận / Huyện *</option>
+                                    {districts.map((district) => (
+                                        <option key={district.districtId} value={district.districtId}>
+                                            {district.districtName}
+                                        </option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={form.customerWardId ?? ''}
+                                    onChange={handleWardChange}
+                                    disabled={
+                                        isSubmitting ||
+                                        isCreatingPayment ||
+                                        !selectedDistrict
+                                    }
                                     className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                />
+                                    required
+                                >
+                                    <option value="">Phường / Xã *</option>
+                                    {wards.map((ward) => (
+                                        <option key={ward.wardId} value={ward.wardId}>
+                                            {ward.wardName}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
+                            {locationTree?.stale && (
+                                <p className="text-xs font-semibold text-amber-700">
+                                    Đang sử dụng dữ liệu địa điểm được lưu gần nhất.
+                                </p>
+                            )}
+                            {locationError && !locationsLoaded && (
+                                <button
+                                    type="button"
+                                    onClick={() => void fetchLocations()}
+                                    disabled={isLocationsLoading}
+                                    className="text-left text-xs font-bold text-primary underline disabled:opacity-50"
+                                >
+                                    Thử tải lại danh sách địa điểm
+                                </button>
+                            )}
                             <textarea
                                 value={form.description}
                                 onChange={(event) => updateField('description', event.target.value)}
@@ -400,7 +541,12 @@ export default function Cart() {
 
                         <button
                             type="submit"
-                            disabled={isSubmitting || isCreatingPayment || items.length === 0}
+                            disabled={
+                                isSubmitting ||
+                                isCreatingPayment ||
+                                !locationsLoaded ||
+                                items.length === 0
+                            }
                             className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-white shadow-md shadow-primary/10 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}

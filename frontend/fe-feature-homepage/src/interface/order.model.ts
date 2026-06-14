@@ -18,17 +18,20 @@ export interface CreateNormalOrderItemDto {
     quantity: number;
 }
 
-export interface CreateNormalOrderDto {
+export interface OrderShippingLocationDto {
+    customerCityName: string;
+    customerDistrictName: string;
+    customerWardName: string;
+    customerCityId: number;
+    customerDistrictId: number;
+    customerWardId: number;
+}
+
+export interface CreateNormalOrderDto extends Partial<OrderShippingLocationDto> {
     customerName: string;
     customerMobile: string;
     customerEmail?: string;
     customerAddress?: string;
-    customerCityName?: string;
-    customerDistrictName?: string;
-    customerWardName?: string;
-    customerCityId?: number;
-    customerDistrictId?: number;
-    customerWardId?: number;
     carrierId?: number;
     carrierServiceId?: number;
     shippingFee?: number;
@@ -46,7 +49,7 @@ export interface OrderItemResponseDto {
     discount?: number;
 }
 
-export interface OrderResponseDto {
+export interface OrderResponseDto extends Partial<OrderShippingLocationDto> {
     id: number;
     orderCode?: string;
     requestId?: number | null;
@@ -65,12 +68,6 @@ export interface OrderResponseDto {
     customerMobile?: string;
     customerEmail?: string;
     customerAddress?: string;
-    customerCityName?: string;
-    customerDistrictName?: string;
-    customerWardName?: string;
-    customerCityId?: number;
-    customerDistrictId?: number;
-    customerWardId?: number;
     nhanhOrderId?: string;
     nhanhOrderCode?: string;
     syncError?: string;
