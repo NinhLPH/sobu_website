@@ -4,7 +4,7 @@ import {Plus, Edit, Trash2, Search, X} from 'lucide-react';
 import {ProductModel, mapListItemToProductModel} from "../../interface/product.model";
 import {CategoryModel, mapCategoryDtoToModel} from "../../interface/category.model";
 import {useProductStore} from '../../store/useProductStore';
-import {formatCurrency} from "../../util/format";
+import {formatCurrency} from "../../utils/format";
 
 export default function AdminProducts() {
     const { products: dbProducts, categories: dbCategories, fetchProducts, fetchCategories } = useProductStore();

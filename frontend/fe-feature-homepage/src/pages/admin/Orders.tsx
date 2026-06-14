@@ -11,7 +11,7 @@ import {
     SlidersHorizontal
 } from 'lucide-react';
 import { useAdminStore } from '../../store/useAdminStore';
-import { formatCurrency } from '../../util/format';
+import { formatCurrency } from '../../utils/format';
 
 const getStatusColor = (status?: string) => {
     switch (status) {

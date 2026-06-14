@@ -4,7 +4,7 @@ import {useNavigate} from 'react-router-dom';
 
 import {useCartStore} from "../../store/useCartStore";
 import {ProductModel} from "../../interface/product.model";
-import {formatCurrency} from "../../util/format";
+import {formatCurrency} from "../../utils/format";
 
 interface ProductCardProps {
     product: ProductModel;

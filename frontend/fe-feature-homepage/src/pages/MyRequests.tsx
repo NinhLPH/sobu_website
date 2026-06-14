@@ -10,7 +10,7 @@ import {
     Plus
 } from 'lucide-react';
 import { useRequestStore } from '../store/useRequestStore';
-import { formatCurrency } from '../util/format';
+import { formatCurrency } from '../utils/format';
 import { RequestStatus, RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
 

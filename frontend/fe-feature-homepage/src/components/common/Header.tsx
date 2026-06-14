@@ -7,7 +7,7 @@ import {
 import {useCartStore} from "../../store/useCartStore";
 import {useProductStore} from "../../store/useProductStore";
 import {useAuthStore} from "../../store/useAuthStore";
-import {formatCurrency} from "../../util/format";
+import {formatCurrency} from "../../utils/format";
 
 
 const getCategoryIcon = (catCode: string) => {

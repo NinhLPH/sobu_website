@@ -3,7 +3,7 @@ import {useParams, Link} from 'react-router-dom';
 import {ChevronRight, Star, ShoppingBag, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
 
 import {useCartStore} from '../store/useCartStore';
-import {formatCurrency} from "../util/format";
+import {formatCurrency} from "../utils/format";
 import ProductSlider from "../components/common/ProductSlider";
 import {useProductStore} from '../store/useProductStore';
 import {PublicCatalogService} from '../service/public-catalog.service';

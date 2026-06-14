@@ -18,7 +18,7 @@ import {
 } from '../interface/order.model';
 import { PaymentMethod } from '../enum/union-types';
 import { usePaymentStore } from '../store/usePaymentStore';
-import { formatCurrency } from '../util/format';
+import { formatCurrency } from '../utils/format';
 
 type TrackingType = 'internal' | 'nhanh';
 

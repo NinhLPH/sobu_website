@@ -5,7 +5,7 @@ import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { ToastService } from '../service/toast.service';
-import { formatCurrency } from '../util/format';
+import { formatCurrency } from '../utils/format';
 
 interface QuantityControllerProps {
     quantity: number;
