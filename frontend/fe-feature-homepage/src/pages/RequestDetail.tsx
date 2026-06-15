@@ -67,7 +67,7 @@ export default function RequestDetail() {
 
     if (isLoading) {
         return (
-            <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh]">
+            <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh]">
                 <Loader2 className="w-10 h-10 text-primary animate-spin" />
                 <p className="text-outline text-xs font-bold mt-4">Đang tải chi tiết yêu cầu...</p>
             </main>
@@ -76,7 +76,7 @@ export default function RequestDetail() {
 
     if (!currentRequestDetail) {
         return (
-            <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh] text-center">
+            <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh] text-center">
                 <AlertCircle className="w-12 h-12 text-error mb-4" />
                 <h1 className="text-xl font-black text-on-surface uppercase">Không tìm thấy yêu cầu</h1>
                 <p className="text-outline text-sm mt-2 mb-6">Yêu cầu này không tồn tại hoặc bạn không có quyền xem.</p>
@@ -189,7 +189,7 @@ export default function RequestDetail() {
     };
 
     return (
-        <main className="max-w-4xl mx-auto px-6 pt-32 pb-24 bg-surface">
+        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
             {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>

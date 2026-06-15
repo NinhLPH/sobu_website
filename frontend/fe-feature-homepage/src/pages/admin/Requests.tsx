@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ShieldAlert, CheckCircle, SlidersHorizontal, Loader2, FileText, CheckCircle2, ChevronLeft, ChevronRight, PackageCheck } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, SlidersHorizontal, Loader2, FileText, CheckCircle2, ChevronLeft, ChevronRight, PackageCheck, Save, Send } from 'lucide-react';
 import { useRequestStore } from '../../store/useRequestStore';
 import { formatCurrency } from '../../utils/format';
 import { RequestStatus } from '../../enum/union-types';
 import { ToastService } from '../../service/toast.service';
 import { getPublicImageUrl } from '../../utils/file-url';
+import { RequestItemDto, UpdateRequestDto } from '../../interface/customer-request.model';
 
 const allowedTransitions: Record<RequestStatus, RequestStatus[]> = {
     PENDING: ['REVIEWING', 'SOURCING', 'REJECTED', 'CANCELLED'],
@@ -17,6 +18,11 @@ const allowedTransitions: Record<RequestStatus, RequestStatus[]> = {
     CANCELLED: []
 };
 
+const calculateQuoteTotal = (items: RequestItemDto[]) => items.reduce(
+    (total, item) => total + (Number(item.price) || 0) * item.quantity,
+    0
+);
+
 export default function AdminRequests() {
     const { 
         adminRequests, 
@@ -24,6 +30,7 @@ export default function AdminRequests() {
         currentRequestDetail, 
         fetchAdminRequests, 
         getRequestDetail, 
+        updateRequestAction,
         processRequestAction, 
         isLoading, 
         isSubmitting, 
@@ -45,6 +52,13 @@ export default function AdminRequests() {
     const [processDeposit, setProcessDeposit] = useState('');
     const [processError, setProcessError] = useState<string | null>(null);
 
+    // Quotation form states
+    const [quoteItems, setQuoteItems] = useState<RequestItemDto[]>([]);
+    const [quoteTotalAmount, setQuoteTotalAmount] = useState('');
+    const [quoteDepositAmount, setQuoteDepositAmount] = useState('');
+    const [isQuoteTotalOverridden, setIsQuoteTotalOverridden] = useState(false);
+    const [quoteError, setQuoteError] = useState<string | null>(null);
+
     useEffect(() => {
         fetchAdminRequests({ page, size: 10 });
     }, [fetchAdminRequests, page]);
@@ -61,11 +75,151 @@ export default function AdminRequests() {
         }
     }, [error]);
 
+    useEffect(() => {
+        if (!currentRequestDetail || currentRequestDetail.status !== 'REVIEWING') {
+            setQuoteItems([]);
+            setQuoteTotalAmount('');
+            setQuoteDepositAmount('');
+            setIsQuoteTotalOverridden(false);
+            setQuoteError(null);
+            return;
+        }
+
+        const nextItems = currentRequestDetail.items.map((item) => ({
+            nhanhProductId: item.nhanhProductId,
+            name: item.name,
+            note: item.note,
+            price: item.price,
+            quantity: item.quantity,
+            metadataJson: item.metadataJson
+        }));
+        const calculatedTotal = calculateQuoteTotal(nextItems);
+
+        setQuoteItems(nextItems);
+        setQuoteTotalAmount(
+            currentRequestDetail.totalAmount > 0
+                ? String(currentRequestDetail.totalAmount)
+                : calculatedTotal > 0
+                    ? String(calculatedTotal)
+                    : ''
+        );
+        setQuoteDepositAmount(
+            currentRequestDetail.depositAmount > 0
+                ? String(currentRequestDetail.depositAmount)
+                : ''
+        );
+        setIsQuoteTotalOverridden(
+            currentRequestDetail.totalAmount > 0 &&
+            currentRequestDetail.totalAmount !== calculatedTotal
+        );
+        setQuoteError(null);
+    }, [currentRequestDetail]);
+
     // Handle selecting request detail
     const handleSelectRequest = (id: string | number) => {
         clearError();
         setProcessError(null);
+        setQuoteError(null);
         getRequestDetail(id, 'admin');
+    };
+
+    const handleQuotePriceChange = (index: number, value: string) => {
+        const nextItems = quoteItems.map((item, itemIndex) => (
+            itemIndex === index
+                ? { ...item, price: value === '' ? undefined : Number(value) }
+                : item
+        ));
+
+        setQuoteItems(nextItems);
+        setQuoteError(null);
+
+        if (!isQuoteTotalOverridden) {
+            setQuoteTotalAmount(String(calculateQuoteTotal(nextItems)));
+        }
+    };
+
+    const handleRecalculateQuoteTotal = () => {
+        setQuoteTotalAmount(String(calculateQuoteTotal(quoteItems)));
+        setIsQuoteTotalOverridden(false);
+        setQuoteError(null);
+    };
+
+    const buildQuotePayload = (): UpdateRequestDto | null => {
+        const hasInvalidPrice = quoteItems.some((item) => (
+            item.price === undefined ||
+            !Number.isFinite(Number(item.price)) ||
+            Number(item.price) < 0
+        ));
+
+        if (hasInvalidPrice) {
+            setQuoteError('Vui lòng nhập giá hợp lệ cho tất cả sản phẩm.');
+            return null;
+        }
+
+        if (!quoteTotalAmount.trim()) {
+            setQuoteError('Vui lòng nhập tổng tiền báo giá.');
+            return null;
+        }
+
+        const totalAmount = Number(quoteTotalAmount);
+        if (!Number.isFinite(totalAmount) || totalAmount < 0) {
+            setQuoteError('Tổng tiền phải là số lớn hơn hoặc bằng 0.');
+            return null;
+        }
+
+        let depositAmount = 0;
+        if (quoteDepositAmount.trim()) {
+            depositAmount = Number(quoteDepositAmount);
+            if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
+                setQuoteError('Tiền cọc nếu nhập phải là số lớn hơn 0.');
+                return null;
+            }
+        }
+
+        return {
+            items: quoteItems.map((item) => ({
+                ...item,
+                price: Number(item.price)
+            })),
+            totalAmount,
+            depositAmount
+        };
+    };
+
+    const handleSaveQuotation = async () => {
+        if (!currentRequestDetail) return;
+
+        clearError();
+        setQuoteError(null);
+        const payload = buildQuotePayload();
+        if (!payload) return;
+
+        try {
+            await updateRequestAction(currentRequestDetail.id, payload, 'admin');
+            ToastService.success('Đã lưu nháp báo giá.');
+        } catch (err: any) {
+            setQuoteError(err?.message || 'Không thể lưu báo giá.');
+        }
+    };
+
+    const handleSendQuotation = async () => {
+        if (!currentRequestDetail) return;
+
+        clearError();
+        setQuoteError(null);
+        const payload = buildQuotePayload();
+        if (!payload) return;
+
+        try {
+            await updateRequestAction(currentRequestDetail.id, payload, 'admin');
+            await processRequestAction(currentRequestDetail.id, {
+                targetStatus: 'WAITING_CUSTOMER',
+                depositAmount: payload.depositAmount
+            });
+            ToastService.success('Đã gửi báo giá và chuyển yêu cầu sang chờ khách hàng.');
+        } catch (err: any) {
+            setQuoteError(err?.message || 'Không thể gửi báo giá cho khách hàng.');
+        }
     };
 
     // Filter requests
@@ -338,17 +492,46 @@ export default function AdminRequests() {
                             </div>
 
                             <div>
-                                <p className="text-[10px] text-outline font-black uppercase mb-2">Danh sách mô hình yêu cầu</p>
+                                <p className="text-[10px] text-outline font-black uppercase mb-2">
+                                    {currentRequestDetail.status === 'REVIEWING'
+                                        ? 'Báo giá từng sản phẩm'
+                                        : 'Danh sách mô hình yêu cầu'}
+                                </p>
                                 <div className="space-y-2">
                                     {currentRequestDetail.items?.map((item, idx) => (
-                                        <div key={idx} className="p-3 bg-surface-container rounded-xl font-bold flex justify-between items-center gap-2">
-                                            <div>
-                                                <p className="text-on-surface line-clamp-2 leading-tight">{item.name}</p>
-                                                {item.note && <p className="text-[9px] text-outline font-medium mt-0.5">Ghi chú: {item.note}</p>}
+                                        <div key={item.id || idx} className="p-3 bg-surface-container rounded-xl font-bold space-y-2.5">
+                                            <div className="flex justify-between items-center gap-2">
+                                                <div>
+                                                    <p className="text-on-surface line-clamp-2 leading-tight">{item.name}</p>
+                                                    {item.note && <p className="text-[9px] text-outline font-medium mt-0.5">Ghi chú: {item.note}</p>}
+                                                </div>
+                                                <span className="shrink-0 text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-black">
+                                                    x{item.quantity}
+                                                </span>
                                             </div>
-                                            <span className="shrink-0 text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-black">
-                                                x{item.quantity}
-                                            </span>
+
+                                            {currentRequestDetail.status === 'REVIEWING' ? (
+                                                <label className="block">
+                                                    <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
+                                                        Đơn giá (VND)
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1000"
+                                                        value={quoteItems[idx]?.price ?? ''}
+                                                        onChange={(event) => handleQuotePriceChange(idx, event.target.value)}
+                                                        disabled={isSubmitting}
+                                                        placeholder="Nhập giá sản phẩm"
+                                                        className="w-full rounded-lg border border-outline-variant/30 bg-white px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60"
+                                                    />
+                                                </label>
+                                            ) : item.price > 0 ? (
+                                                <div className="flex items-center justify-between border-t border-outline-variant/20 pt-2 text-[10px]">
+                                                    <span className="text-outline">Đơn giá:</span>
+                                                    <span className="font-black text-primary">{formatCurrency(item.price)}</span>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     ))}
                                 </div>
@@ -389,20 +572,119 @@ export default function AdminRequests() {
                             )}
 
                             {/* Quotation / Price details */}
-                            <div className="border-t border-surface-container pt-4 space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-outline font-bold">Giá cọc tối thiểu:</span>
-                                    <span className="text-on-surface font-black">
-                                        {currentRequestDetail.depositAmount > 0 ? formatCurrency(currentRequestDetail.depositAmount) : 'Chưa định giá'}
-                                    </span>
+                            {currentRequestDetail.status === 'REVIEWING' ? (
+                                <form
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        void handleSaveQuotation();
+                                    }}
+                                    className="border-t border-surface-container pt-4 space-y-3"
+                                >
+                                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[10px] font-black uppercase tracking-wide text-primary">
+                                                Tổng hợp báo giá
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={handleRecalculateQuoteTotal}
+                                                disabled={isSubmitting}
+                                                className="text-[9px] font-black uppercase text-primary hover:underline disabled:opacity-50"
+                                            >
+                                                Tính lại
+                                            </button>
+                                        </div>
+
+                                        <label className="block">
+                                            <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
+                                                Tổng tiền (VND)
+                                            </span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1000"
+                                                value={quoteTotalAmount}
+                                                onChange={(event) => {
+                                                    setQuoteTotalAmount(event.target.value);
+                                                    setIsQuoteTotalOverridden(true);
+                                                    setQuoteError(null);
+                                                }}
+                                                disabled={isSubmitting}
+                                                placeholder="Tự động tính theo đơn giá"
+                                                className="w-full rounded-lg border border-outline-variant/30 bg-white px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60"
+                                            />
+                                        </label>
+
+                                        <label className="block">
+                                            <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
+                                                Số tiền cọc bắt buộc (VND)
+                                            </span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="1000"
+                                                value={quoteDepositAmount}
+                                                onChange={(event) => {
+                                                    setQuoteDepositAmount(event.target.value);
+                                                    setQuoteError(null);
+                                                }}
+                                                disabled={isSubmitting}
+                                                placeholder="Ví dụ: 300000"
+                                                className="w-full rounded-lg border border-outline-variant/30 bg-white px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    {quoteError && (
+                                        <div className="rounded-xl border border-error/20 bg-error/10 px-3 py-2.5 text-[10px] font-bold text-error">
+                                            {quoteError}
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-surface-container px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {isSubmitting ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Save className="h-3.5 w-3.5" />
+                                            )}
+                                            Lưu Báo Giá
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleSendQuotation()}
+                                            disabled={isSubmitting}
+                                            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-primary to-primary-container px-3 py-3 text-[10px] font-black uppercase tracking-wide text-white shadow-md transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {isSubmitting ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Send className="h-3.5 w-3.5" />
+                                            )}
+                                            Gửi báo giá cho khách
+                                        </button>
+                                    </div>
+                                </form>
+                            ) : (
+                                <div className="border-t border-surface-container pt-4 space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-outline font-bold">Giá cọc tối thiểu:</span>
+                                        <span className="text-on-surface font-black">
+                                            {currentRequestDetail.depositAmount > 0 ? formatCurrency(currentRequestDetail.depositAmount) : 'Chưa định giá'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-outline font-bold">Tổng chi phí dự kiến:</span>
+                                        <span className="text-primary font-black text-sm">
+                                            {currentRequestDetail.totalAmount > 0 ? formatCurrency(currentRequestDetail.totalAmount) : 'Chưa tính cọc'}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-outline font-bold">Tổng chi phí dự kiến:</span>
-                                    <span className="text-primary font-black text-sm">
-                                        {currentRequestDetail.totalAmount > 0 ? formatCurrency(currentRequestDetail.totalAmount) : 'Chưa tính cọc'}
-                                    </span>
-                                </div>
-                            </div>
+                            )}
 
                             {currentRequestDetail.status === 'APPROVED' &&
                                 (currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId) && (
@@ -524,9 +806,6 @@ export default function AdminRequests() {
                                     required
                                     className="w-full bg-surface-container rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent text-on-surface placeholder:text-outline/40"
                                 />
-                                <p className="mt-1.5 text-[10px] font-semibold text-outline">
-                                    Tiền cọc sẽ được cập nhật trước khi backend chuyển yêu cầu thành đơn hàng.
-                                </p>
                             </div>
                         )}
 

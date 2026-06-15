@@ -25,7 +25,6 @@ export default function CreateRequest() {
     const [uploadingFiles, setUploadingFiles] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [successCreated, setSuccessCreated] = useState(false);
-    const idempotencyKeyRef = useRef(createIdempotencyKey());
 
     const handleAddItem = () => {
         setItems(prev => [...prev, { name: '', quantity: 1, note: '' }]);
@@ -75,7 +74,7 @@ export default function CreateRequest() {
         };
 
         try {
-            await createRequestAction(payload, idempotencyKeyRef.current);
+            await createRequestAction(payload);
             setSuccessCreated(true);
             ToastService.success('Gửi yêu cầu thành công.');
         } catch (err) {
@@ -91,8 +90,8 @@ export default function CreateRequest() {
 
     if (successCreated) {
         return (
-            <main className="max-w-xl mx-auto px-6 pt-32 pb-24 bg-surface text-center">
-                <div className="bg-surface-container-lowest rounded-[2rem] p-10 shadow-[0_20px_50px_-15px_rgba(14,48,78,0.06)] border border-surface-container/60 flex flex-col items-center justify-center">
+            <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface text-center">
+                <div className="max-w-xl mx-auto bg-surface-container-lowest rounded-[2rem] p-10 shadow-[0_20px_50px_-15px_rgba(14,48,78,0.06)] border border-surface-container/60 flex flex-col items-center justify-center">
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6">
                         <CheckCircle className="w-10 h-10 stroke-[2]" />
                     </div>
@@ -114,7 +113,6 @@ export default function CreateRequest() {
                                 setRequirements('');
                                 setItems([{ name: '', quantity: 1, note: '' }]);
                                 setUploadedImages([]);
-                                idempotencyKeyRef.current = createIdempotencyKey();
                             }}
                             className="flex-1 py-3 bg-surface-container text-on-surface border border-outline-variant/30 rounded-2xl text-xs font-black uppercase tracking-widest text-center hover:bg-surface-container-high transition-colors"
                         >
@@ -127,7 +125,7 @@ export default function CreateRequest() {
     }
 
     return (
-        <main className="max-w-3xl mx-auto px-6 pt-32 pb-24 bg-surface">
+        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
             {/* Navigation & Back */}
             <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>

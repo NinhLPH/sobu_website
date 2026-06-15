@@ -210,7 +210,7 @@ export default function Header() {
                             </div>
                         </div>
 
-                        <Link to="/requests" className="hover:text-primary transition-colors">Dịch vụ</Link>
+                        <Link to="/services" className="hover:text-primary transition-colors">Dịch vụ</Link>
                         <Link to="/membership" className="hover:text-primary transition-colors">Thẻ thành viên</Link>
                         <Link to="/blog" className="hover:text-primary transition-colors">Tin tức</Link>
                     </nav>

@@ -6,6 +6,7 @@ import {
     OrderResponseDto
 } from '../interface/order.model';
 import { CustomerService } from '../service/custom.service';
+import {ToastService} from "../service/toast.service";
 import { createIdempotencyKey } from '../utils/idempotency';
 
 type CheckoutDetails =
@@ -59,6 +60,7 @@ export const useCartStore = create<CartState>((set, get) => ({
                 pendingOrderFingerprint: null
             };
         });
+        ToastService.success('Đã thêm sản phẩm vào giỏ hàng');
     },
 
     removeFromCart: (productId) => {
@@ -67,6 +69,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             pendingOrderKey: null,
             pendingOrderFingerprint: null
         }));
+        ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
     },
 
     updateQuantity: (productId, quantity) => {

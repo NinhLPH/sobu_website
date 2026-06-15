@@ -18,7 +18,7 @@ import AdminRequests from "./pages/admin/Requests";
 import AdminOrderDetail from "./pages/admin/OrderDetails";
 import BlogList from "./pages/BlogList";
 import BlogDetail from "./pages/BlogDetail";
-import ServicesPage from "./pages/ServicesPage";
+import ServicesLandingPage from "./pages/ServicesLandingPage";
 import Membership from "./pages/Membership";
 import CreateRequest from "./pages/CreateRequest";
 import MyRequests from "./pages/MyRequests";
@@ -45,7 +45,7 @@ export default function App() {
                     <Route path="/category/:category" element={<ProductList/>}/>
                     <Route path="/blog" element={<BlogList/>}/>
                     <Route path="/blog/:id" element={<BlogDetail/>}/>
-                    <Route path="/services" element={<ServicesPage/>}/>
+                    <Route path="/services" element={<ServicesLandingPage/>}/>
                     <Route path="/membership" element={<Membership/>}/>
 
                     {/* CUSTOMER ORDER TRACKING */}

@@ -62,7 +62,7 @@ export default function MyRequests() {
     }, [error]);
 
     return (
-        <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
+        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
             <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
                 <ChevronRight className="w-3.5 h-3.5" />

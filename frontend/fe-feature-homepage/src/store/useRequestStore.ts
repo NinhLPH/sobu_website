@@ -44,13 +44,14 @@ interface RequestState {
     isLoading: boolean;
     isSubmitting: boolean;
     error: string | null;
+    pendingRequestKey: string | null;
+    pendingRequestFingerprint: string | null;
 
     fetchMyRequests: (params?: Record<string, unknown>) => Promise<void>;
     fetchAdminRequests: (params?: Record<string, unknown>) => Promise<void>;
     getRequestDetail: (id: string | number, role: RequestRole) => Promise<void>;
     createRequestAction: (
-        data: CreateRequestDto,
-        idempotencyKey?: string
+        data: CreateRequestDto
     ) => Promise<RequestResponseDto>;
     updateRequestAction: (
         id: string | number,
@@ -65,7 +66,7 @@ interface RequestState {
     clearCurrentDetail: () => void;
 }
 
-export const useRequestStore = create<RequestState>((set) => ({
+export const useRequestStore = create<RequestState>((set, get) => ({
     myRequests: [],
     adminRequests: [],
     myRequestsPage: emptyPage,
@@ -74,6 +75,8 @@ export const useRequestStore = create<RequestState>((set) => ({
     isLoading: false,
     isSubmitting: false,
     error: null,
+    pendingRequestKey: null,
+    pendingRequestFingerprint: null,
 
     fetchMyRequests: async (params) => {
         set({ isLoading: true, error: null });
@@ -138,13 +141,24 @@ export const useRequestStore = create<RequestState>((set) => ({
         }
     },
 
-    createRequestAction: async (data, idempotencyKey) => {
-        set({ isSubmitting: true, error: null });
+    createRequestAction: async (data) => {
+        const fingerprint = JSON.stringify(data);
+        const state = get();
+
+        const idempotencyKey = state.pendingRequestFingerprint === fingerprint
+        && state.pendingRequestKey
+            ? state.pendingRequestKey
+            : createIdempotencyKey();
+
+        set({
+            isSubmitting: true,
+            error: null,
+            pendingRequestKey: idempotencyKey,
+            pendingRequestFingerprint: fingerprint
+        });
+
         try {
-            const response = await CustomerService.createRequest(
-                data,
-                idempotencyKey || createIdempotencyKey()
-            );
+            const response = await CustomerService.createRequest(data, idempotencyKey);
             set((state) => ({
                 myRequests: [response.data, ...state.myRequests],
                 myRequestsPage: {
@@ -152,7 +166,9 @@ export const useRequestStore = create<RequestState>((set) => ({
                     totalElements: state.myRequestsPage.totalElements + 1
                 },
                 currentRequestDetail: response.data,
-                isSubmitting: false
+                isSubmitting: false,
+                pendingRequestKey: null,
+                pendingRequestFingerprint: null
             }));
             return response.data;
         } catch (error) {
