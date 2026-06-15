@@ -136,7 +136,7 @@ public class NhanhClient {
 
             NhanhResponse<List<T>> resp;
             try {
-                resp = withRetry(call, 3, 500);
+                resp = withRetry(call, 3, 43000 );
             } catch (Exception ex) {
                 log.error("Failed to fetch data from Nhanh {} at request={}", apiPath, requestCount, ex);
                 throw new ExternalServiceException("Nhanh API fetch failed", ex);
@@ -282,11 +282,35 @@ public class NhanhClient {
         }
     }
 
-    private <RESP> RESP deserialize(String rawBody, ParameterizedTypeReference<RESP> responseType, String apiPath) {
+    private <RESP> RESP deserialize(
+            String rawBody,
+            ParameterizedTypeReference<RESP> responseType,
+            String apiPath) {
         try {
+            JsonNode root = objectMapper.readTree(rawBody);
+
+            int code = root.path("code").asInt();
+
+            if (code != 1) {
+
+                String errorCode =
+                        root.path("errorCode").asText();
+
+                String message =
+                        root.path("messages").asText();
+
+                throw new ExternalServiceException(
+                        String.format(
+                                "Nhanh API error [%s]: %s",
+                                errorCode,
+                                message
+                        )
+                );
+            }
             return objectMapper.readValue(
                     rawBody,
-                    objectMapper.getTypeFactory().constructType(responseType.getType())
+                    objectMapper.getTypeFactory()
+                            .constructType(responseType.getType())
             );
         } catch (JsonProcessingException ex) {
             log.error("Failed to deserialize Nhanh response for {}: body={}", apiPath, rawBody, ex);

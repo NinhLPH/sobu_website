@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.service;
 
+import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhProperties;
@@ -13,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class NhanhService {
+
+    private static final long TOKEN_EXPIRY_SAFETY_SECONDS = 60;
 
     private final NhanhClient nhanhClient;
     private final NhanhIntegrationRepo nhanhIntegrationRepo;
@@ -54,9 +57,19 @@ public class NhanhService {
 
     // Get valid access token from first active integration
     public String getValidAccessToken() {
-        return getIntegration()
-                .map(NhanhIntegration::getAccessToken)
-                .orElseThrow(() -> new RuntimeException("No Nhanh integration found. Please authenticate first."));
+        NhanhIntegration integration = getIntegration()
+                .orElseThrow(() -> new ExternalServiceException("No Nhanh integration found. Please authenticate first."));
+
+        if (integration.getExpiredAt() == null) {
+            throw new ExternalServiceException("Nhanh integration token expiry is missing. Please authenticate again.");
+        }
+
+        long now = System.currentTimeMillis() / 1000;
+        if (integration.getExpiredAt() <= now + TOKEN_EXPIRY_SAFETY_SECONDS) {
+            throw new ExternalServiceException("Nhanh integration token has expired. Please authenticate again.");
+        }
+
+        return integration.getAccessToken();
     }
 
     public java.util.Optional<NhanhIntegration> getIntegration() {

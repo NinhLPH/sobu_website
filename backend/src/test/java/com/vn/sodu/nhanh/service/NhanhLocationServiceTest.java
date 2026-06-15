@@ -78,7 +78,7 @@ class NhanhLocationServiceTest {
         assertEquals(1116L, first.getCities().get(0).getDistricts().get(0).getWards().get(0).getWardId());
         assertSame(first, second);
         verify(nhanhService, times(1)).getValidAccessToken();
-        verify(nhanhClient, times(3)).postWithBearerAuthorization(anyString(), eq("token"), any(), any());
+        verify(nhanhClient, times(3)).post(anyString(), eq("token"), any(), any());
     }
 
     @Test
@@ -92,7 +92,7 @@ class NhanhLocationServiceTest {
 
         assertEquals(Instant.parse("2026-06-14T03:00:00Z"), refreshed.getCachedAt());
         verify(nhanhService, times(2)).getValidAccessToken();
-        verify(nhanhClient, times(6)).postWithBearerAuthorization(anyString(), eq("token"), any(), any());
+        verify(nhanhClient, times(6)).post(anyString(), eq("token"), any(), any());
     }
 
     @Test
@@ -108,7 +108,7 @@ class NhanhLocationServiceTest {
         assertEquals(Instant.parse("2026-06-13T04:00:00Z"), refreshed.getCachedAt());
         assertEquals(Instant.parse("2026-06-14T04:00:00Z"), refreshed.getExpiresAt());
         verify(nhanhService, times(2)).getValidAccessToken();
-        verify(nhanhClient, times(6)).postWithBearerAuthorization(anyString(), eq("token"), any(), any());
+        verify(nhanhClient, times(6)).post(anyString(), eq("token"), any(), any());
     }
 
     @Test
@@ -119,7 +119,7 @@ class NhanhLocationServiceTest {
 
         reset(nhanhClient, nhanhService);
         when(nhanhService.getValidAccessToken()).thenReturn("token");
-        when(nhanhClient.postWithBearerAuthorization(anyString(), eq("token"), any(), any()))
+        when(nhanhClient.post(anyString(), eq("token"), any(), any()))
                 .thenThrow(new ExternalServiceException("Nhanh unavailable"));
         clock.advance(Duration.ofHours(25));
 
@@ -128,13 +128,13 @@ class NhanhLocationServiceTest {
         assertTrue(stale.isStale());
         assertEquals(fresh.getCities().get(0).getCityId(), stale.getCities().get(0).getCityId());
         verify(nhanhService, times(1)).getValidAccessToken();
-        verify(nhanhClient, times(1)).postWithBearerAuthorization(anyString(), eq("token"), any(), any());
+        verify(nhanhClient, times(1)).post(anyString(), eq("token"), any(), any());
     }
 
     @Test
     void noCacheRefreshFailureThrowsException() {
         when(nhanhService.getValidAccessToken()).thenReturn("token");
-        when(nhanhClient.postWithBearerAuthorization(anyString(), eq("token"), any(), any()))
+        when(nhanhClient.post(anyString(), eq("token"), any(), any()))
                 .thenThrow(new ExternalServiceException("Nhanh unavailable"));
 
         assertThrows(ExternalServiceException.class, () -> locationService.getLocations());
@@ -150,7 +150,7 @@ class NhanhLocationServiceTest {
                 .mapToObj(i -> item((long) i, "City " + i))
                 .toList();
 
-        when(nhanhClient.postWithBearerAuthorization(anyString(), eq("token"), any(), any()))
+        when(nhanhClient.post(anyString(), eq("token"), any(), any()))
                 .thenAnswer(invocation -> {
                     Map<?, ?> filters = filters(invocation.getArgument(2));
                     String type = (String) filters.get("type");
@@ -204,11 +204,11 @@ class NhanhLocationServiceTest {
 
         executor.shutdownNow();
         verify(nhanhService, times(1)).getValidAccessToken();
-        verify(nhanhClient, times(5)).postWithBearerAuthorization(anyString(), eq("token"), any(), any());
+        verify(nhanhClient, times(5)).post(anyString(), eq("token"), any(), any());
     }
 
     private void stubSimpleLocationTree() {
-        when(nhanhClient.postWithBearerAuthorization(anyString(), eq("token"), any(), any()))
+        when(nhanhClient.post(anyString(), eq("token"), any(), any()))
                 .thenAnswer(invocation -> {
                     Map<?, ?> filters = filters(invocation.getArgument(2));
                     return switch ((String) filters.get("type")) {
@@ -221,7 +221,7 @@ class NhanhLocationServiceTest {
     }
 
     private void stubTwoCityTree() {
-        when(nhanhClient.postWithBearerAuthorization(anyString(), eq("token"), any(), any()))
+        when(nhanhClient.post(anyString(), eq("token"), any(), any()))
                 .thenAnswer(invocation -> {
                     Map<?, ?> filters = filters(invocation.getArgument(2));
                     String type = (String) filters.get("type");

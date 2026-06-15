@@ -182,7 +182,7 @@ public class NhanhLocationService {
             filters.put("parentId", parentId);
         }
 
-        NhanhResponse<List<NhanhLocationItemDTO>> response = nhanhClient.postWithBearerAuthorization(
+        NhanhResponse<List<NhanhLocationItemDTO>> response = nhanhClient.post(
                 nhanhProperties.getLocation().getPath(),
                 accessToken,
                 Map.of("filters", filters),
