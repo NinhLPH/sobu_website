@@ -58,11 +58,6 @@ export default function ProductList() {
         });
     }, [apiCategories]);
 
-    const categories = useMemo(() => {
-        if (!apiCategories || apiCategories.length === 0) return [];
-        return Array.from(new Set(apiCategories.map(c => c.name).filter(Boolean))) as string[];
-    }, [apiCategories]);
-
     const brands = useMemo(() => {
         if (!apiBrands || apiBrands.length === 0) return [];
         return Array.from(new Set(apiBrands.map(b => b.name).filter(b => b && b !== 'N/A'))) as string[];

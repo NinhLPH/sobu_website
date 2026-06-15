@@ -1,4 +1,4 @@
-import {useState, useEffect, useMemo} from 'react';
+import {useState, useEffect} from 'react';
 import {Plus, Edit, Trash2, Search, X} from 'lucide-react';
 
 import {ProductModel, mapListItemToProductModel} from "../../interface/product.model";

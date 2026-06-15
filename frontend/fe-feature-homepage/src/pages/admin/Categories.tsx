@@ -4,6 +4,23 @@ import {Plus, Edit, Trash2, ChevronRight, ChevronDown, X} from 'lucide-react';
 import {useProductStore} from '../../store/useProductStore';
 import {CategoryModel, mapCategoryDtoToModel} from "../../interface/category.model";
 
+const collectCategoryTreeIds = (categories: CategoryModel[], rootId: string) => {
+    const ids = new Set<string>([rootId]);
+    const pending = [rootId];
+
+    while (pending.length > 0) {
+        const parentId = pending.shift()!;
+        for (const category of categories) {
+            if (category.parentId === parentId && !ids.has(category.id)) {
+                ids.add(category.id);
+                pending.push(category.id);
+            }
+        }
+    }
+
+    return ids;
+};
+
 function CategoryNode({category, level = 0, onEdit, onAddChild, onDelete}: { category: CategoryModel, level?: number, onEdit: (category?: CategoryModel, parentId?: string) => void, onAddChild: (parentId: string) => void, onDelete: (id: string) => void }) {
     const [expanded, setExpanded] = useState(true);
 
@@ -137,18 +154,7 @@ export default function AdminCategories() {
     }, [localCategories]);
     const getInvalidParentIds = () => {
         if (!editingCategory?.id) return [];
-        const ids = new Set<string>([editingCategory.id]);
-        let changed = true;
-        while (changed) {
-            changed = false;
-            localCategories.forEach(c => {
-                if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) {
-                    ids.add(c.id);
-                    changed = true;
-                }
-            });
-        }
-        return Array.from(ids);
+        return Array.from(collectCategoryTreeIds(localCategories, editingCategory.id));
     };
 
     const handleOpenModal = (category?: CategoryModel, parentId?: string) => {
@@ -193,18 +199,7 @@ export default function AdminCategories() {
     };
 
     const handleDeleteCategory = (id: string) => {
-        const idsToDelete = new Set<string>([id]);
-        let changed = true;
-
-        while (changed) {
-            changed = false;
-            localCategories.forEach(c => {
-                if (c.parentId && idsToDelete.has(c.parentId) && !idsToDelete.has(c.id)) {
-                    idsToDelete.add(c.id);
-                    changed = true;
-                }
-            });
-        }
+        const idsToDelete = collectCategoryTreeIds(localCategories, id);
 
          setLocalCategories(prev => prev.filter(c => !idsToDelete.has(c.id)));
     };

@@ -1,11 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Plus, Trash2, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
 import ImageUploader from '../components/common/ImageUploader';
 import { useRequestStore } from '../store/useRequestStore';
 import { RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
-import { createIdempotencyKey } from '../utils/idempotency';
 
 export default function CreateRequest() {
     const { createRequestAction, isSubmitting, error, clearError } = useRequestStore();

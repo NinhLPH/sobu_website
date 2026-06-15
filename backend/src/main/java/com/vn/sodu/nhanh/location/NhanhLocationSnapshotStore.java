@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.dto.LocationTreeResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -22,6 +23,7 @@ public class NhanhLocationSnapshotStore {
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
+    @Autowired
     public NhanhLocationSnapshotStore(
             NhanhLocationSnapshotRepository repository,
             NhanhProperties nhanhProperties,
