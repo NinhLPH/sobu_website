@@ -1,6 +1,7 @@
 package com.vn.sodu.nhanh.location;
 
 import com.vn.sodu.nhanh.NhanhProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -17,6 +18,7 @@ public class NhanhLocationRateLimiter {
     private final Deque<Long> attempts = new ArrayDeque<>();
     private long lastAttemptAt = Long.MIN_VALUE;
 
+    @Autowired
     public NhanhLocationRateLimiter(
             NhanhLocationSleeper sleeper,
             NhanhProperties nhanhProperties) {

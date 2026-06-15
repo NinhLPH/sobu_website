@@ -13,6 +13,7 @@ import com.vn.sodu.nhanh.location.NhanhLocationSleeper;
 import com.vn.sodu.nhanh.location.NhanhLocationSnapshotStore;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +47,7 @@ public class NhanhLocationSyncService {
     private final NhanhLocationSleeper sleeper;
     private final Clock clock;
 
+    @Autowired
     public NhanhLocationSyncService(
             NhanhClient nhanhClient,
             NhanhService nhanhService,
