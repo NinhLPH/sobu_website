@@ -13,8 +13,11 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -189,6 +192,36 @@ public class NhanhClient {
         return postWithAuthorization(apiPath, accessToken, body, responseType);
     }
 
+    public <REQ, RESP> RESP postOnce(
+            String apiPath,
+            String accessToken,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
+        String url = buildApiUrl(apiPath);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", accessToken);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    String.class);
+            return deserializeOnce(response.getBody(), responseType, apiPath, response.getStatusCode().value());
+        } catch (RestClientResponseException ex) {
+            throw apiException(ex.getResponseBodyAsString(), ex.getStatusCode().value(), ex);
+        } catch (RestClientException ex) {
+            throw new NhanhApiException(
+                    "Nhanh API transport failure",
+                    null,
+                    null,
+                    null,
+                    true,
+                    ex);
+        }
+    }
+
     public <REQ, RESP> RESP postWithBearerAuthorization(
             String apiPath,
             String accessToken,
@@ -203,11 +236,7 @@ public class NhanhClient {
             REQ body,
             ParameterizedTypeReference<RESP> responseType) {
 
-        String url = UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
-                .replacePath(apiPath)
-                .queryParam("appId", nhanhProperties.getClientId())
-                .queryParam("businessId", nhanhProperties.getBusinessId())
-                .toUriString();
+        String url = buildApiUrl(apiPath);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -315,6 +344,147 @@ public class NhanhClient {
         } catch (JsonProcessingException ex) {
             log.error("Failed to deserialize Nhanh response for {}: body={}", apiPath, rawBody, ex);
             throw new ExternalServiceException("Nhanh API response could not be parsed", ex);
+        }
+    }
+
+    private <RESP> RESP deserializeOnce(
+            String rawBody,
+            ParameterizedTypeReference<RESP> responseType,
+            String apiPath,
+            int httpStatus) {
+        if (rawBody == null || rawBody.isBlank()) {
+            throw new NhanhApiException(
+                    "Nhanh API returned an empty response",
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    null);
+        }
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            if (root.path("code").asInt() != 1) {
+                throw apiException(root, httpStatus, null);
+            }
+            return objectMapper.readValue(
+                    rawBody,
+                    objectMapper.getTypeFactory().constructType(responseType.getType()));
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to deserialize Nhanh response for {}", apiPath, ex);
+            throw new NhanhApiException(
+                    "Nhanh API response could not be parsed",
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    ex);
+        }
+    }
+
+    private NhanhApiException apiException(String rawBody, int httpStatus, Throwable cause) {
+        if (rawBody == null || rawBody.isBlank()) {
+            return new NhanhApiException(
+                    "Nhanh API request failed",
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    cause);
+        }
+        try {
+            return apiException(objectMapper.readTree(rawBody), httpStatus, cause);
+        } catch (JsonProcessingException ex) {
+            return new NhanhApiException(
+                    "Nhanh API request failed",
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    cause);
+        }
+    }
+
+    private NhanhApiException apiException(JsonNode root, int httpStatus, Throwable cause) {
+        String errorCode = firstText(root, "errorCode", "codeError");
+        Instant unlockedAt = parseInstant(findField(root, "unlockedAt"));
+        String message = firstText(root, "message", "error", "description");
+        if (message == null) {
+            JsonNode messages = root.get("messages");
+            message = messages == null ? null : messages.toString();
+        }
+        if (message == null || message.isBlank()) {
+            message = "Nhanh API request failed";
+        }
+        return new NhanhApiException(
+                message,
+                httpStatus,
+                errorCode,
+                unlockedAt,
+                false,
+                cause);
+    }
+
+    private String buildApiUrl(String apiPath) {
+        return UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
+                .replacePath(apiPath)
+                .queryParam("appId", nhanhProperties.getClientId())
+                .queryParam("businessId", nhanhProperties.getBusinessId())
+                .toUriString();
+    }
+
+    private JsonNode findField(JsonNode node, String fieldName) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        JsonNode direct = node.get(fieldName);
+        if (direct != null) {
+            return direct;
+        }
+        if (node.isContainerNode()) {
+            for (JsonNode child : node) {
+                JsonNode found = findField(child, fieldName);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String firstText(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            JsonNode value = findField(node, fieldName);
+            if (value != null && !value.isNull() && !value.isContainerNode()) {
+                String text = value.asText();
+                if (!text.isBlank()) {
+                    return text;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Instant parseInstant(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        try {
+            if (node.isNumber()) {
+                long value = node.asLong();
+                return Math.abs(value) >= 1_000_000_000_000L
+                        ? Instant.ofEpochMilli(value)
+                        : Instant.ofEpochSecond(value);
+            }
+            String value = node.asText();
+            if (value.matches("-?\\d+")) {
+                long epoch = Long.parseLong(value);
+                return Math.abs(epoch) >= 1_000_000_000_000L
+                        ? Instant.ofEpochMilli(epoch)
+                        : Instant.ofEpochSecond(epoch);
+            }
+            return Instant.parse(value);
+        } catch (RuntimeException ex) {
+            return null;
         }
     }
 

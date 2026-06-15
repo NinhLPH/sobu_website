@@ -18,6 +18,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -227,5 +228,41 @@ class NhanhClientTest {
         Map<?, ?> filters = (Map<?, ?>) body.get("filters");
         assertEquals("v1", filters.get("locationVersion"));
         assertEquals("CITY", filters.get("type"));
+    }
+
+    @Test
+    @DisplayName("Should expose structured rate-limit metadata without retrying")
+    void testPostOnceParsesRateLimitMetadata() {
+        String rawResponse = """
+                {
+                  "code": 0,
+                  "errorCode": "ERR_429",
+                  "messages": ["Too many requests"],
+                  "unlockedAt": 1781481900
+                }
+                """;
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                eq(String.class)))
+                .thenReturn(ResponseEntity.ok(rawResponse));
+
+        NhanhApiException ex = assertThrows(NhanhApiException.class, () ->
+                nhanhClient.postOnce(
+                        "/v3.0/shipping/location",
+                        "token",
+                        Map.of("filters", Map.of("type", "CITY")),
+                        new ParameterizedTypeReference<NhanhResponse<List<Map<String, Object>>>>() {
+                        }));
+
+        assertTrue(ex.isRateLimited());
+        assertEquals("ERR_429", ex.getErrorCode());
+        assertEquals(Instant.ofEpochSecond(1781481900), ex.getUnlockedAt());
+        verify(restTemplate, times(1)).exchange(
+                anyString(),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                eq(String.class));
     }
 }

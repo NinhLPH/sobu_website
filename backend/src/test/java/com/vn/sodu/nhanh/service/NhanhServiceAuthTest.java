@@ -4,16 +4,20 @@ import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhProperties;
+import com.vn.sodu.nhanh.NhanhTokenResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 public class NhanhServiceAuthTest {
@@ -30,11 +34,18 @@ public class NhanhServiceAuthTest {
     @Mock
     private NhanhProperties nhanhProperties;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private NhanhService nhanhService;
 
     @BeforeEach
     public void setUp() {
-        nhanhService = new NhanhService(nhanhClient, nhanhIntegrationRepo, nhanhProperties);
+        nhanhService = new NhanhService(
+                nhanhClient,
+                nhanhIntegrationRepo,
+                nhanhProperties,
+                eventPublisher);
     }
 
     @Test
@@ -160,5 +171,20 @@ public class NhanhServiceAuthTest {
         
         assertTrue(authHeader.startsWith("Bearer "), "Header should start with 'Bearer '");
         assertEquals("Bearer test_token_123", authHeader, "Header format should be 'Bearer <token>'");
+    }
+
+    @Test
+    public void oauthBusinessMismatchIsRejectedBeforePersistence() {
+        NhanhTokenResponse response = new NhanhTokenResponse();
+        response.setBusinessId(456L);
+        response.setAccessToken("token");
+        response.setExpiredAt(FUTURE_EXPIRY);
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
+        when(nhanhClient.getAccessToken("code")).thenReturn(response);
+
+        assertThrows(ExternalServiceException.class, () -> nhanhService.handleCallback("code"));
+
+        verify(nhanhIntegrationRepo, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any());
     }
 }

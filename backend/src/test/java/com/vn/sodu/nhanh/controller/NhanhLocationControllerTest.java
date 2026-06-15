@@ -4,6 +4,8 @@ import com.vn.sodu.nhanh.dto.LocationCityDTO;
 import com.vn.sodu.nhanh.dto.LocationDistrictDTO;
 import com.vn.sodu.nhanh.dto.LocationTreeResponse;
 import com.vn.sodu.nhanh.dto.LocationWardDTO;
+import com.vn.sodu.nhanh.NhanhProperties;
+import com.vn.sodu.nhanh.location.LocationDataUnavailableException;
 import com.vn.sodu.nhanh.service.NhanhLocationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -17,6 +19,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class NhanhLocationControllerTest {
@@ -24,6 +27,7 @@ class NhanhLocationControllerTest {
     @Test
     void getLocationsReturnsPublicLocationTreeWithoutAuthentication() throws Exception {
         NhanhLocationService locationService = mock(NhanhLocationService.class);
+        NhanhProperties properties = new NhanhProperties();
         when(locationService.getLocations()).thenReturn(LocationTreeResponse.builder()
                 .provider("NHANH")
                 .locationVersion("v1")
@@ -44,7 +48,7 @@ class NhanhLocationControllerTest {
                         .build()))
                 .build());
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(new NhanhLocationController(locationService))
+                .standaloneSetup(new NhanhLocationController(locationService, properties))
                 .build();
 
         mockMvc.perform(get("/api/public/locations")
@@ -63,6 +67,7 @@ class NhanhLocationControllerTest {
     @Test
     void getLocationsUsesStaleCacheMessage() throws Exception {
         NhanhLocationService locationService = mock(NhanhLocationService.class);
+        NhanhProperties properties = new NhanhProperties();
         when(locationService.getLocations()).thenReturn(LocationTreeResponse.builder()
                 .provider("NHANH")
                 .locationVersion("v1")
@@ -72,12 +77,28 @@ class NhanhLocationControllerTest {
                 .cities(List.of())
                 .build());
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(new NhanhLocationController(locationService))
+                .standaloneSetup(new NhanhLocationController(locationService, properties))
                 .build();
 
         mockMvc.perform(get("/api/public/locations"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Locations retrieved from stale cache"))
                 .andExpect(jsonPath("$.data.stale").value(true));
+    }
+
+    @Test
+    void getLocationsReturnsRetryAfterWhenSnapshotIsMissing() throws Exception {
+        NhanhLocationService locationService = mock(NhanhLocationService.class);
+        NhanhProperties properties = new NhanhProperties();
+        properties.getLocation().setRetryAfterSeconds(30);
+        when(locationService.getLocations()).thenThrow(new LocationDataUnavailableException());
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(new NhanhLocationController(locationService, properties))
+                .build();
+
+        mockMvc.perform(get("/api/public/locations"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "30"))
+                .andExpect(jsonPath("$.error").value("LOCATION_DATA_UNAVAILABLE"));
     }
 }

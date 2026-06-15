@@ -7,6 +7,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Typed configuration for all Nhanh integration properties.
  * Replaces scattered {@code @Value("${nhanh.*}")} across sync services,
@@ -77,5 +80,14 @@ public class NhanhProperties {
         private String path = "/v3.0/shipping/location";
         private String version = "v1";
         private long cacheTtlHours = 24;
+        private long requestIntervalMs = 250;
+        private long rollingWindowMs = 30_000;
+        private int rollingWindowMaxRequests = 120;
+        private int chunkSize = 21;
+        private long interChunkSleepMs = 60_000;
+        private int maxAttemptsPerRequest = 3;
+        private List<Long> retryBackoffSeconds = new ArrayList<>(List.of(1L, 2L));
+        private long extendedLockThresholdMs = 300_000;
+        private int retryAfterSeconds = 30;
     }
 }
