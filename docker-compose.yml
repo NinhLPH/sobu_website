@@ -23,6 +23,17 @@ services:
       retries: 10
       start_period: 30s
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
   backend:
     image: ${BACKEND_IMAGE}
     container_name: ${BACKEND_CONTAINER_NAME}
@@ -31,6 +42,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
 
     env_file:
       - .env
@@ -44,3 +57,4 @@ services:
 volumes:
   mysql_data:
   backend_uploads:
+  redis_data:
