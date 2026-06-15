@@ -1,0 +1,60 @@
+services:
+  mysql:
+    image: ${MYSQL_IMAGE}
+    container_name: ${MYSQL_CONTAINER_NAME}
+    restart: unless-stopped
+
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+
+    ports:
+      - "${MYSQL_PORT}:3306"
+
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+  backend:
+    image: ${BACKEND_IMAGE}
+    container_name: ${BACKEND_CONTAINER_NAME}
+    restart: unless-stopped
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+    env_file:
+      - .env
+
+    ports:
+      - "${BACKEND_PORT}:${SERVER_PORT}"
+
+    volumes:
+      - backend_uploads:/app/uploads
+
+volumes:
+  mysql_data:
+  backend_uploads:
+  redis_data:

@@ -1,0 +1,11 @@
+target/
+.idea/
+.vscode/
+.git/
+.gitignore
+*.md
+.codex/
+.notebook/
+.env
+.env.*
+src/main/resources/.env
