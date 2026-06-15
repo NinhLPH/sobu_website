@@ -13,7 +13,10 @@ export default function ActivateAccount() {
     const [status, setStatus] = useState<ActivationStatus>('loading');
     const [message, setMessage] = useState('Đang xác thực tài khoản...');
     const [redirectSeconds, setRedirectSeconds] = useState(3);
-    const activatedToken = useRef<string | null>(null);
+    const activationRequest = useRef<{
+        token: string;
+        promise: Promise<string>;
+    } | null>(null);
 
     useEffect(() => {
         clearError();
@@ -24,16 +27,19 @@ export default function ActivateAccount() {
             return;
         }
 
-        if (activatedToken.current === token) {
-            return;
+        if (activationRequest.current?.token !== token) {
+            activationRequest.current = {
+                token,
+                promise: activateAccountAction(token)
+            };
         }
-        activatedToken.current = token;
+        const request = activationRequest.current.promise;
 
         let cancelled = false;
         const activate = async () => {
             setStatus('loading');
             try {
-                const successMessage = await activateAccountAction(token);
+                const successMessage = await request;
                 if (!cancelled) {
                     setStatus('success');
                     setMessage(successMessage);
