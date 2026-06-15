@@ -1,7 +1,7 @@
 import axios from 'axios';
 import {authStorage} from '../utils/auth-storage';
 
-export const BASE_URL = 'http://localhost:8081';
+export const BASE_URL = 'https://7bb7-58-186-240-2.ngrok-free.app';
 
 const PUBLIC_ROUTES = [
     '/api/auth/login',
