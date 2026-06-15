@@ -6,6 +6,12 @@ import { useRequestStore } from '../store/useRequestStore';
 import { formatCurrency } from '../utils/format';
 import { RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
+import { RequestItemDto, UpdateRequestDto } from '../interface/customer-request.model';
+import { isRequestOpen } from '../utils/request-workflow';
+import { useProductStore } from '../store/useProductStore';
+import CatalogProductCombobox, {
+    CatalogProductSelection
+} from '../components/common/CatalogProductCombobox';
 
 export default function RequestDetail() {
     const { id } = useParams();
@@ -20,14 +26,19 @@ export default function RequestDetail() {
         clearError,
         clearCurrentDetail
     } = useRequestStore();
+    const {
+        allProducts,
+        fetchAllProducts,
+        isAllProductsLoading
+    } = useProductStore();
 
     // Local form states (synced from currentRequestDetail)
     const [phone, setPhone] = useState('');
     const [type, setType] = useState<RequestType>('NORMAL');
     const [requirements, setRequirements] = useState('');
-    const [items, setItems] = useState<{ name: string; quantity: number; note: string }[]>([]);
+    const [items, setItems] = useState<RequestItemDto[]>([]);
     const [attachments, setAttachments] = useState<string[]>([]);
-    
+
     // UI Helpers
     const [uploadingFiles, setUploadingFiles] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
@@ -49,15 +60,25 @@ export default function RequestDetail() {
             setType(currentRequestDetail.type || 'NORMAL');
             setRequirements(currentRequestDetail.customRequirements || '');
             setItems(currentRequestDetail.items?.map(item => ({
+                nhanhProductId: item.nhanhProductId,
                 name: item.name,
+                price: item.price,
                 quantity: item.quantity,
-                note: item.note || ''
+                note: item.note || '',
+                metadataJson: item.metadataJson
             })) || []);
             setAttachments(currentRequestDetail.attachments?.map(att => att.url) || []);
+
             setSuccessMessage(null);
             setLocalError(null);
         }
     }, [currentRequestDetail]);
+
+    useEffect(() => {
+        if (currentRequestDetail && currentRequestDetail.type !== 'NORMAL') {
+            void fetchAllProducts();
+        }
+    }, [currentRequestDetail, fetchAllProducts]);
 
     useEffect(() => {
         if (error) {
@@ -87,9 +108,7 @@ export default function RequestDetail() {
         );
     }
 
-    const isEditable = !['APPROVED', 'REJECTED', 'CANCELLED'].includes(
-        currentRequestDetail.status
-    );
+    const isEditable = isRequestOpen(currentRequestDetail.status);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -127,10 +146,24 @@ export default function RequestDetail() {
         }
     };
 
-    // Item list handlers (only allowed if pending)
     const handleAddItem = () => {
         if (!isEditable) return;
         setItems(prev => [...prev, { name: '', quantity: 1, note: '' }]);
+    };
+
+    const handleProductSelection = (
+        index: number,
+        selection: CatalogProductSelection
+    ) => {
+        if (!isEditable) return;
+        setItems(prev => prev.map((item, itemIndex) => (
+            itemIndex === index
+                ? {
+                    ...item,
+                    ...selection
+                }
+                : item
+        )));
     };
 
     const handleRemoveItem = (index: number) => {
@@ -156,35 +189,37 @@ export default function RequestDetail() {
         setLocalError(null);
         setSuccessMessage(null);
 
-        if (!phone.trim()) {
-            setLocalError('Số điện thoại liên hệ không được bỏ trống!');
-            return;
-        }
-
         const validItems = items.filter(item => item.name.trim());
         if (validItems.length === 0) {
             setLocalError('Danh sách sản phẩm cần ít nhất 1 mặt hàng có tên!');
             return;
         }
+        if (
+            (currentRequestDetail.type === 'CUSTOM' || currentRequestDetail.type === 'FINDING') &&
+            !requirements.trim()
+        ) {
+            setLocalError('Vui lòng nhập yêu cầu chi tiết cho loại yêu cầu này.');
+            return;
+        }
 
-        const payload = {
-            customerPhone: phone,
-            type,
+        const payload: UpdateRequestDto = {
             customRequirements: requirements.trim(),
             items: validItems.map(item => ({
+                nhanhProductId: item.nhanhProductId,
                 name: item.name.trim(),
                 quantity: item.quantity,
-                note: item.note.trim() || undefined
+                note: item.note?.trim() || undefined,
+                metadataJson: item.metadataJson
             })),
             uploadedImageUrls: attachments
         };
 
         try {
-            await updateRequestAction(id, payload);
+            await updateRequestAction(id, payload, 'user');
             setSuccessMessage('Lưu thông tin thay đổi yêu cầu thành công!');
             ToastService.success('Cập nhật yêu cầu thành công.');
         } catch (err) {
-            // The store exposes conflict and validation messages to the UI.
+            // Error handled by store
         }
     };
 
@@ -201,7 +236,8 @@ export default function RequestDetail() {
 
             {/* Title Bar */}
             <div className="flex items-center gap-4 mb-8">
-                <button 
+                <button
+                    type="button"
                     onClick={() => navigate('/requests')}
                     className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer"
                     title="Quay lại"
@@ -238,19 +274,36 @@ export default function RequestDetail() {
                 </div>
             )}
 
-            {currentRequestDetail.status === 'APPROVED' &&
-                (currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId) && (
-                <div className="mb-6 flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-green-900">
-                    <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
-                    <div>
-                        <p className="text-xs font-black uppercase tracking-wide text-green-700">
-                            Yêu cầu đã được duyệt thành đơn hàng
-                        </p>
-                        <p className="mt-1 text-sm font-bold">
-                            Mã đơn: {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
-                        </p>
+            {currentRequestDetail.status === 'APPROVED' && (
+                    <div className="mb-6 flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-green-900">
+                        <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-wide text-green-700">
+                                Yêu cầu đã được duyệt thành đơn hàng
+                            </p>
+                            {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId ? (
+                                <>
+                                    <p className="mt-1 text-sm font-bold">
+                                        Mã đơn: {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
+                                    </p>
+                                    <Link
+                                        to={`/tracking?nhanhOrderId=${encodeURIComponent(
+                                            currentRequestDetail.nhanhOrderCode ||
+                                            currentRequestDetail.nhanhOrderId ||
+                                            ''
+                                        )}`}
+                                        className="mt-2 inline-flex text-xs font-black uppercase text-primary hover:underline"
+                                    >
+                                        Theo dõi đơn hàng
+                                    </Link>
+                                </>
+                            ) : (
+                                <p className="mt-1 text-xs font-semibold">
+                                    Đơn hàng đã được tạo nhưng chưa có mã tra cứu. Vui lòng quay lại sau.
+                                </p>
+                            )}
+                        </div>
                     </div>
-                </div>
             )}
 
             {/* Read-only / Status lock notice */}
@@ -263,10 +316,10 @@ export default function RequestDetail() {
             )}
 
             <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                
+
                 {/* Left side: Main Form details */}
                 <div className="lg:col-span-8 space-y-6">
-                    
+
                     {/* Basic info section */}
                     <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 space-y-4">
                         <h2 className="text-xs font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">1. Thông tin liên hệ & Loại yêu cầu</h2>
@@ -276,25 +329,20 @@ export default function RequestDetail() {
                                 <input
                                     type="tel"
                                     value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    disabled={!isEditable || isSubmitting}
+                                    readOnly
+                                    disabled
                                     className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
                                     required
                                 />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">Phân loại yêu cầu</label>
-                                <select
-                                    value={type}
-                                    onChange={(e) => setType(e.target.value as RequestType)}
-                                    disabled={!isEditable || isSubmitting}
-                                    className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
-                                >
-                                    <option value="NORMAL">Tìm hàng thông thường (Normal)</option>
-                                    <option value="PREORDER">Đặt trước mô hình hiếm (Pre-order)</option>
-                                    <option value="FINDING">Tìm kiếm hàng hiếm giới hạn (Finding)</option>
-                                    <option value="CUSTOM">Custom ráp độ / Đắp LED / Sơn phủ (Custom)</option>
-                                </select>
+                                <input
+                                    value={getTypeLabel(type)}
+                                    readOnly
+                                    disabled
+                                    className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold outline-none border border-transparent text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
+                                />
                             </div>
                         </div>
                     </div>
@@ -321,14 +369,25 @@ export default function RequestDetail() {
                                     <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-12 gap-3">
                                         <div className="md:col-span-6">
                                             <label className="block text-[9px] font-black text-outline uppercase tracking-wider mb-1">Tên mô hình / Sản phẩm</label>
-                                            <input
-                                                type="text"
-                                                value={item.name}
-                                                onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                                                disabled={!isEditable || isSubmitting}
-                                                className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
-                                                required
-                                            />
+                                            {currentRequestDetail.type !== 'NORMAL' && isEditable ? (
+                                                <CatalogProductCombobox
+                                                    products={allProducts}
+                                                    value={item}
+                                                    onChange={(selection) => handleProductSelection(index, selection)}
+                                                    disabled={isSubmitting}
+                                                    isLoading={isAllProductsLoading}
+                                                    ariaLabel={`Sản phẩm yêu cầu ${index + 1}`}
+                                                />
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={item.name}
+                                                    onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                                                    disabled={!isEditable || isSubmitting}
+                                                    className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
+                                                    required
+                                                />
+                                            )}
                                         </div>
                                         <div className="md:col-span-2">
                                             <label className="block text-[9px] font-black text-outline uppercase tracking-wider mb-1">Số lượng</label>
@@ -399,11 +458,11 @@ export default function RequestDetail() {
                     </div>
                 </div>
 
-                {/* Right side: Summary quotation details */}
+                {/* Right side: Summary & Quotation details */}
                 <div className="lg:col-span-4 space-y-6">
                     <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 sticky top-28 space-y-5">
                         <h2 className="text-xs font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">Phản hồi & Báo giá</h2>
-                        
+
                         <div className="space-y-4 text-xs">
                             <div className="flex justify-between py-2 border-b border-surface-container-low font-bold">
                                 <span className="text-outline">Tổng chi phí dự kiến:</span>
@@ -417,6 +476,7 @@ export default function RequestDetail() {
                                     {currentRequestDetail.depositAmount > 0 ? formatCurrency(currentRequestDetail.depositAmount) : 'Chờ tính cọc'}
                                 </span>
                             </div>
+
                             <div className="flex justify-between py-2 border-b border-surface-container-low font-bold">
                                 <span className="text-outline">Loại yêu cầu gốc:</span>
                                 <span className="text-on-surface font-black uppercase">{getTypeLabel(currentRequestDetail.type)}</span>
@@ -431,7 +491,7 @@ export default function RequestDetail() {
                             )}
                         </div>
 
-                        {/* Save Action if pending */}
+                        {/* Save Action button */}
                         {isEditable ? (
                             <button
                                 type="submit"

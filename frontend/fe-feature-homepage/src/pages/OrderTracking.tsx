@@ -99,7 +99,7 @@ const getPaymentStatusColor = (status: string) => {
     }
 };
 
-const getAvailablePaymentTypes = (order: OrderResponseDto): OrderPaymentType[] => {
+export const getAvailablePaymentTypes = (order: OrderResponseDto): OrderPaymentType[] => {
     if (order.status === 'CANCELLED' || order.paymentStatus === 'PAID') {
         return [];
     }
@@ -125,9 +125,12 @@ const paymentTypeLabels: Record<OrderPaymentType, string> = {
 export default function OrderTracking() {
     const [searchParams] = useSearchParams();
     const initialOrderId = searchParams.get('orderId') || '';
-    const [reference, setReference] = useState(initialOrderId);
+    const initialNhanhOrderId = searchParams.get('nhanhOrderId') || '';
+    const initialReference = initialOrderId || initialNhanhOrderId;
+    const initialTrackingType: TrackingType = initialOrderId ? 'internal' : 'nhanh';
+    const [reference, setReference] = useState(initialReference);
     const [trackingType, setTrackingType] = useState<TrackingType>(
-        initialOrderId ? 'internal' : 'nhanh'
+        initialTrackingType
     );
     const [orderDetail, setOrderDetail] = useState<OrderResponseDto | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -178,12 +181,12 @@ export default function OrderTracking() {
     }, [fetchPayments]);
 
     useEffect(() => {
-        if (!initialOrderId || autoTrackedReference.current === initialOrderId) {
+        if (!initialReference || autoTrackedReference.current === initialReference) {
             return;
         }
-        autoTrackedReference.current = initialOrderId;
-        trackOrder(initialOrderId, 'internal');
-    }, [initialOrderId, trackOrder]);
+        autoTrackedReference.current = initialReference;
+        trackOrder(initialReference, initialTrackingType);
+    }, [initialReference, initialTrackingType, trackOrder]);
 
     useEffect(() => () => {
         clearPayments();

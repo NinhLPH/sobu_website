@@ -25,12 +25,12 @@ const emptyPage: RequestPage = {
 };
 
 const getErrorMessage = (error: any, fallback: string) => {
+    if (error?.response?.status === 409) {
+        return 'Yêu cầu đã thay đổi hoặc không còn được phép cập nhật. Vui lòng tải lại dữ liệu mới nhất.';
+    }
     const backendMessage = error?.response?.data?.message || error?.response?.data?.error;
     if (backendMessage) {
         return backendMessage;
-    }
-    if (error?.response?.status === 409) {
-        return 'Yêu cầu đã bị khóa hoặc trạng thái chuyển đổi không còn hợp lệ.';
     }
     return error?.message || fallback;
 };

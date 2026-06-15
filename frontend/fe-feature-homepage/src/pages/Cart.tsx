@@ -132,7 +132,8 @@ export default function Cart() {
         locationsLoaded,
         isLoading: isLocationsLoading,
         error: locationError,
-        fetchLocations
+        fetchLocations,
+        cancelScheduledRetry
     } = useLocationStore();
     const { subtotal, itemCount } = getTotals();
     const { isAuthenticated, user } = useAuthStore();
@@ -141,8 +142,9 @@ export default function Cart() {
     const [validationError, setValidationError] = useState<string | null>(null);
 
     useEffect(() => {
-        void fetchLocations();
-    }, [fetchLocations]);
+        void fetchLocations(true);
+        return cancelScheduledRetry;
+    }, [fetchLocations, cancelScheduledRetry]);
 
     useEffect(() => {
         if (!user) {
@@ -295,7 +297,7 @@ export default function Cart() {
 
     if (items.length === 0 && !isSubmitting && !isCreatingPayment) {
         return (
-            <main className="mx-auto flex min-h-[60vh] max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
+            <main className="mx-auto flex min-h-[60vh] w-full max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
                 <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-surface-container shadow-inner">
                     <ShoppingBag className="h-10 w-10 text-primary opacity-40" />
                 </div>
@@ -315,7 +317,7 @@ export default function Cart() {
 
     if (items.length === 0 && (isSubmitting || isCreatingPayment)) {
         return (
-            <main className="mx-auto flex min-h-[60vh] max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
+            <main className="mx-auto flex min-h-[60vh] w-full max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
                 <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
                 <p className="text-xs font-bold text-outline">
                     {isCreatingPayment
@@ -327,7 +329,7 @@ export default function Cart() {
     }
 
     return (
-        <main className="mx-auto max-w-screen-2xl bg-surface px-6 pb-16 pt-24">
+        <main className="mx-auto w-full max-w-screen-2xl bg-surface px-6 pb-16 pt-24">
             <header className="mb-8 flex items-center gap-3">
                 <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface md:text-3xl">
                     Giỏ hàng

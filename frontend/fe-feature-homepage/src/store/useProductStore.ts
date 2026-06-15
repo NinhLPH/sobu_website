@@ -10,12 +10,15 @@ type SyncResponse = { message: string };
 
 interface ProductState {
     products: ProductListItemDTO[];
+    allProducts: ProductListItemDTO[];
     categories: CategoryListItemDTO[];
     brands: BrandListItemDTO[];
     productsLoaded: boolean;
+    allProductsLoaded: boolean;
     categoriesLoaded: boolean;
     brandsLoaded: boolean;
     isProductsLoading: boolean;
+    isAllProductsLoading: boolean;
     isCategoriesLoading: boolean;
     isBrandsLoading: boolean;
     isSyncingProducts: boolean;
@@ -25,6 +28,7 @@ interface ProductState {
     error: string | null;
 
     fetchProducts: (params?: CatalogParams, force?: boolean) => Promise<void>;
+    fetchAllProducts: (force?: boolean) => Promise<void>;
     fetchCategories: (force?: boolean) => Promise<void>;
     fetchBrands: (force?: boolean) => Promise<void>;
     triggerSyncProducts: () => Promise<SyncResponse>;
@@ -37,12 +41,15 @@ const getErrorMessage = (error: any, fallback: string) =>
 
 export const useProductStore = create<ProductState>((set, get) => ({
     products: [],
+    allProducts: [],
     categories: [],
     brands: [],
     productsLoaded: false,
+    allProductsLoaded: false,
     categoriesLoaded: false,
     brandsLoaded: false,
     isProductsLoading: false,
+    isAllProductsLoading: false,
     isCategoriesLoading: false,
     isBrandsLoading: false,
     isSyncingProducts: false,
@@ -71,6 +78,28 @@ export const useProductStore = create<ProductState>((set, get) => ({
                 error: getErrorMessage(error, 'Không thể tải danh sách sản phẩm.'),
                 isProductsLoading: false,
                 isLoading: get().isCategoriesLoading || get().isBrandsLoading
+            });
+        }
+    },
+
+    fetchAllProducts: async (force = false) => {
+        const state = get();
+        if (state.isAllProductsLoading || (!force && state.allProductsLoaded)) {
+            return;
+        }
+
+        set({ isAllProductsLoading: true, error: null });
+        try {
+            const allProducts = await PublicCatalogService.getAllProducts();
+            set({
+                allProducts: allProducts ?? [],
+                allProductsLoaded: true,
+                isAllProductsLoading: false
+            });
+        } catch (error) {
+            set({
+                error: getErrorMessage(error, 'Không thể tải toàn bộ catalog sản phẩm.'),
+                isAllProductsLoading: false
             });
         }
     },
@@ -128,6 +157,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
         try {
             const response = await AdminSyncService.syncProducts();
             await get().fetchProducts(undefined, true);
+            set({ allProductsLoaded: false });
             return response;
         } catch (error) {
             set({ error: getErrorMessage(error, 'Không thể đồng bộ sản phẩm.') });

@@ -150,7 +150,7 @@ export default function ProductList() {
     };
 
     return (
-        <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface min-h-screen flex flex-col">
+        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface min-h-screen flex flex-col">
             {/* Header / Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm font-bold text-on-surface-variant mb-8">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>

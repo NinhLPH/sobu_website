@@ -1,24 +1,44 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Plus, Trash2, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
 import ImageUploader from '../components/common/ImageUploader';
 import { useRequestStore } from '../store/useRequestStore';
-import { RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
-import { createIdempotencyKey } from '../utils/idempotency';
+import { RequestWorkflowType } from '../interface/customer-request.model';
+import { useProductStore } from '../store/useProductStore';
+import CatalogProductCombobox, {
+    CatalogProductSelection
+} from '../components/common/CatalogProductCombobox';
+
+interface RequestFormItem {
+    nhanhProductId?: string;
+    name: string;
+    price?: number;
+    quantity: number;
+    note: string;
+}
+
+const emptyItem = (): RequestFormItem => ({
+    name: '',
+    quantity: 1,
+    note: ''
+});
 
 export default function CreateRequest() {
     const { createRequestAction, isSubmitting, error, clearError } = useRequestStore();
+    const {
+        allProducts,
+        fetchAllProducts,
+        isAllProductsLoading
+    } = useProductStore();
 
     // Form fields
     const [phone, setPhone] = useState('');
-    const [type, setType] = useState<RequestType>('PREORDER');
+    const [type, setType] = useState<RequestWorkflowType>('PREORDER');
     const [requirements, setRequirements] = useState('');
     
     // Items list
-    const [items, setItems] = useState<{ name: string; quantity: number; note: string }[]>([
-        { name: '', quantity: 1, note: '' }
-    ]);
+    const [items, setItems] = useState<RequestFormItem[]>([emptyItem()]);
 
     // Attachments
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
@@ -26,8 +46,12 @@ export default function CreateRequest() {
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [successCreated, setSuccessCreated] = useState(false);
 
+    useEffect(() => {
+        void fetchAllProducts();
+    }, [fetchAllProducts]);
+
     const handleAddItem = () => {
-        setItems(prev => [...prev, { name: '', quantity: 1, note: '' }]);
+        setItems(prev => [...prev, emptyItem()]);
     };
 
     const handleRemoveItem = (index: number) => {
@@ -42,6 +66,20 @@ export default function CreateRequest() {
             }
             return item;
         }));
+    };
+
+    const handleProductSelection = (
+        index: number,
+        selection: CatalogProductSelection
+    ) => {
+        setItems(prev => prev.map((item, itemIndex) => (
+            itemIndex === index
+                ? {
+                    ...item,
+                    ...selection
+                }
+                : item
+        )));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -60,13 +98,19 @@ export default function CreateRequest() {
             setUploadError('Vui lòng thêm ít nhất một món hàng yêu cầu có tên!');
             return;
         }
+        if ((type === 'CUSTOM' || type === 'FINDING') && !requirements.trim()) {
+            setUploadError('Vui lòng nhập yêu cầu chi tiết cho loại yêu cầu đã chọn.');
+            return;
+        }
 
         const payload = {
             customerPhone: phone,
             type,
             customRequirements: requirements.trim() || undefined,
             items: validItems.map(item => ({
+                nhanhProductId: item.nhanhProductId,
                 name: item.name.trim(),
+                price: item.price,
                 quantity: item.quantity,
                 note: item.note.trim() || undefined
             })),
@@ -111,7 +155,7 @@ export default function CreateRequest() {
                                 setSuccessCreated(false);
                                 setPhone('');
                                 setRequirements('');
-                                setItems([{ name: '', quantity: 1, note: '' }]);
+                                setItems([emptyItem()]);
                                 setUploadedImages([]);
                             }}
                             className="flex-1 py-3 bg-surface-container text-on-surface border border-outline-variant/30 rounded-2xl text-xs font-black uppercase tracking-widest text-center hover:bg-surface-container-high transition-colors"
@@ -186,13 +230,17 @@ export default function CreateRequest() {
                             </label>
                             <select
                                 value={type}
-                                onChange={(e) => setType(e.target.value as RequestType)}
+                                onChange={(e) => {
+                                    const nextType = e.target.value as RequestWorkflowType;
+                                    setType(nextType);
+                                    setItems([emptyItem()]);
+                                }}
                                 disabled={isSubmitting}
                                 className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface cursor-pointer"
                             >
-                                <option value="PREORDER">Đặt trước mô hình hiếm (Pre-order)</option>
-                                <option value="FINDING">Tìm kiếm hàng hiếm giới hạn (Finding)</option>
-                                <option value="CUSTOM">Custom ráp độ / Đắp LED / Sơn phủ (Custom)</option>
+                                <option value="PREORDER">Đặt trước mô hình</option>
+                                <option value="FINDING">Tìm kiếm hàng hiếm</option>
+                                <option value="CUSTOM">Custom ráp độ / Đắp LED / Sơn phủs</option>
                             </select>
                         </div>
                     </div>
@@ -221,14 +269,13 @@ export default function CreateRequest() {
                                 <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-12 gap-3">
                                     <div className="md:col-span-6">
                                         <label className="block text-[10px] font-bold text-outline uppercase tracking-wider mb-1">Tên mô hình / Sản phẩm</label>
-                                        <input
-                                            type="text"
-                                            value={item.name}
-                                            onChange={(e) => handleItemChange(index, 'name', e.target.value)}
-                                            placeholder="Ví dụ: Gundam PG Unleashed RX-78-2..."
+                                        <CatalogProductCombobox
+                                            products={allProducts}
+                                            value={item}
+                                            onChange={(selection) => handleProductSelection(index, selection)}
                                             disabled={isSubmitting}
-                                            className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all placeholder:text-outline/40 text-on-surface"
-                                            required
+                                            isLoading={isAllProductsLoading}
+                                            ariaLabel={`Sản phẩm yêu cầu ${index + 1}`}
                                         />
                                     </div>
                                     <div className="md:col-span-2">
@@ -283,6 +330,7 @@ export default function CreateRequest() {
                         <textarea
                             value={requirements}
                             onChange={(e) => setRequirements(e.target.value)}
+                            aria-label="Yêu cầu chi tiết"
                             placeholder="Mô tả kỹ thêm về màu sơn tĩnh điện mong muốn, cách đi bóng LED, hoặc nguồn gốc mô hình bạn cần tìm..."
                             disabled={isSubmitting}
                             className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all placeholder:text-outline/40 text-on-surface min-h-[100px]"

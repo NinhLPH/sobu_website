@@ -1,5 +1,7 @@
 import { RequestStatus, RequestType } from '../enum/union-types';
 
+export type RequestWorkflowType = Exclude<RequestType, 'NORMAL'>;
+
 export interface RequestItemResponseDto {
     id: number;
     nhanhProductId?: string;
@@ -49,7 +51,7 @@ export interface RequestItemDto {
 
 export interface CreateRequestDto {
     customerPhone: string;
-    type: RequestType;
+    type: RequestWorkflowType;
     customRequirements?: string;
     uploadedImageUrls?: string[];
     items: RequestItemDto[];
@@ -63,7 +65,7 @@ export interface ProcessRequestDto {
 
 export interface UpdateRequestDto {
     customerPhone?: string;
-    type?: RequestType;
+    type?: RequestWorkflowType;
     customRequirements?: string;
     totalAmount?: number;
     depositAmount?: number;

@@ -1,22 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ShieldAlert, CheckCircle, SlidersHorizontal, Loader2, FileText, CheckCircle2, ChevronLeft, ChevronRight, PackageCheck, Save, Send } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, SlidersHorizontal, Loader2, FileText, CheckCircle2, ChevronLeft, ChevronRight, PackageCheck, Save, Send, Plus, Trash2 } from 'lucide-react';
 import { useRequestStore } from '../../store/useRequestStore';
 import { formatCurrency } from '../../utils/format';
 import { RequestStatus } from '../../enum/union-types';
 import { ToastService } from '../../service/toast.service';
 import { getPublicImageUrl } from '../../utils/file-url';
 import { RequestItemDto, UpdateRequestDto } from '../../interface/customer-request.model';
-
-const allowedTransitions: Record<RequestStatus, RequestStatus[]> = {
-    PENDING: ['REVIEWING', 'SOURCING', 'REJECTED', 'CANCELLED'],
-    REVIEWING: ['SOURCING', 'WAITING_CUSTOMER', 'APPROVED', 'REJECTED', 'CANCELLED'],
-    SOURCING: ['REVIEWING', 'WAITING_CUSTOMER', 'APPROVED', 'REJECTED', 'CANCELLED'],
-    WAITING_CUSTOMER: ['REVIEWING', 'SOURCING', 'APPROVED', 'REJECTED', 'CANCELLED'],
-    APPROVED: ['CANCELLED'],
-    REJECTED: [],
-    CANCELLED: []
-};
+import { getAllowedRequestTransitions, isRequestOpen } from '../../utils/request-workflow';
+import ImageUploader from '../../components/common/ImageUploader';
 
 const calculateQuoteTotal = (items: RequestItemDto[]) => items.reduce(
     (total, item) => total + (Number(item.price) || 0) * item.quantity,
@@ -58,6 +50,9 @@ export default function AdminRequests() {
     const [quoteDepositAmount, setQuoteDepositAmount] = useState('');
     const [isQuoteTotalOverridden, setIsQuoteTotalOverridden] = useState(false);
     const [quoteError, setQuoteError] = useState<string | null>(null);
+    const [adminRequirements, setAdminRequirements] = useState('');
+    const [adminAttachments, setAdminAttachments] = useState<string[]>([]);
+    const [isUploadingImages, setIsUploadingImages] = useState(false);
 
     useEffect(() => {
         fetchAdminRequests({ page, size: 10 });
@@ -76,12 +71,14 @@ export default function AdminRequests() {
     }, [error]);
 
     useEffect(() => {
-        if (!currentRequestDetail || currentRequestDetail.status !== 'REVIEWING') {
+        if (!currentRequestDetail || !isRequestOpen(currentRequestDetail.status)) {
             setQuoteItems([]);
             setQuoteTotalAmount('');
             setQuoteDepositAmount('');
             setIsQuoteTotalOverridden(false);
             setQuoteError(null);
+            setAdminRequirements('');
+            setAdminAttachments([]);
             return;
         }
 
@@ -112,6 +109,8 @@ export default function AdminRequests() {
             currentRequestDetail.totalAmount > 0 &&
             currentRequestDetail.totalAmount !== calculatedTotal
         );
+        setAdminRequirements(currentRequestDetail.customRequirements || '');
+        setAdminAttachments(currentRequestDetail.attachments.map(attachment => attachment.url));
         setQuoteError(null);
     }, [currentRequestDetail]);
 
@@ -138,6 +137,40 @@ export default function AdminRequests() {
         }
     };
 
+    const handleQuoteItemChange = (
+        index: number,
+        field: 'name' | 'note' | 'quantity',
+        value: string | number
+    ) => {
+        setQuoteItems(current => current.map((item, itemIndex) => (
+            itemIndex === index ? { ...item, [field]: value } : item
+        )));
+        setQuoteError(null);
+    };
+
+    const handleAddQuoteItem = () => {
+        setQuoteItems(current => [
+            ...current,
+            {
+                name: '',
+                note: '',
+                price: 0,
+                quantity: 1
+            }
+        ]);
+        setQuoteError(null);
+    };
+
+    const handleRemoveQuoteItem = (index: number) => {
+        const nextItems = quoteItems.filter((_, itemIndex) => itemIndex !== index);
+        setQuoteItems(nextItems);
+        setQuoteError(null);
+
+        if (!isQuoteTotalOverridden) {
+            setQuoteTotalAmount(String(calculateQuoteTotal(nextItems)));
+        }
+    };
+
     const handleRecalculateQuoteTotal = () => {
         setQuoteTotalAmount(String(calculateQuoteTotal(quoteItems)));
         setIsQuoteTotalOverridden(false);
@@ -145,6 +178,16 @@ export default function AdminRequests() {
     };
 
     const buildQuotePayload = (): UpdateRequestDto | null => {
+        const hasInvalidItem = quoteItems.length === 0 || quoteItems.some((item) => (
+            !item.name.trim() ||
+            !Number.isFinite(Number(item.quantity)) ||
+            Number(item.quantity) < 1
+        ));
+        if (hasInvalidItem) {
+            setQuoteError('Mỗi sản phẩm phải có tên và số lượng hợp lệ.');
+            return null;
+        }
+
         const hasInvalidPrice = quoteItems.some((item) => (
             item.price === undefined ||
             !Number.isFinite(Number(item.price)) ||
@@ -170,10 +213,15 @@ export default function AdminRequests() {
         let depositAmount = 0;
         if (quoteDepositAmount.trim()) {
             depositAmount = Number(quoteDepositAmount);
-            if (!Number.isFinite(depositAmount) || depositAmount <= 0) {
-                setQuoteError('Tiền cọc nếu nhập phải là số lớn hơn 0.');
+            if (!Number.isFinite(depositAmount) || depositAmount < 0) {
+                setQuoteError('Tiền cọc phải là số lớn hơn hoặc bằng 0.');
                 return null;
             }
+        }
+
+        if (depositAmount > totalAmount) {
+            setQuoteError('Tiền cọc không được vượt quá tổng tiền báo giá.');
+            return null;
         }
 
         return {
@@ -182,7 +230,9 @@ export default function AdminRequests() {
                 price: Number(item.price)
             })),
             totalAmount,
-            depositAmount
+            depositAmount,
+            customRequirements: adminRequirements.trim(),
+            uploadedImageUrls: adminAttachments
         };
     };
 
@@ -197,6 +247,7 @@ export default function AdminRequests() {
         try {
             await updateRequestAction(currentRequestDetail.id, payload, 'admin');
             ToastService.success('Đã lưu nháp báo giá.');
+            await fetchAdminRequests({ page, size: 10 });
         } catch (err: any) {
             setQuoteError(err?.message || 'Không thể lưu báo giá.');
         }
@@ -213,10 +264,10 @@ export default function AdminRequests() {
         try {
             await updateRequestAction(currentRequestDetail.id, payload, 'admin');
             await processRequestAction(currentRequestDetail.id, {
-                targetStatus: 'WAITING_CUSTOMER',
-                depositAmount: payload.depositAmount
+                targetStatus: 'WAITING_CUSTOMER'
             });
             ToastService.success('Đã gửi báo giá và chuyển yêu cầu sang chờ khách hàng.');
+            await fetchAdminRequests({ page, size: 10 });
         } catch (err: any) {
             setQuoteError(err?.message || 'Không thể gửi báo giá cho khách hàng.');
         }
@@ -274,7 +325,10 @@ export default function AdminRequests() {
 
     const handleOpenProcessModal = () => {
         if (!currentRequestDetail) return;
-        const transitions = allowedTransitions[currentRequestDetail.status];
+        const transitions = getAllowedRequestTransitions(
+            currentRequestDetail.status,
+            currentRequestDetail.type
+        );
         if (transitions.length === 0) return;
         setProcessAction(transitions[0]);
         setProcessNote('');
@@ -290,7 +344,7 @@ export default function AdminRequests() {
         setProcessError(null);
         clearError();
 
-        const requiresDeposit = processAction === 'WAITING_CUSTOMER' || processAction === 'APPROVED';
+        const requiresDeposit = processAction === 'APPROVED';
         const depositInput = processDeposit.trim();
 
         if (requiresDeposit && !depositInput) {
@@ -301,6 +355,14 @@ export default function AdminRequests() {
         const depositVal = depositInput ? Number(depositInput) : undefined;
         if (depositVal !== undefined && (!Number.isFinite(depositVal) || depositVal < 0)) {
             setProcessError('Tiền cọc phải là số lớn hơn hoặc bằng 0.');
+            return;
+        }
+        if (
+            requiresDeposit &&
+            depositVal !== undefined &&
+            depositVal > currentRequestDetail.totalAmount
+        ) {
+            setProcessError('Tiền cọc không được vượt quá tổng tiền báo giá.');
             return;
         }
 
@@ -324,9 +386,12 @@ export default function AdminRequests() {
     };
 
     const transitions = currentRequestDetail
-        ? allowedTransitions[currentRequestDetail.status]
+        ? getAllowedRequestTransitions(currentRequestDetail.status, currentRequestDetail.type)
         : [];
-    const requiresDeposit = processAction === 'WAITING_CUSTOMER' || processAction === 'APPROVED';
+    const requiresDeposit = processAction === 'APPROVED';
+    const isAdminEditable = currentRequestDetail
+        ? isRequestOpen(currentRequestDetail.status)
+        : false;
 
     return (
         <div className="pt-6 space-y-6 flex flex-col md:flex-row gap-6 relative">
@@ -493,25 +558,59 @@ export default function AdminRequests() {
 
                             <div>
                                 <p className="text-[10px] text-outline font-black uppercase mb-2">
-                                    {currentRequestDetail.status === 'REVIEWING'
+                                    {isAdminEditable
                                         ? 'Báo giá từng sản phẩm'
                                         : 'Danh sách mô hình yêu cầu'}
                                 </p>
                                 <div className="space-y-2">
-                                    {currentRequestDetail.items?.map((item, idx) => (
-                                        <div key={item.id || idx} className="p-3 bg-surface-container rounded-xl font-bold space-y-2.5">
-                                            <div className="flex justify-between items-center gap-2">
-                                                <div>
-                                                    <p className="text-on-surface line-clamp-2 leading-tight">{item.name}</p>
-                                                    {item.note && <p className="text-[9px] text-outline font-medium mt-0.5">Ghi chú: {item.note}</p>}
-                                                </div>
-                                                <span className="shrink-0 text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-black">
-                                                    x{item.quantity}
-                                                </span>
-                                            </div>
-
-                                            {currentRequestDetail.status === 'REVIEWING' ? (
-                                                <label className="block">
+                                    {(isAdminEditable ? quoteItems : currentRequestDetail.items)?.map((item, idx) => (
+                                        <div key={idx} className="p-3 bg-surface-container rounded-xl font-bold space-y-2.5">
+                                            {isAdminEditable ? (
+                                                <>
+                                                    <label className="block">
+                                                        <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
+                                                            Tên sản phẩm
+                                                        </span>
+                                                        <input
+                                                            type="text"
+                                                            value={item.name}
+                                                            onChange={(event) => handleQuoteItemChange(idx, 'name', event.target.value)}
+                                                            disabled={isSubmitting}
+                                                            className="w-full rounded-lg border border-outline-variant/30 bg-white px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary disabled:opacity-60"
+                                                        />
+                                                    </label>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <label className="block">
+                                                            <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
+                                                                Số lượng
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                min="1"
+                                                                value={item.quantity}
+                                                                onChange={(event) => handleQuoteItemChange(
+                                                                    idx,
+                                                                    'quantity',
+                                                                    Math.max(1, Number(event.target.value) || 1)
+                                                                )}
+                                                                disabled={isSubmitting}
+                                                                className="w-full rounded-lg border border-outline-variant/30 bg-white px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary disabled:opacity-60"
+                                                            />
+                                                        </label>
+                                                        <label className="block">
+                                                            <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
+                                                                Ghi chú
+                                                            </span>
+                                                            <input
+                                                                type="text"
+                                                                value={item.note || ''}
+                                                                onChange={(event) => handleQuoteItemChange(idx, 'note', event.target.value)}
+                                                                disabled={isSubmitting}
+                                                                className="w-full rounded-lg border border-outline-variant/30 bg-white px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary disabled:opacity-60"
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                    <label className="block">
                                                     <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
                                                         Đơn giá (VND)
                                                     </span>
@@ -525,29 +624,88 @@ export default function AdminRequests() {
                                                         placeholder="Nhập giá sản phẩm"
                                                         className="w-full rounded-lg border border-outline-variant/30 bg-white px-3 py-2 text-xs font-bold text-on-surface outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60"
                                                     />
-                                                </label>
-                                            ) : item.price > 0 ? (
-                                                <div className="flex items-center justify-between border-t border-outline-variant/20 pt-2 text-[10px]">
-                                                    <span className="text-outline">Đơn giá:</span>
-                                                    <span className="font-black text-primary">{formatCurrency(item.price)}</span>
-                                                </div>
-                                            ) : null}
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveQuoteItem(idx)}
+                                                        disabled={isSubmitting || quoteItems.length === 1}
+                                                        className="flex w-full items-center justify-center gap-1 rounded-lg border border-error/20 px-2 py-1.5 text-[9px] font-black uppercase text-error disabled:cursor-not-allowed disabled:opacity-40"
+                                                    >
+                                                        <Trash2 className="h-3 w-3" />
+                                                        Xóa sản phẩm
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="flex justify-between items-center gap-2">
+                                                        <div>
+                                                            <p className="text-on-surface line-clamp-2 leading-tight">{item.name}</p>
+                                                            {item.note && <p className="text-[9px] text-outline font-medium mt-0.5">Ghi chú: {item.note}</p>}
+                                                        </div>
+                                                        <span className="shrink-0 text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-black">
+                                                            x{item.quantity}
+                                                        </span>
+                                                    </div>
+                                                    {(item.price || 0) > 0 && (
+                                                        <div className="flex items-center justify-between border-t border-outline-variant/20 pt-2 text-[10px]">
+                                                            <span className="text-outline">Đơn giá:</span>
+                                                            <span className="font-black text-primary">{formatCurrency(item.price || 0)}</span>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     ))}
+                                    {isAdminEditable && (
+                                        <button
+                                            type="button"
+                                            onClick={handleAddQuoteItem}
+                                            disabled={isSubmitting}
+                                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/30 px-3 py-2.5 text-[10px] font-black uppercase text-primary disabled:opacity-50"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Thêm sản phẩm
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
-                            {currentRequestDetail.customRequirements && (
+                            {isAdminEditable ? (
+                                <label className="block">
+                                    <span className="mb-1 block text-[10px] font-black uppercase text-outline">
+                                        Yêu cầu chi tiết / ghi chú
+                                    </span>
+                                    <textarea
+                                        value={adminRequirements}
+                                        onChange={(event) => setAdminRequirements(event.target.value)}
+                                        disabled={isSubmitting}
+                                        className="min-h-[90px] w-full rounded-xl bg-surface-container p-3 text-xs font-semibold text-on-surface outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+                                    />
+                                </label>
+                            ) : currentRequestDetail.customRequirements ? (
                                 <div>
                                     <p className="text-[10px] text-outline font-black uppercase mb-1">Yêu cầu chi tiết từ khách</p>
                                     <p className="p-3 bg-surface-container rounded-xl text-on-surface-variant leading-relaxed">
                                         {currentRequestDetail.customRequirements}
                                     </p>
                                 </div>
-                            )}
+                            ) : null}
 
                             {/* Attachments list */}
-                            {currentRequestDetail.attachments && currentRequestDetail.attachments.length > 0 && (
+                            {isAdminEditable ? (
+                                <div>
+                                    <p className="text-[10px] text-outline font-black uppercase mb-2">
+                                        Tệp ảnh đính kèm minh họa
+                                    </p>
+                                    <ImageUploader
+                                        uploadedUrls={adminAttachments}
+                                        onChange={setAdminAttachments}
+                                        disabled={isSubmitting}
+                                        subDirectory="requests"
+                                        onUploadingChange={setIsUploadingImages}
+                                    />
+                                </div>
+                            ) : currentRequestDetail.attachments && currentRequestDetail.attachments.length > 0 ? (
                                 <div>
                                     <p className="text-[10px] text-outline font-black uppercase mb-2">Tệp ảnh đính kèm minh họa</p>
                                     <div className="grid grid-cols-3 gap-2">
@@ -569,10 +727,10 @@ export default function AdminRequests() {
                                         ))}
                                     </div>
                                 </div>
-                            )}
+                            ) : null}
 
                             {/* Quotation / Price details */}
-                            {currentRequestDetail.status === 'REVIEWING' ? (
+                            {isAdminEditable ? (
                                 <form
                                     onSubmit={(event) => {
                                         event.preventDefault();
@@ -617,7 +775,7 @@ export default function AdminRequests() {
 
                                         <label className="block">
                                             <span className="mb-1 block text-[9px] font-black uppercase tracking-wide text-outline">
-                                                Số tiền cọc bắt buộc (VND)
+                                                Số tiền cọc (VND)
                                             </span>
                                             <input
                                                 type="number"
@@ -644,7 +802,7 @@ export default function AdminRequests() {
                                     <div className="grid grid-cols-1 gap-2">
                                         <button
                                             type="submit"
-                                            disabled={isSubmitting}
+                                            disabled={isSubmitting || isUploadingImages}
                                             className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-surface-container px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-60"
                                         >
                                             {isSubmitting ? (
@@ -652,21 +810,23 @@ export default function AdminRequests() {
                                             ) : (
                                                 <Save className="h-3.5 w-3.5" />
                                             )}
-                                            Lưu Báo Giá
+                                            Lưu thay đổi
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleSendQuotation()}
-                                            disabled={isSubmitting}
-                                            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-primary to-primary-container px-3 py-3 text-[10px] font-black uppercase tracking-wide text-white shadow-md transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                            {isSubmitting ? (
-                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            ) : (
-                                                <Send className="h-3.5 w-3.5" />
-                                            )}
-                                            Gửi báo giá cho khách
-                                        </button>
+                                        {transitions.includes('WAITING_CUSTOMER') && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleSendQuotation()}
+                                                disabled={isSubmitting || isUploadingImages}
+                                                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-primary to-primary-container px-3 py-3 text-[10px] font-black uppercase tracking-wide text-white shadow-md transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                {isSubmitting ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                    <Send className="h-3.5 w-3.5" />
+                                                )}
+                                                Gửi báo giá cho khách
+                                            </button>
+                                        )}
                                     </div>
                                 </form>
                             ) : (

@@ -9,6 +9,24 @@ const getErrorMessage = (error: any, fallback: string) =>
     fallback;
 
 let inFlightRequest: Promise<void> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let nextRetryAt = 0;
+
+const cancelRetryTimer = () => {
+    if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+    }
+};
+
+const retryDelayMs = (error: any): number | null => {
+    if (error?.response?.status !== 503) {
+        return null;
+    }
+    const rawHeader = error?.response?.headers?.['retry-after'];
+    const seconds = Number.parseInt(String(rawHeader ?? ''), 10);
+    return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 30_000;
+};
 
 interface LocationState {
     locationTree: LocationTreeResponse | null;
@@ -16,7 +34,8 @@ interface LocationState {
     isLoading: boolean;
     message: string | null;
     error: string | null;
-    fetchLocations: () => Promise<void>;
+    fetchLocations: (autoRetry?: boolean) => Promise<void>;
+    cancelScheduledRetry: () => void;
 }
 
 export const useLocationStore = create<LocationState>((set, get) => ({
@@ -26,13 +45,20 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     message: null,
     error: null,
 
-    fetchLocations: async () => {
+    cancelScheduledRetry: () => {
+        cancelRetryTimer();
+        nextRetryAt = 0;
+    },
+
+    fetchLocations: async (autoRetry = false) => {
         if (get().locationsLoaded) {
             return;
         }
-
         if (inFlightRequest) {
             return inFlightRequest;
+        }
+        if (Date.now() < nextRetryAt) {
+            return;
         }
 
         set({ isLoading: true, error: null });
@@ -49,13 +75,26 @@ export const useLocationStore = create<LocationState>((set, get) => ({
                     message: response.message,
                     error: null
                 });
+                cancelRetryTimer();
+                nextRetryAt = 0;
             } catch (error) {
+                const delayMs = retryDelayMs(error);
                 set({
                     error: getErrorMessage(
                         error,
                         'Không thể tải danh sách tỉnh, quận và phường.'
                     )
                 });
+                if (delayMs !== null) {
+                    nextRetryAt = Date.now() + delayMs;
+                    if (autoRetry && !retryTimer) {
+                        retryTimer = setTimeout(() => {
+                            retryTimer = null;
+                            nextRetryAt = 0;
+                            void get().fetchLocations(true);
+                        }, delayMs);
+                    }
+                }
             } finally {
                 set({ isLoading: false });
                 inFlightRequest = null;
