@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -92,6 +93,23 @@ public class NhanhLocationService {
 
                 log.error("Nhanh location cache refresh failed and no cache is available", ex);
                 throw ex;
+            }
+        }
+    }
+
+    @Scheduled(fixedDelayString = "#{@nhanhProperties.location.cacheTtlHours * 60 * 60 * 1000}")
+    public void refreshLocationsCache() {
+        synchronized (refreshLock) {
+            Instant now = clock.instant();
+            CachedLocationData current = cache;
+            try {
+                refreshCache(current, now);
+            } catch (RuntimeException ex) {
+                log.warn(
+                        "Scheduled Nhanh location cache refresh failed. Keeping existing cache cachedAt={}, expiresAt={}",
+                        current == null ? null : current.cachedAt(),
+                        current == null ? null : current.expiresAt(),
+                        ex);
             }
         }
     }
