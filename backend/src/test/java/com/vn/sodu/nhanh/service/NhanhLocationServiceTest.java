@@ -96,6 +96,22 @@ class NhanhLocationServiceTest {
     }
 
     @Test
+    void scheduledRefreshUpdatesCacheEvenWhenCurrentCacheIsStillValid() {
+        when(nhanhService.getValidAccessToken()).thenReturn("token");
+        stubSimpleLocationTree();
+
+        locationService.getLocations();
+        clock.advance(Duration.ofHours(1));
+        locationService.refreshLocationsCache();
+        LocationTreeResponse refreshed = locationService.getLocations();
+
+        assertEquals(Instant.parse("2026-06-13T04:00:00Z"), refreshed.getCachedAt());
+        assertEquals(Instant.parse("2026-06-14T04:00:00Z"), refreshed.getExpiresAt());
+        verify(nhanhService, times(2)).getValidAccessToken();
+        verify(nhanhClient, times(6)).postWithBearerAuthorization(anyString(), eq("token"), any(), any());
+    }
+
+    @Test
     void expiredCacheRefreshFailureReturnsStaleCache() {
         when(nhanhService.getValidAccessToken()).thenReturn("token");
         stubSimpleLocationTree();

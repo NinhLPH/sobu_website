@@ -54,7 +54,9 @@ These public catalog endpoints return raw objects or raw page responses instead 
 
 Some modules expose multiple base paths:
 
+- Auth: `/api/auth/...` and `/auth/...`
 - Public catalog: `/api/public/...` and `/api/v1/public/...`
+- Public Nhanh locations: `/api/public/locations` only
 - Requests: `/api/requests/...`, `/api/request/...`, `/api/v1/requests/...`, `/api/v1/request/...`
 - Orders: `/api/orders/...` and `/api/v1/orders/...`
 - Admin requests: `/api/admin/requests/...` and `/api/v1/admin/requests/...`
@@ -1359,6 +1361,111 @@ Typical statuses: `500`.
 ### Notes
 
 * Alias available at `/api/v1/public/brands`.
+
+## Endpoint
+
+**List Public Locations**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/public/locations`
+
+### Description
+
+Get the cached Nhanh shipping location tree for checkout province, district, and ward selection.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | No | Optional for GET requests |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Locations retrieved successfully",
+  "data": {
+    "provider": "NHANH",
+    "locationVersion": "v1",
+    "cachedAt": "2026-06-13T03:00:00Z",
+    "expiresAt": "2026-06-14T03:00:00Z",
+    "stale": false,
+    "cities": [
+      {
+        "cityId": 254,
+        "cityName": "Ha Noi",
+        "otherName": null,
+        "districts": [
+          {
+            "districtId": 331,
+            "districtName": "Ba Dinh",
+            "otherName": null,
+            "wards": [
+              {
+                "wardId": 1116,
+                "wardName": "Phuc Xa",
+                "otherName": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "timestamp": "2026-06-13T10:00:00"
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `502`, `500`.
+
+### Business Rules
+
+* Intended for checkout address selection; one page load should call this endpoint once.
+* The response is cached in memory for 24 hours by default.
+* If a refresh fails but an expired cache exists, the endpoint returns stale data with `data.stale = true`.
+* A cold refresh failure has no fallback and can propagate the upstream Nhanh failure.
+
+### Notes
+
+* This endpoint returns `ApiResponseDTO<LocationTreeResponse>`.
+* The stale-cache success message is `Locations retrieved from stale cache`.
+* City, district, and ward IDs are explicit as `cityId`, `districtId`, and `wardId` for shipping and order flows.
+* No `/api/v1/public/locations` alias is currently defined.
 
 ## Endpoint
 
