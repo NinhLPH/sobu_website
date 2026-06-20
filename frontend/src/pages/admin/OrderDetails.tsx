@@ -151,6 +151,12 @@ export default function AdminOrderDetail() {
         if (!normalizedCode) {
             return;
         }
+        const confirmed = window.confirm(
+            `Xác nhận payment ${normalizedCode} đã thanh toán? Thao tác này chỉ dành cho giao dịch giả lập.`
+        );
+        if (!confirmed) {
+            return;
+        }
         clearOrdersError();
         clearOrderActionMessage();
         try {

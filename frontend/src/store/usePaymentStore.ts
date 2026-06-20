@@ -5,7 +5,8 @@ import {
 } from '../interface/order.model';
 import { CustomerService } from '../service/custom.service';
 import { createIdempotencyKey } from '../utils/idempotency';
-import { paymentSession } from '../utils/payment-session';
+
+let latestPaymentsRequestId = 0;
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message ||
@@ -52,27 +53,38 @@ export const usePaymentStore = create<PaymentState>((set, get) => ({
 
     fetchPayments: async (orderId) => {
         const normalizedOrderId = String(orderId);
-        set({
+        const requestId = ++latestPaymentsRequestId;
+        set((state) => ({
+            payments: state.activeOrderId === normalizedOrderId ? state.payments : [],
             activeOrderId: normalizedOrderId,
             isLoadingPayments: true,
             paymentError: null
-        });
+        }));
         try {
             const response = await CustomerService.getOrderPayments(orderId);
             if (!response.success) {
                 throw new Error(response.message || 'Không thể tải lịch sử thanh toán.');
             }
-            set({
-                payments: response.data ?? [],
-                activeOrderId: normalizedOrderId,
-                isLoadingPayments: false
-            });
+            if (
+                requestId === latestPaymentsRequestId &&
+                get().activeOrderId === normalizedOrderId
+            ) {
+                set({
+                    payments: response.data ?? [],
+                    isLoadingPayments: false
+                });
+            }
             return response.data ?? [];
         } catch (error) {
-            set({
-                isLoadingPayments: false,
-                paymentError: getErrorMessage(error, 'Không thể tải lịch sử thanh toán.')
-            });
+            if (
+                requestId === latestPaymentsRequestId &&
+                get().activeOrderId === normalizedOrderId
+            ) {
+                set({
+                    isLoadingPayments: false,
+                    paymentError: getErrorMessage(error, 'Không thể tải lịch sử thanh toán.')
+                });
+            }
             throw error;
         }
     },
@@ -88,13 +100,14 @@ export const usePaymentStore = create<PaymentState>((set, get) => ({
             ? state.pendingPaymentKey
             : createIdempotencyKey();
 
-        set({
+        set((current) => ({
+            payments: current.activeOrderId === String(orderId) ? current.payments : [],
             activeOrderId: String(orderId),
             isCreatingPayment: true,
             paymentError: null,
             pendingPaymentKey: idempotencyKey,
             pendingPaymentFingerprint: fingerprint
-        });
+        }));
 
         try {
             const response = await CustomerService.createOrderPayment(
@@ -121,9 +134,6 @@ export const usePaymentStore = create<PaymentState>((set, get) => ({
                 );
             }
 
-            if (data.paymentMethod === 'ONLINE') {
-                paymentSession.save(payment);
-            }
             return payment;
         } catch (error) {
             set({
@@ -135,13 +145,14 @@ export const usePaymentStore = create<PaymentState>((set, get) => ({
     },
 
     clearPaymentError: () => set({ paymentError: null }),
-    clearPayments: () => set({
-        payments: [],
-        activeOrderId: null,
-        isLoadingPayments: false,
-        isCreatingPayment: false,
-        paymentError: null,
-        pendingPaymentKey: null,
-        pendingPaymentFingerprint: null
-    })
+    clearPayments: () => {
+        latestPaymentsRequestId += 1;
+        set({
+            payments: [],
+            activeOrderId: null,
+            isLoadingPayments: false,
+            isCreatingPayment: false,
+            paymentError: null
+        });
+    }
 }));

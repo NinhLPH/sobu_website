@@ -5,9 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="77d9b6aa-23b1-4102-9b38-833bd3b4e0bf" name="Changes" comment="base url for backend">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_6_15_2026_8_47_PM_[Changes]/shelved.patch" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/api/api-client.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/api/api-client.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/Cart.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/Cart.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/OrderTracking.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/OrderTracking.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/PaymentResult.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/PaymentResult.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/admin/OrderDetails.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/admin/OrderDetails.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/store/usePaymentStore.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/store/usePaymentStore.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/store/usePaymentStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/store/usePaymentStore.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/payment-session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/payment-session.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -60,7 +66,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "#25 on fe-payment",
     "javascript.preferred.runtime.type.id": "node",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",

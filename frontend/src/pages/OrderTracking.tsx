@@ -19,6 +19,7 @@ import {
 import { PaymentMethod } from '../enum/union-types';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { formatCurrency } from '../utils/format';
+import { redirectToPaymentCheckout } from '../utils/payment-session';
 
 type TrackingType = 'internal' | 'nhanh';
 
@@ -128,6 +129,7 @@ export default function OrderTracking() {
     const initialNhanhOrderId = searchParams.get('nhanhOrderId') || '';
     const initialReference = initialOrderId || initialNhanhOrderId;
     const initialTrackingType: TrackingType = initialOrderId ? 'internal' : 'nhanh';
+    const initialPaymentSetup = searchParams.get('paymentSetup');
     const [reference, setReference] = useState(initialReference);
     const [trackingType, setTrackingType] = useState<TrackingType>(
         initialTrackingType
@@ -137,7 +139,15 @@ export default function OrderTracking() {
     const [trackingError, setTrackingError] = useState<string | null>(null);
     const [paymentType, setPaymentType] = useState<OrderPaymentType>('FULL');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ONLINE');
-    const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+    const [paymentMessage, setPaymentMessage] = useState<string | null>(() => {
+        if (initialPaymentSetup === 'cod') {
+            return 'Đã ghi nhận phương thức COD cho đơn hàng.';
+        }
+        if (initialPaymentSetup === 'failed') {
+            return 'Đơn hàng đã được tạo nhưng chưa thể khởi tạo thanh toán. Vui lòng thử lại bên dưới.';
+        }
+        return null;
+    });
     const autoTrackedReference = useRef<string | null>(null);
     const {
         payments,
@@ -154,6 +164,7 @@ export default function OrderTracking() {
         setIsLoading(true);
         setTrackingError(null);
         setOrderDetail(null);
+        clearPayments();
 
         try {
             const response = type === 'internal'
@@ -178,7 +189,7 @@ export default function OrderTracking() {
         } finally {
             setIsLoading(false);
         }
-    }, [fetchPayments]);
+    }, [clearPayments, fetchPayments]);
 
     useEffect(() => {
         if (!initialReference || autoTrackedReference.current === initialReference) {
@@ -213,7 +224,7 @@ export default function OrderTracking() {
             payment.type === paymentType && payment.status === 'PENDING'
         );
         if (pendingPayment?.checkoutUrl) {
-            window.location.assign(pendingPayment.checkoutUrl);
+            redirectToPaymentCheckout(pendingPayment);
             return;
         }
         if (pendingPayment) {
@@ -227,7 +238,7 @@ export default function OrderTracking() {
                 paymentMethod
             });
             if (paymentMethod === 'ONLINE' && payment.checkoutUrl) {
-                window.location.assign(payment.checkoutUrl);
+                redirectToPaymentCheckout(payment);
                 return;
             }
             setPaymentMessage(
@@ -625,7 +636,7 @@ export default function OrderTracking() {
                                             {payment.status === 'PENDING' && payment.checkoutUrl && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => window.location.assign(payment.checkoutUrl!)}
+                                                    onClick={() => redirectToPaymentCheckout(payment)}
                                                     className="mt-2 inline-flex items-center gap-1 font-black uppercase text-primary hover:underline"
                                                 >
                                                     Mở PayOS <ExternalLink className="h-3 w-3" />
