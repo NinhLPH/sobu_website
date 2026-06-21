@@ -7,6 +7,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Typed configuration for all Nhanh integration properties.
  * Replaces scattered {@code @Value("${nhanh.*}")} across sync services,

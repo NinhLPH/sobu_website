@@ -13,6 +13,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Instant;
@@ -193,6 +195,36 @@ public class NhanhClient {
         return postWithAuthorization(apiPath, accessToken, body, responseType);
     }
 
+    public <REQ, RESP> RESP postOnce(
+            String apiPath,
+            String accessToken,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
+        String url = buildApiUrl(apiPath);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", accessToken);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    String.class);
+            return deserializeOnce(response.getBody(), responseType, apiPath, response.getStatusCode().value());
+        } catch (RestClientResponseException ex) {
+            throw apiException(ex.getResponseBodyAsString(), ex.getStatusCode().value(), ex);
+        } catch (RestClientException ex) {
+            throw new NhanhApiException(
+                    "Nhanh API transport failure",
+                    null,
+                    null,
+                    null,
+                    true,
+                    ex);
+        }
+    }
+
     public <REQ, RESP> RESP postWithBearerAuthorization(
             String apiPath,
             String accessToken,
@@ -207,11 +239,7 @@ public class NhanhClient {
             REQ body,
             ParameterizedTypeReference<RESP> responseType) {
 
-        String url = UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
-                .replacePath(apiPath)
-                .queryParam("appId", nhanhProperties.getClientId())
-                .queryParam("businessId", nhanhProperties.getBusinessId())
-                .toUriString();
+        String url = buildApiUrl(apiPath);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

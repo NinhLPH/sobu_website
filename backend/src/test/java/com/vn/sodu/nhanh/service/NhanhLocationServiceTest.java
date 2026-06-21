@@ -1,34 +1,17 @@
 package com.vn.sodu.nhanh.service;
 
-import com.vn.sodu.global.exception.ExternalServiceException;
-import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.dto.LocationTreeResponse;
-import com.vn.sodu.nhanh.dto.NhanhLocationItemDTO;
-import com.vn.sodu.product.dto.NhanhResponse;
-import org.junit.jupiter.api.BeforeEach;
+import com.vn.sodu.nhanh.location.LocationDataUnavailableException;
+import com.vn.sodu.nhanh.location.NhanhLocationSnapshotStore;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.ParameterizedTypeReference;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.IntStream;
+import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class NhanhLocationServiceTest {
 
@@ -99,19 +82,15 @@ class NhanhLocationServiceTest {
     }
 
     @Test
-    void scheduledRefreshUpdatesCacheEvenWhenCurrentCacheIsStillValid() {
-        when(nhanhService.getValidAccessToken()).thenReturn("token");
-        stubSimpleLocationTree();
+    void readsOnlyFromPersistedSnapshot() {
+        NhanhLocationSnapshotStore store = mock(NhanhLocationSnapshotStore.class);
+        LocationTreeResponse expected = LocationTreeResponse.builder().build();
+        when(store.load()).thenReturn(Optional.of(expected));
 
-        locationService.getLocations();
-        clock.advance(Duration.ofHours(1));
-        locationService.refreshLocationsCache();
-        LocationTreeResponse refreshed = locationService.getLocations();
+        LocationTreeResponse result = new NhanhLocationService(store).getLocations();
 
-        assertEquals(Instant.parse("2026-06-13T04:00:00Z"), refreshed.getCachedAt());
-        assertEquals(Instant.parse("2026-06-14T04:00:00Z"), refreshed.getExpiresAt());
-        verify(nhanhService, times(2)).getValidAccessToken();
-        verify(nhanhClient, times(6)).post(anyString(), eq("token"), any(), any());
+        assertSame(expected, result);
+        verify(store).load();
     }
 
     @Test
@@ -300,9 +279,8 @@ class NhanhLocationServiceTest {
             return this;
         }
 
-        @Override
-        public Instant instant() {
-            return instant;
-        }
+        assertThrows(
+                LocationDataUnavailableException.class,
+                () -> new NhanhLocationService(store).getLocations());
     }
 }

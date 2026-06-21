@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/(css|js|media|static|icons)/(.*)",
+      "destination": "/$1/$2"
+    },
+    {
+      "source": "/manifest.json",
+      "destination": "/manifest.json"
+    },
+    {
+      "source": "/favicon.ico",
+      "destination": "/favicon.ico"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

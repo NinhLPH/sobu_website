@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 
@@ -35,11 +36,18 @@ public class NhanhServiceAuthTest {
     @Mock
     private NhanhProperties nhanhProperties;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private NhanhService nhanhService;
 
     @BeforeEach
     public void setUp() {
-        nhanhService = new NhanhService(nhanhClient, nhanhIntegrationRepo, nhanhProperties);
+        nhanhService = new NhanhService(
+                nhanhClient,
+                nhanhIntegrationRepo,
+                nhanhProperties,
+                eventPublisher);
     }
 
     @Test

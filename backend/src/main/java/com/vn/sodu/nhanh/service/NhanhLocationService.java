@@ -1,68 +1,16 @@
 package com.vn.sodu.nhanh.service;
 
-import com.vn.sodu.global.exception.ExternalServiceException;
-import com.vn.sodu.nhanh.NhanhProperties;
-import com.vn.sodu.nhanh.dto.LocationCityDTO;
-import com.vn.sodu.nhanh.dto.LocationDistrictDTO;
 import com.vn.sodu.nhanh.dto.LocationTreeResponse;
-import com.vn.sodu.nhanh.dto.LocationWardDTO;
-import com.vn.sodu.nhanh.dto.NhanhLocationItemDTO;
-import com.vn.sodu.product.dto.NhanhResponse;
-import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.scheduling.annotation.Scheduled;
+import com.vn.sodu.nhanh.location.LocationDataUnavailableException;
+import com.vn.sodu.nhanh.location.NhanhLocationSnapshotStore;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 @Service
-@Slf4j
+@RequiredArgsConstructor
 public class NhanhLocationService {
 
-    private static final String TYPE_CITY = "CITY";
-    private static final String TYPE_DISTRICT = "DISTRICT";
-    private static final String TYPE_WARD = "WARD";
-    private static final ParameterizedTypeReference<NhanhResponse<List<NhanhLocationItemDTO>>> LOCATION_RESPONSE_TYPE = new ParameterizedTypeReference<>() {
-    };
-
-    private final NhanhClient nhanhClient;
-    private final NhanhService nhanhService;
-    private final NhanhProperties nhanhProperties;
-    private final NhanhLocationMapper locationMapper;
-    private final Clock clock;
-    private final Object refreshLock = new Object();
-
-    private volatile CachedLocationData cache;
-
-    @Autowired
-    public NhanhLocationService(
-            NhanhClient nhanhClient,
-            NhanhService nhanhService,
-            NhanhProperties nhanhProperties,
-            NhanhLocationMapper locationMapper) {
-        this(nhanhClient, nhanhService, nhanhProperties, locationMapper, Clock.systemUTC());
-    }
-
-    NhanhLocationService(
-            NhanhClient nhanhClient,
-            NhanhService nhanhService,
-            NhanhProperties nhanhProperties,
-            NhanhLocationMapper locationMapper,
-            Clock clock) {
-        this.nhanhClient = nhanhClient;
-        this.nhanhService = nhanhService;
-        this.nhanhProperties = nhanhProperties;
-        this.locationMapper = locationMapper;
-        this.clock = clock;
-    }
+    private final NhanhLocationSnapshotStore snapshotStore;
 
     public LocationTreeResponse getLocations() {
         Instant now = clock.instant();

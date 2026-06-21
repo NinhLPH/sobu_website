@@ -4,10 +4,12 @@ import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
+import com.vn.sodu.nhanh.NhanhOAuthConnectedEvent;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhTokenResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ public class NhanhService {
     private final NhanhClient nhanhClient;
     private final NhanhIntegrationRepo nhanhIntegrationRepo;
     private final NhanhProperties nhanhProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 1. Generate login URL
     public String buildAuthUrl() {
@@ -49,6 +52,11 @@ public class NhanhService {
         if (response == null || response.getAccessToken() == null) {
             throw new ExternalServiceException("Nhanh token response is missing accessToken");
         }
+        Long configuredBusinessId = Long.valueOf(nhanhProperties.getBusinessId());
+        if (!configuredBusinessId.equals(response.getBusinessId())) {
+            throw new ExternalServiceException(
+                    "Nhanh OAuth businessId does not match the configured business");
+        }
 
         // tìm theo businessId (QUAN TRỌNG)
         NhanhIntegration entity = nhanhIntegrationRepo
@@ -61,6 +69,7 @@ public class NhanhService {
         entity.setExpiredAt(response.getExpiredAt());
 
         nhanhIntegrationRepo.save(entity);
+        eventPublisher.publishEvent(new NhanhOAuthConnectedEvent(response.getBusinessId()));
 
         log.info("Saved/Updated Nhanh token OK, businessId={}", response.getBusinessId());
     }
