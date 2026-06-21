@@ -44,6 +44,57 @@ class NhanhClientTest {
     }
 
     @Test
+    @DisplayName("Should surface expired access code message from token exchange")
+    void testGetAccessTokenExpiredAccessCodeResponse() {
+        String rawResponse = """
+                {
+                  "code": false,
+                  "messages": [
+                    "Invalid accessCode or accessCode has expired"
+                  ]
+                }
+                """;
+
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(rawResponse));
+
+        ExternalServiceException ex = assertThrows(ExternalServiceException.class, () ->
+                nhanhClient.getAccessToken("expired-access-code"));
+
+        assertEquals("Invalid accessCode or accessCode has expired", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should expose Nhanh rate limit metadata")
+    void testPostRateLimitResponseIncludesUnlockMetadata() {
+        String rawResponse = """
+                {
+                  "code": 0,
+                  "errorCode": "ERR_429",
+                  "message": "Your app exceeded the API Rate Limit",
+                  "data": {
+                    "lockedSeconds": 10,
+                    "unlockedAt": 1733387520
+                  }
+                }
+                """;
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(rawResponse));
+
+        NhanhRateLimitException ex = assertThrows(NhanhRateLimitException.class, () -> nhanhClient.post(
+                "/v3.0/shipping/location",
+                "token",
+                Map.of("filters", Map.of("locationVersion", "v1", "type", "CITY")),
+                new ParameterizedTypeReference<NhanhResponse<List<Map<String, Object>>>>() {}
+        ));
+
+        assertEquals("Your app exceeded the API Rate Limit", ex.getMessage());
+        assertEquals(10L, ex.getLockedSeconds());
+        assertEquals(1733387520L, ex.getUnlockedAt().getEpochSecond());
+    }
+
+    @Test
     @DisplayName("Should build list request with app, business, filters, and paginator")
     void testFetchAllPagesRequestShape() {
         NhanhProductDTO dto = new NhanhProductDTO();
@@ -231,38 +282,32 @@ class NhanhClientTest {
     }
 
     @Test
-    @DisplayName("Should expose structured rate-limit metadata without retrying")
-    void testPostOnceParsesRateLimitMetadata() {
+    @DisplayName("Should surface expired access token message from boolean false response")
+    void testPostLocationExpiredAccessTokenResponse() {
         String rawResponse = """
                 {
-                  "code": 0,
-                  "errorCode": "ERR_429",
-                  "messages": ["Too many requests"],
-                  "unlockedAt": 1781481900
+                  "code": false,
+                  "messages": [
+                    "Invalid accessToken or accessToken has expired"
+                  ]
                 }
                 """;
-        when(restTemplate.exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(String.class)))
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(rawResponse));
 
-        NhanhApiException ex = assertThrows(NhanhApiException.class, () ->
-                nhanhClient.postOnce(
-                        "/v3.0/shipping/location",
-                        "token",
-                        Map.of("filters", Map.of("type", "CITY")),
-                        new ParameterizedTypeReference<NhanhResponse<List<Map<String, Object>>>>() {
-                        }));
+        ExternalServiceException ex = assertThrows(ExternalServiceException.class, () -> nhanhClient.post(
+                "/v3.0/shipping/location",
+                "expired-token",
+                Map.of("filters", Map.of(
+                        "locationVersion", "v1",
+                        "type", "CITY"
+                )),
+                new ParameterizedTypeReference<NhanhResponse<List<Map<String, Object>>>>() {}
+        ));
 
-        assertTrue(ex.isRateLimited());
-        assertEquals("ERR_429", ex.getErrorCode());
-        assertEquals(Instant.ofEpochSecond(1781481900), ex.getUnlockedAt());
-        verify(restTemplate, times(1)).exchange(
-                anyString(),
-                eq(HttpMethod.POST),
-                any(HttpEntity.class),
-                eq(String.class));
+        assertEquals("Invalid accessToken or accessToken has expired", ex.getMessage());
+        verify(restTemplate, times(1))
+                .exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(String.class));
     }
 }
