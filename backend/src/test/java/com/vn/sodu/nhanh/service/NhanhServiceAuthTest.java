@@ -1,9 +1,11 @@
 package com.vn.sodu.nhanh.service;
 
 import com.vn.sodu.global.exception.ExternalServiceException;
+import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhProperties;
+import com.vn.sodu.nhanh.NhanhTokenResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,7 +15,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 public class NhanhServiceAuthTest {
@@ -160,5 +165,35 @@ public class NhanhServiceAuthTest {
         
         assertTrue(authHeader.startsWith("Bearer "), "Header should start with 'Bearer '");
         assertEquals("Bearer test_token_123", authHeader, "Header format should be 'Bearer <token>'");
+    }
+
+    @Test
+    public void handleCallbackExpiredAccessCodeThrowsBadRequestAndDoesNotPersist() {
+        when(nhanhClient.getAccessToken("expired-code"))
+                .thenThrow(new ExternalServiceException("Invalid accessCode or accessCode has expired"));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                nhanhService.handleCallback("expired-code"));
+
+        assertEquals(
+                "Nhanh access code is invalid or expired. Please start the Nhanh login flow again.",
+                ex.getMessage());
+        verify(nhanhIntegrationRepo, never()).save(any(NhanhIntegration.class));
+    }
+
+    @Test
+    public void handleCallbackValidTokenPersistsIntegration() {
+        NhanhTokenResponse response = new NhanhTokenResponse();
+        response.setAccessToken("access-token");
+        response.setBusinessId(123L);
+        response.setExpiredAt(FUTURE_EXPIRY);
+
+        when(nhanhClient.getAccessToken("valid-code")).thenReturn(response);
+        when(nhanhProperties.getClientId()).thenReturn("app1");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.empty());
+
+        nhanhService.handleCallback("valid-code");
+
+        verify(nhanhIntegrationRepo).save(any(NhanhIntegration.class));
     }
 }

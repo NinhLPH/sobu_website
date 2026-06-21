@@ -77,5 +77,8 @@ public class NhanhProperties {
         private String path = "/v3.0/shipping/location";
         private String version = "v1";
         private long cacheTtlHours = 24;
+        private long requestIntervalMs = 250;
+        private int rateLimitMaxAttempts = 5;
+        private long rateLimitUnlockBufferSeconds = 1;
     }
 }

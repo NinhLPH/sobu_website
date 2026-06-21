@@ -1,6 +1,7 @@
 package com.vn.sodu.nhanh.service;
 
 import com.vn.sodu.global.exception.ExternalServiceException;
+import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhProperties;
@@ -32,12 +33,21 @@ public class NhanhService {
     @Transactional
     public void handleCallback(String accessCode) {
 
-        NhanhTokenResponse response = nhanhClient.getAccessToken(accessCode);
+        NhanhTokenResponse response;
+        try {
+            response = nhanhClient.getAccessToken(accessCode);
+        } catch (ExternalServiceException ex) {
+            if (isInvalidAccessCode(ex.getMessage())) {
+                throw new BadRequestException(
+                        "Nhanh access code is invalid or expired. Please start the Nhanh login flow again.");
+            }
+            throw ex;
+        }
 
         log.info("Nhanh response: {}", response);
 
         if (response == null || response.getAccessToken() == null) {
-            throw new RuntimeException("Failed to get accessToken from Nhanh");
+            throw new ExternalServiceException("Nhanh token response is missing accessToken");
         }
 
         // tìm theo businessId (QUAN TRỌNG)
@@ -53,6 +63,17 @@ public class NhanhService {
         nhanhIntegrationRepo.save(entity);
 
         log.info("Saved/Updated Nhanh token OK, businessId={}", response.getBusinessId());
+    }
+
+    private boolean isInvalidAccessCode(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String normalized = message.toLowerCase();
+        return normalized.contains("accesscode")
+                && (normalized.contains("expired")
+                || normalized.contains("invalid")
+                || normalized.contains("not found"));
     }
 
     // Get valid access token from first active integration

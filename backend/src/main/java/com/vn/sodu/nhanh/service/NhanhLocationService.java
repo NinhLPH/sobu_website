@@ -182,22 +182,76 @@ public class NhanhLocationService {
             filters.put("parentId", parentId);
         }
 
-        NhanhResponse<List<NhanhLocationItemDTO>> response = nhanhClient.post(
-                nhanhProperties.getLocation().getPath(),
-                accessToken,
-                Map.of("filters", filters),
-                LOCATION_RESPONSE_TYPE);
+        int maxAttempts = Math.max(1, nhanhProperties.getLocation().getRateLimitMaxAttempts());
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            waitForRequestSlot();
+            try {
+                NhanhResponse<List<NhanhLocationItemDTO>> response = nhanhClient.post(
+                        nhanhProperties.getLocation().getPath(),
+                        accessToken,
+                        Map.of("filters", filters),
+                        LOCATION_RESPONSE_TYPE);
 
-        if (response == null) {
-            throw new ExternalServiceException("Nhanh location response is null");
+                if (response == null) {
+                    throw new ExternalServiceException("Nhanh location response is null");
+                }
+                if (response.getCode() != 1) {
+                    throw new ExternalServiceException(errorMessage(response));
+                }
+                if (response.getData() == null) {
+                    throw new ExternalServiceException("Nhanh location response data is null");
+                }
+                return response.getData();
+            } catch (NhanhRateLimitException ex) {
+                if (attempt == maxAttempts) {
+                    throw ex;
+                }
+                Duration wait = rateLimitWait(ex);
+                log.warn(
+                        "Nhanh location API rate limited. attempt={}/{}, lockedSeconds={}, unlockedAt={}, waitMs={}",
+                        attempt,
+                        maxAttempts,
+                        ex.getLockedSeconds(),
+                        ex.getUnlockedAt(),
+                        wait.toMillis());
+                sleep(wait);
+            }
         }
-        if (response.getCode() != 1) {
-            throw new ExternalServiceException(errorMessage(response));
+        throw new ExternalServiceException("Nhanh location request exhausted all rate-limit retry attempts");
+    }
+
+    private void waitForRequestSlot() {
+        sleep(Duration.ofMillis(Math.max(0, nhanhProperties.getLocation().getRequestIntervalMs())));
+    }
+
+    private Duration rateLimitWait(NhanhRateLimitException ex) {
+        long bufferSeconds = Math.max(0, nhanhProperties.getLocation().getRateLimitUnlockBufferSeconds());
+        if (ex.getUnlockedAt() != null) {
+            return positive(Duration.between(clock.instant(), ex.getUnlockedAt().plusSeconds(bufferSeconds)));
         }
-        if (response.getData() == null) {
-            throw new ExternalServiceException("Nhanh location response data is null");
+        if (ex.getLockedSeconds() != null) {
+            return Duration.ofSeconds(Math.max(0, ex.getLockedSeconds() + bufferSeconds));
         }
-        return response.getData();
+        return Duration.ofSeconds(30 + bufferSeconds);
+    }
+
+    private Duration positive(Duration duration) {
+        if (duration == null || duration.isNegative()) {
+            return Duration.ZERO;
+        }
+        return duration;
+    }
+
+    private void sleep(Duration duration) {
+        if (duration == null || duration.isZero() || duration.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new ExternalServiceException("Nhanh location rate-limit wait interrupted", ex);
+        }
     }
 
     private String errorMessage(NhanhResponse<?> response) {

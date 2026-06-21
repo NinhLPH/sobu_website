@@ -50,6 +50,9 @@ class NhanhLocationServiceTest {
         nhanhProperties.getLocation().setPath("/v3.0/shipping/location");
         nhanhProperties.getLocation().setVersion("v1");
         nhanhProperties.getLocation().setCacheTtlHours(24);
+        nhanhProperties.getLocation().setRequestIntervalMs(0);
+        nhanhProperties.getLocation().setRateLimitMaxAttempts(2);
+        nhanhProperties.getLocation().setRateLimitUnlockBufferSeconds(0);
         clock = new MutableClock(Instant.parse("2026-06-13T03:00:00Z"));
         locationService = new NhanhLocationService(
                 nhanhClient,
@@ -174,6 +177,30 @@ class NhanhLocationServiceTest {
         assertEquals(1, cityCalls.get());
         assertEquals(63, districtCalls.get());
         assertEquals(63, wardCalls.get());
+    }
+
+    @Test
+    void rateLimitedLocationRequestWaitsUntilUnlockedAndRetries() {
+        when(nhanhService.getValidAccessToken()).thenReturn("token");
+        when(nhanhClient.post(anyString(), eq("token"), any(), any()))
+                .thenThrow(new NhanhRateLimitException(
+                        "Your app exceeded the API Rate Limit",
+                        10L,
+                        clock.instant()))
+                .thenAnswer(invocation -> {
+                    Map<?, ?> filters = filters(invocation.getArgument(2));
+                    return switch ((String) filters.get("type")) {
+                        case "CITY" -> response(List.of(item(254L, "Ha Noi")));
+                        case "DISTRICT" -> response(List.of(item(331L, "Ba Dinh")));
+                        case "WARD" -> response(List.of(item(1116L, "Phuc Xa")));
+                        default -> response(List.of());
+                    };
+                });
+
+        LocationTreeResponse result = locationService.getLocations();
+
+        assertEquals(1, result.getCities().size());
+        verify(nhanhClient, times(4)).post(anyString(), eq("token"), any(), any());
     }
 
     @Test

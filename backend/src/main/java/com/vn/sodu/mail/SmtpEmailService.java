@@ -16,7 +16,7 @@ public class SmtpEmailService implements EmailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${app.frontend.base-url:http://localhost:3000}")
+    @Value("${app.frontend.base-url:https://sobu-jet.vercel.app}")
     private String frontendBaseUrl;
 
     @Value("${spring.mail.username:}")
