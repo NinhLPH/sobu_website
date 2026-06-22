@@ -239,11 +239,6 @@ export default function Header() {
                     </form>
 
                     <div className="flex items-center gap-3">
-                        <Link to="/admin"
-                              className="hidden w-10 h-10 rounded-full sm:flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors"
-                              title="Admin">
-                            <Shield className="w-5 h-5"/>
-                        </Link>
 
                         <div className="relative" ref={cartRef}>
                             <button
