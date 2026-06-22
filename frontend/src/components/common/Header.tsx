@@ -8,7 +8,7 @@ import {useCartStore} from "../../store/useCartStore";
 import {useProductStore} from "../../store/useProductStore";
 import {useAuthStore} from "../../store/useAuthStore";
 import {formatCurrency} from "../../utils/format";
-import {getPublicConfigValue, usePublicUiStore} from '../../store/usePublicUiStore';
+// import {getPublicConfigValue, usePublicUiStore} from '../../store/usePublicUiStore';
 
 
 const getCategoryIcon = (catCode: string) => {
@@ -35,7 +35,7 @@ const getCategoryIcon = (catCode: string) => {
 
 export default function Header() {
     const navigate = useNavigate();
-    const configs = usePublicUiStore((state) => state.configs);
+    // const configs = usePublicUiStore((state) => state.configs);
     // const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
 
     const {items, removeFromCart, getTotals} = useCartStore();
