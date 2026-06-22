@@ -34,7 +34,6 @@ import SiteLayout from './components/layout/SiteLayout';
 import {useEffect} from 'react';
 import {usePublicUiStore} from './store/usePublicUiStore';
 import AdminBanners from './pages/admin/Banners';
-import AdminConfigs from './pages/admin/Configs';
 import ScrollToTop from './components/common/ScrollToTop';
 
 export default function App() {
