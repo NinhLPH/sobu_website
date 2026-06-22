@@ -36,7 +36,7 @@ const getCategoryIcon = (catCode: string) => {
 export default function Header() {
     const navigate = useNavigate();
     const configs = usePublicUiStore((state) => state.configs);
-    const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
+    // const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
 
     const {items, removeFromCart, getTotals} = useCartStore();
     const {subtotal} = getTotals();
@@ -128,7 +128,7 @@ export default function Header() {
                 <div className="flex min-w-0 items-center gap-10">
                     <Link to="/"
                           className="bg-primary-container text-white px-6 py-2 rounded-xl font-black text-xl tracking-widest hover:scale-105 transition-transform shadow-md">
-                        {siteName}
+                        SOBU
                     </Link>
 
                     {/* Navigation */}
