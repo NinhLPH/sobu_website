@@ -7,6 +7,8 @@ import { useLocationStore } from '../store/useLocationStore';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { ToastService } from '../service/toast.service';
 import { formatCurrency } from '../utils/format';
+import { PaymentMethod } from '../enum/union-types';
+import { redirectToPaymentCheckout } from '../utils/payment-session';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -139,6 +141,7 @@ export default function Cart() {
     const { isAuthenticated, user } = useAuthStore();
     const navigate = useNavigate();
     const [form, setForm] = useState<CheckoutForm>(initialCheckoutForm);
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ONLINE');
     const [validationError, setValidationError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -265,31 +268,30 @@ export default function Cart() {
                 description: form.description.trim() || undefined
             });
 
-            const payNow = window.confirm(
-                'Đơn hàng đã được tạo. Bạn có muốn thanh toán ONLINE ngay bây giờ không?'
-            );
-            if (payNow) {
-                try {
-                    const payment = await createPayment(order.id, {
-                        type: 'FULL',
-                        paymentMethod: 'ONLINE'
-                    });
-                    if (payment.checkoutUrl) {
-                        window.location.assign(payment.checkoutUrl);
-                        return;
-                    }
-                } catch (error: any) {
-                    ToastService.error(
-                        error?.response?.data?.message ||
-                        error?.message ||
-                        'Không thể mở cổng thanh toán. Bạn có thể thử lại trong trang theo dõi đơn.'
-                    );
+            try {
+                const payment = await createPayment(order.id, {
+                    type: 'FULL',
+                    paymentMethod
+                });
+                if (paymentMethod === 'ONLINE') {
+                    redirectToPaymentCheckout(payment);
+                    return;
                 }
+                navigate(
+                    `/tracking?orderId=${encodeURIComponent(String(order.id))}&paymentSetup=cod`,
+                    { replace: true }
+                );
+            } catch (error: any) {
+                ToastService.error(
+                    error?.response?.data?.message ||
+                    error?.message ||
+                    'Đơn hàng đã được tạo nhưng chưa thể khởi tạo thanh toán. Bạn có thể thử lại trong trang theo dõi đơn.'
+                );
+                navigate(
+                    `/tracking?orderId=${encodeURIComponent(String(order.id))}&paymentSetup=failed`,
+                    { replace: true }
+                );
             }
-
-            navigate(`/tracking?orderId=${encodeURIComponent(String(order.id))}`, {
-                replace: true
-            });
         } catch {
             // The cart store exposes the backend error through checkoutError.
         }
@@ -297,7 +299,7 @@ export default function Cart() {
 
     if (items.length === 0 && !isSubmitting && !isCreatingPayment) {
         return (
-            <main className="mx-auto flex min-h-[60vh] w-full max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
+            <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
                 <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-surface-container shadow-inner">
                     <ShoppingBag className="h-10 w-10 text-primary opacity-40" />
                 </div>
@@ -317,7 +319,7 @@ export default function Cart() {
 
     if (items.length === 0 && (isSubmitting || isCreatingPayment)) {
         return (
-            <main className="mx-auto flex min-h-[60vh] w-full max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
+            <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
                 <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
                 <p className="text-xs font-bold text-outline">
                     {isCreatingPayment
@@ -329,7 +331,7 @@ export default function Cart() {
     }
 
     return (
-        <main className="mx-auto w-full max-w-screen-2xl bg-surface px-6 pb-16 pt-24">
+        <main className="w-full min-w-0 bg-surface px-4 pb-16 pt-24 sm:px-6">
             <header className="mb-8 flex items-center gap-3">
                 <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface md:text-3xl">
                     Giỏ hàng
@@ -478,8 +480,8 @@ export default function Cart() {
                     </section>
                 </div>
 
-                <aside className="lg:col-span-5">
-                    <div className="rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-5 shadow-sm">
+                <aside className="min-w-0 lg:col-span-5">
+                    <div className="rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-4 shadow-sm sm:p-5 lg:sticky lg:top-28">
                         <h3 className="mb-4 border-b border-surface-container-high pb-3 text-sm font-black uppercase tracking-wider">
                             Đơn hàng của bạn
                         </h3>
@@ -541,6 +543,25 @@ export default function Cart() {
                             </div>
                         </div>
 
+                        <label className="mt-5 block text-[10px] font-black uppercase tracking-wider text-outline">
+                            Phương thức thanh toán
+                            <select
+                                aria-label="Phương thức thanh toán"
+                                value={paymentMethod}
+                                onChange={(event) => {
+                                    setPaymentMethod(event.target.value as PaymentMethod);
+                                    setValidationError(null);
+                                    clearCheckoutError();
+                                }}
+                                disabled={isSubmitting || isCreatingPayment}
+                                className="mt-2 w-full rounded-xl border border-surface-container bg-white px-4 py-3 text-xs font-bold normal-case text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                required
+                            >
+                                <option value="ONLINE">ONLINE - Thanh toán qua PayOS</option>
+                                <option value="COD">COD - Thanh toán khi nhận hàng</option>
+                            </select>
+                        </label>
+
                         <button
                             type="submit"
                             disabled={
@@ -551,8 +572,14 @@ export default function Cart() {
                             }
                             className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-white shadow-md shadow-primary/10 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                            {isSubmitting ? 'Đang tạo đơn hàng...' : 'Xác nhận đặt hàng'}
+                            {(isSubmitting || isCreatingPayment) && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {isSubmitting
+                                ? 'Đang tạo đơn hàng...'
+                                : isCreatingPayment
+                                    ? 'Đang khởi tạo thanh toán...'
+                                    : paymentMethod === 'COD'
+                                        ? 'Đặt hàng với COD'
+                                        : 'Đặt hàng và thanh toán'}
                         </button>
 
                         <div className="mt-3 text-center">

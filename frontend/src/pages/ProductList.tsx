@@ -16,6 +16,7 @@ export default function ProductList() {
     const [inStockOnly, setInStockOnly] = useState<boolean>(false);
     const [priceRange, setPriceRange] = useState<number>(10000000);
     const [expandedParents, setExpandedParents] = useState<number[]>([]);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
 
     const { products, categories: apiCategories, brands: apiBrands, fetchProducts, fetchCategories, fetchBrands } = useProductStore();
 
@@ -145,7 +146,7 @@ export default function ProductList() {
     };
 
     return (
-        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface min-h-screen flex flex-col">
+        <main className="flex min-h-screen w-full min-w-0 flex-col bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
             {/* Header / Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm font-bold text-on-surface-variant mb-8">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
@@ -153,12 +154,23 @@ export default function ProductList() {
                 <span className="text-primary">Cửa hàng</span>
             </nav>
             <header className="mb-12">
-                <h1 className="text-5xl font-black tracking-tighter mb-4 text-on-surface uppercase">Tất cả sản phẩm</h1>
+                <h1 className="mb-4 text-3xl font-black uppercase tracking-tighter text-on-surface sm:text-4xl lg:text-5xl">Tất cả sản phẩm</h1>
             </header>
+
+            <button
+                type="button"
+                onClick={() => setIsFilterOpen((open) => !open)}
+                className="mb-5 flex w-full items-center justify-between rounded-2xl bg-surface-container-lowest px-5 py-4 text-sm font-black uppercase text-on-surface shadow-sm lg:hidden"
+                aria-expanded={isFilterOpen}
+                aria-controls="product-filters"
+            >
+                <span className="flex items-center gap-2"><SlidersHorizontal className="h-5 w-5 text-primary"/> Bộ lọc</span>
+                <ChevronDown className={`h-5 w-5 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`}/>
+            </button>
 
             <div className="flex flex-col lg:flex-row gap-10 items-start">
                 {/* ---------------- SIDEBAR BỘ LỌC ---------------- */}
-                <aside className="w-full lg:w-72 flex-shrink-0 lg:sticky lg:top-28">
+                <aside id="product-filters" className={`${isFilterOpen ? 'block' : 'hidden'} w-full flex-shrink-0 lg:sticky lg:top-28 lg:block lg:w-72`}>
                     <div
                         className="bg-surface-container-lowest rounded-[2rem] p-8 shadow-[0_20px_40px_-15px_rgba(14,48,78,0.05)]">
                         <div className="flex items-center justify-between mb-8 pb-4 relative">
@@ -336,7 +348,7 @@ export default function ProductList() {
                         </div>
                     </div>
                     {filteredProducts.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-[1536px]:grid-cols-3">
                             {filteredProducts.map(product => (
                                 <ProductCard key={product.id} product={product}/>
                             ))}

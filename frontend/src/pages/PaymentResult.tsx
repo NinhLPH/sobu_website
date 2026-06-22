@@ -5,38 +5,39 @@ import {
     CheckCircle2,
     Clock3,
     Loader2,
+    RefreshCw,
     ReceiptText
 } from 'lucide-react';
 import { PaymentStatus } from '../enum/union-types';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { paymentSession } from '../utils/payment-session';
 
-type ResultStatus = PaymentStatus | 'SUCCESS' | 'UNKNOWN';
+type ResultStatus = PaymentStatus | 'UNKNOWN';
+const MAX_STATUS_CHECKS = 6;
+const STATUS_CHECK_INTERVAL_MS = 2000;
+const TERMINAL_PAYMENT_STATUSES: PaymentStatus[] = [
+    'PAID',
+    'FAILED',
+    'CANCELLED',
+    'EXPIRED',
+    'REFUNDED'
+];
 
 const normalizeQueryStatus = (
     status: string | null,
-    code: string | null,
     cancelled: string | null
 ): ResultStatus => {
     const normalizedStatus = status?.toUpperCase();
-    if (normalizedStatus === 'SUCCESS') {
-        return 'SUCCESS';
-    }
     if (
-        normalizedStatus === 'PAID' ||
         normalizedStatus === 'FAILED' ||
         normalizedStatus === 'CANCELLED' ||
         normalizedStatus === 'EXPIRED' ||
-        normalizedStatus === 'REFUNDED' ||
-        normalizedStatus === 'PENDING'
+        normalizedStatus === 'REFUNDED'
     ) {
         return normalizedStatus;
     }
     if (cancelled === 'true') {
         return 'FAILED';
-    }
-    if (code === '00') {
-        return 'SUCCESS';
     }
     return 'UNKNOWN';
 };
@@ -49,11 +50,12 @@ export default function PaymentResult() {
     const [resultStatus, setResultStatus] = useState<ResultStatus>(() =>
         normalizeQueryStatus(
             searchParams.get('status'),
-            searchParams.get('code'),
             searchParams.get('cancel')
         )
     );
-    const [isChecking, setIsChecking] = useState(Boolean(orderId));
+    const [isChecking, setIsChecking] = useState(Boolean(orderId && paymentCode));
+    const [canRetry, setCanRetry] = useState(false);
+    const [checkVersion, setCheckVersion] = useState(0);
     const {
         fetchPayments,
         paymentError,
@@ -61,8 +63,9 @@ export default function PaymentResult() {
     } = usePaymentStore();
 
     useEffect(() => {
-        if (!orderId) {
+        if (!orderId || !paymentCode) {
             setIsChecking(false);
+            setCanRetry(false);
             return;
         }
 
@@ -74,29 +77,34 @@ export default function PaymentResult() {
             attempt += 1;
             try {
                 const payments = await fetchPayments(orderId);
-                const payment = payments.find(item => item.paymentCode === paymentCode)
-                    || payments[payments.length - 1];
+                const payment = payments.find(item => item.paymentCode === paymentCode);
                 if (disposed) {
                     return;
                 }
-                if (payment && payment.status !== 'PENDING') {
+                if (payment && TERMINAL_PAYMENT_STATUSES.includes(payment.status)) {
                     setResultStatus(payment.status);
                     setIsChecking(false);
-                    return;
-                }
-                if (attempt < 4) {
-                    timer = setTimeout(refreshStatus, 2000);
+                    setCanRetry(false);
+                    paymentSession.clear();
                     return;
                 }
             } catch {
-                // Keep the redirect result visible when status refresh is unavailable.
+                // Retry transient failures while keeping the redirect result visible.
             }
-            if (!disposed) {
-                setIsChecking(false);
+            if (disposed) {
+                return;
             }
+            if (attempt < MAX_STATUS_CHECKS) {
+                timer = setTimeout(refreshStatus, STATUS_CHECK_INTERVAL_MS);
+                return;
+            }
+            setIsChecking(false);
+            setCanRetry(true);
         };
 
         clearPaymentError();
+        setIsChecking(true);
+        setCanRetry(false);
         refreshStatus();
 
         return () => {
@@ -105,13 +113,13 @@ export default function PaymentResult() {
                 clearTimeout(timer);
             }
         };
-    }, [clearPaymentError, fetchPayments, orderId, paymentCode]);
+    }, [checkVersion, clearPaymentError, fetchPayments, orderId, paymentCode]);
 
-    const isSuccess = resultStatus === 'SUCCESS' || resultStatus === 'PAID';
+    const isSuccess = resultStatus === 'PAID';
     const isFailure = ['FAILED', 'CANCELLED', 'EXPIRED'].includes(resultStatus);
 
     return (
-        <main className="mx-auto flex min-h-[70vh] max-w-3xl items-center justify-center bg-surface px-6 py-28">
+        <main className="mx-auto flex min-h-[70vh] w-full min-w-0 max-w-3xl items-center justify-center bg-surface px-4 py-24 sm:px-6 sm:py-28">
             <section className="w-full rounded-[2rem] border border-surface-container bg-white p-8 text-center shadow-lg sm:p-12">
                 <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ${
                     isSuccess
@@ -136,7 +144,7 @@ export default function PaymentResult() {
                 </h1>
                 <p className="mx-auto mt-3 max-w-lg text-sm font-medium leading-relaxed text-outline">
                     {isSuccess
-                        ? 'Giao dịch đã được ghi nhận. Trạng thái đơn hàng sẽ được cập nhật theo webhook PayOS.'
+                        ? 'Backend đã xác nhận giao dịch thành công từ trạng thái thanh toán mới nhất.'
                         : isFailure
                             ? 'Giao dịch đã thất bại hoặc bị hủy. Bạn có thể quay lại đơn hàng để tạo phiên thanh toán mới.'
                             : 'PayOS đã chuyển bạn về cửa hàng. Hệ thống đang chờ backend đối soát trạng thái cuối cùng.'}
@@ -169,6 +177,16 @@ export default function PaymentResult() {
                     <p className="mt-4 text-xs font-bold text-error">
                         Chưa thể tải trạng thái mới nhất. Vui lòng kiểm tra lại trong chi tiết đơn hàng.
                     </p>
+                )}
+                {canRetry && (
+                    <button
+                        type="button"
+                        onClick={() => setCheckVersion((current) => current + 1)}
+                        className="mx-auto mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-primary/20 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-primary"
+                    >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Kiểm tra lại trạng thái
+                    </button>
                 )}
 
                 <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">

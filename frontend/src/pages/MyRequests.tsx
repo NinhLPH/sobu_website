@@ -11,28 +11,9 @@ import {
 } from 'lucide-react';
 import { useRequestStore } from '../store/useRequestStore';
 import { formatCurrency } from '../utils/format';
-import { RequestStatus, RequestType } from '../enum/union-types';
+import { RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
-
-const statusStyles: Record<RequestStatus, string> = {
-    PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
-    REVIEWING: 'bg-blue-50 text-blue-700 border-blue-200',
-    SOURCING: 'bg-purple-50 text-purple-700 border-purple-200',
-    WAITING_CUSTOMER: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    APPROVED: 'bg-green-50 text-green-700 border-green-200',
-    REJECTED: 'bg-red-50 text-red-700 border-red-200',
-    CANCELLED: 'bg-gray-50 text-gray-700 border-gray-200'
-};
-
-const statusLabels: Record<RequestStatus, string> = {
-    PENDING: 'Chờ duyệt',
-    REVIEWING: 'Đang xem xét',
-    SOURCING: 'Đang tìm nguồn',
-    WAITING_CUSTOMER: 'Chờ phản hồi',
-    APPROVED: 'Đã duyệt',
-    REJECTED: 'Từ chối',
-    CANCELLED: 'Đã hủy'
-};
+import { RequestStatusBadge } from '../components/request/RequestWorkflow';
 
 const typeLabels: Record<RequestType, string> = {
     NORMAL: 'Thông thường',
@@ -62,7 +43,7 @@ export default function MyRequests() {
     }, [error]);
 
     return (
-        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
+        <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
             <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -94,7 +75,52 @@ export default function MyRequests() {
             )}
 
             <div className="overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm">
-                <div className="overflow-x-auto">
+                <div className="space-y-3 p-3 md:hidden">
+                    {isLoading && (
+                        <div className="py-16 text-center">
+                            <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-primary"/>
+                            <span className="text-xs font-bold text-outline">Đang tải yêu cầu...</span>
+                        </div>
+                    )}
+                    {!isLoading && myRequests.map((request) => (
+                        <article key={request.id} className="rounded-xl border border-outline-variant/20 bg-surface-container-lowest p-4 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="font-black text-primary">#{request.requestCode || request.id}</p>
+                                    <p className="mt-1 text-xs font-bold text-on-surface">{typeLabels[request.type]}</p>
+                                </div>
+                                <RequestStatusBadge status={request.status} />
+                            </div>
+                            <p className="mt-4 line-clamp-2 text-xs font-bold text-on-surface">
+                                {request.items?.map((item) => item.name).join(', ') || 'Yêu cầu dịch vụ'}
+                            </p>
+                            <div className="mt-4 flex items-end justify-between gap-3 border-t border-surface-container pt-3">
+                                <div className="space-y-1 text-[10px] font-semibold text-outline">
+                                    <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5"/> {new Date(request.createdAt).toLocaleDateString('vi-VN')}</span>
+                                    <p className="text-xs font-black text-on-surface">
+                                        {request.totalAmount > 0 ? formatCurrency(request.totalAmount) : 'Chờ báo giá'}
+                                    </p>
+                                </div>
+                                <Link
+                                    to={`/requests/${request.id}`}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-2 text-[10px] font-black uppercase text-primary"
+                                    aria-label={`Xem yêu cầu ${request.requestCode}`}
+                                >
+                                    <Eye className="h-4 w-4"/> Chi tiết
+                                </Link>
+                            </div>
+                        </article>
+                    ))}
+                    {!isLoading && myRequests.length === 0 && (
+                        <div className="py-16 text-center">
+                            <FileText className="mx-auto mb-3 h-10 w-10 text-outline/30"/>
+                            <p className="font-black uppercase text-on-surface">Chưa có yêu cầu nào</p>
+                            <p className="mt-1 text-xs text-outline">Tạo yêu cầu mới để SOBU hỗ trợ bạn.</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
                     <table className="w-full min-w-[820px] text-left text-xs">
                         <thead className="bg-surface-container text-on-surface-variant">
                             <tr>
@@ -143,9 +169,7 @@ export default function MyRequests() {
                                             : 'Chờ báo giá'}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${statusStyles[request.status]}`}>
-                                            {statusLabels[request.status]}
-                                        </span>
+                                        <RequestStatusBadge status={request.status} />
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <Link

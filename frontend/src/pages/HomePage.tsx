@@ -5,28 +5,40 @@ import {placeholderImages, mockBlogs, HERO_SLIDES} from '../data/mockData';
 import ProductSlider from '../components/common/ProductSlider';
 import {useProductStore} from '../store/useProductStore';
 import {mapListItemToProductModel} from '../interface/product.model';
+import {BannerDTO} from '../interface/public-ui-config.model';
+import {getBannersForPlacement, usePublicUiStore} from '../store/usePublicUiStore';
+import {useResponsiveDeviceType} from '../hooks/useResponsiveDeviceType';
+import BannerMedia from '../components/common/BannerMedia';
+import BannerCarousel from '../components/common/BannerCarousel';
 
 const SectionHeader = ({title, subtitle}: { title: string, subtitle?: string }) => (
-    <div className="flex items-center gap-4 mb-6">
-        <h2 className="text-2xl md:text-3xl font-black text-on-surface uppercase whitespace-nowrap">
+    <div className="mb-6 flex flex-wrap items-center gap-2 sm:gap-4">
+        <h2 className="text-xl font-black uppercase text-on-surface sm:text-2xl md:text-3xl">
             {title}
         </h2>
         {subtitle && (
             <>
                 <div className="w-[2px] h-6 bg-on-surface"></div>
-                <span className="text-on-surface font-medium whitespace-nowrap">{subtitle}</span>
+                <span className="text-sm font-medium text-on-surface sm:whitespace-nowrap">{subtitle}</span>
             </>
         )}
         <div className="flex-1 h-[1px] bg-on-surface/30 ml-4"></div>
     </div>
 );
 
-const SectionWithBanner = ({title, subtitle, bannerImg, products}: { title: string, subtitle?: string, bannerImg: string, products: any[] }) => (
-    <section className="px-6 max-w-screen-2xl mx-auto mb-20">
+const SectionWithBanner = ({title, subtitle, bannerImg, products, banners = []}: { title: string, subtitle?: string, bannerImg: string, products: any[], banners?: BannerDTO[] }) => (
+    <section className="mb-14 w-full px-4 sm:mb-20 sm:px-6">
         <SectionHeader title={title} subtitle={subtitle}/>
-        <div className="w-full h-[200px] md:h-[300px] bg-surface-container rounded-xl mb-8 overflow-hidden">
-            <img src={bannerImg} className="w-full h-full object-cover" alt={`${title} banner`}/>
-        </div>
+        <BannerCarousel
+            banners={banners}
+            className="mb-8 h-[200px] w-full rounded-xl bg-surface-container md:h-[300px]"
+            fallback={(
+                <div className="mb-8 h-[200px] w-full overflow-hidden rounded-xl bg-surface-container md:h-[300px]">
+                    <img src={bannerImg} className="h-full w-full object-cover" alt={`${title} banner`}/>
+                </div>
+            )}
+            imageFallback={<img src={bannerImg} className="h-full w-full object-cover" alt={`${title} banner fallback`}/>}
+        />
         <ProductSlider products={products}/>
         <div className="flex justify-center mt-8">
             <Link to="/products"
@@ -42,6 +54,11 @@ const SectionWithBanner = ({title, subtitle, bannerImg, products}: { title: stri
 export default function HomePage() {
     const [current, setCurrent] = useState(0);
     const { products, fetchProducts } = useProductStore();
+    const banners = usePublicUiStore((state) => state.banners);
+    const deviceType = useResponsiveDeviceType();
+    const topBanners = getBannersForPlacement(banners, 'HOME_TOP', deviceType);
+    const middleBanners = getBannersForPlacement(banners, 'HOME_MIDDLE', deviceType);
+    const heroSlideCount = topBanners.length || HERO_SLIDES.length;
 
     useEffect(() => {
         fetchProducts();
@@ -50,56 +67,73 @@ export default function HomePage() {
     const mappedProducts = products.map(mapListItemToProductModel);
 
     const nextSlide = () => {
-        setCurrent((prev) => (prev === HERO_SLIDES.length - 1 ? 0 : prev + 1));
+        setCurrent((prev) => (prev === heroSlideCount - 1 ? 0 : prev + 1));
     };
 
     const prevSlide = () => {
-        setCurrent((prev) => (prev === 0 ? HERO_SLIDES.length - 1 : prev - 1));
+        setCurrent((prev) => (prev === 0 ? heroSlideCount - 1 : prev - 1));
     };
 
     // Tự động chạy slide sau mỗi 5 giây
     useEffect(() => {
-        const slideTimer = setInterval(nextSlide, 5000);
+        setCurrent(0);
+    }, [heroSlideCount]);
+
+    useEffect(() => {
+        const slideTimer = window.setInterval(() => {
+            setCurrent((prev) => (prev + 1) % heroSlideCount);
+        }, 5000);
         return () => clearInterval(slideTimer);
-    }, [current]);
+    }, [heroSlideCount]);
 
     return (
-        <main className="pt-24 pb-24 bg-surface space-y-20">
+        <main className="w-full min-w-0 space-y-14 bg-surface pb-20 pt-24 sm:space-y-20 sm:pb-24">
             <section
-                className="px-6 max-w-screen-2xl mx-auto relative h-[400px] md:h-[500px] flex items-center justify-center group/hero">
+                className="group/hero relative mx-4 flex h-[300px] items-center justify-center sm:mx-6 sm:h-[400px] md:h-[500px]">
                 <div className="absolute left-[5%] top-8 bottom-8 w-[80%] bg-outline-variant/20 rounded-3xl z-0"></div>
                 <div className="absolute right-[5%] top-8 bottom-8 w-[80%] bg-outline-variant/30 rounded-3xl z-0"></div>
                 <div
                     className="relative z-10 w-[90%] h-full rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center">
-                    {HERO_SLIDES.map((slide, index) => (
+                    {(topBanners.length ? topBanners : HERO_SLIDES).map((slide, index) => (
                         <div
                             key={index}
                             className={`absolute inset-0 w-full h-full transition-all duration-1000 ease-in-out ${
                                 index === current ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
                             }`}
                         >
-                            <img
-                                src={slide.image}
-                                className={`absolute inset-0 w-full h-full object-cover mix-blend-overlay transition-transform duration-[2000ms] ease-out ${
-                                    index === current ? 'opacity-80 scale-100' : 'opacity-0 scale-105'
-                                }`}
-                                alt={slide.title}
-                            />
+                            {'imageUrl' in slide ? (
+                                <BannerMedia
+                                    banner={slide}
+                                    className={`absolute inset-0 transition-transform duration-[2000ms] ease-out ${index === current ? 'scale-100' : 'scale-105'}`}
+                                    imageClassName="mix-blend-overlay opacity-80"
+                                    fallback={<img src={HERO_SLIDES[index % HERO_SLIDES.length].image} className="absolute inset-0 h-full w-full object-cover opacity-80 mix-blend-overlay" alt={`${slide.title} fallback`}/>}
+                                />
+                            ) : (
+                                <img
+                                    src={slide.image}
+                                    className={`absolute inset-0 w-full h-full object-cover mix-blend-overlay transition-transform duration-[2000ms] ease-out ${
+                                        index === current ? 'opacity-80 scale-100' : 'opacity-0 scale-105'
+                                    }`}
+                                    alt={slide.title}
+                                />
+                            )}
                             <div
                                 className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/20"></div>
-                            <div
-                                className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
-                                <h1 className={`text-4xl md:text-7xl font-black text-white tracking-widest uppercase transition-all duration-700 delay-300 transform ${
-                                    index === current ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-                                }`}>
-                                    {slide.title}
-                                </h1>
-                                <p className={`mt-4 text-xs md:text-sm font-bold text-white/80 tracking-widest uppercase transition-all duration-700 delay-500 transform ${
-                                    index === current ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-                                }`}>
-                                    {slide.subtitle}
-                                </p>
-                            </div>
+                            {/*<div*/}
+                            {/*    className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">*/}
+                            {/*    <h1 className={`text-4xl md:text-7xl font-black text-white tracking-widest uppercase transition-all duration-700 delay-300 transform ${*/}
+                            {/*        index === current ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'*/}
+                            {/*    }`}>*/}
+                            {/*        {slide.title}*/}
+                            {/*    </h1>*/}
+                            {/*    {'subtitle' in slide && slide.subtitle && (*/}
+                            {/*        <p className={`mt-4 text-xs md:text-sm font-bold text-white/80 tracking-widest uppercase transition-all duration-700 delay-500 transform ${*/}
+                            {/*            index === current ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'*/}
+                            {/*        }`}>*/}
+                            {/*            {slide.subtitle}*/}
+                            {/*        </p>*/}
+                            {/*    )}*/}
+                            {/*</div>*/}
                         </div>
                     ))}
                 </div>
@@ -109,9 +143,9 @@ export default function HomePage() {
                         className="w-4 h-4 cursor-pointer text-on-surface/60 hover:text-primary hover:scale-12 transition-all"
                         onClick={prevSlide}
                     />
-                    {HERO_SLIDES.map((_, index) => (
+                    {(topBanners.length ? topBanners : HERO_SLIDES).map((slide, index) => (
                         <button
-                            key={index}
+                            key={'id' in slide ? slide.id : index}
                             onClick={() => setCurrent(index)}
                             className={`h-2 rounded-full transition-all duration-300 ${
                                 index === current ? 'w-6 bg-primary' : 'w-2 bg-outline/40 hover:bg-outline'
@@ -134,12 +168,13 @@ export default function HomePage() {
                     subtitle="Giao Hàng Toàn Quốc"
                     bannerImg="https://i0.wp.com/www.comicbookrevolution.com/wp-content/uploads/2023/12/transformers-4-previw-banner.jpg"
                     products={mappedProducts}
+                    banners={middleBanners}
                 />
             </div>
 
             {/* 3. DỊCH VỤ ĐỘ MÔ HÌNH  */}
             <section
-                className="px-6 max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mb-20">
+                className="mb-14 grid w-full grid-cols-1 items-center gap-8 px-4 sm:mb-20 sm:px-6 lg:grid-cols-12 lg:gap-12">
                 <div className="lg:col-span-5 space-y-6">
                     <h2 className="text-3xl md:text-4xl font-black text-on-surface uppercase tracking-tight leading-tight">
                         DỊCH VỤ ĐỘ MÔ HÌNH SỐ 1 <br/> VIỆT NAM
@@ -155,7 +190,7 @@ export default function HomePage() {
                         CUSTOM NGAY
                     </Link>
                 </div>
-                <div className="lg:col-span-7 relative h-[400px]">
+                <div className="relative h-[300px] sm:h-[400px] lg:col-span-7">
                     <div
                         className="absolute top-0 right-0 w-[55%] h-[60%] bg-surface-container rounded-lg overflow-hidden shadow-lg">
                         <img src={placeholderImages.custom1} className="w-full h-full object-cover" alt="Custom 1"/>
@@ -174,7 +209,7 @@ export default function HomePage() {
             </section>
 
             {/* 4. MÔ HÌNH CUSTOM */}
-            <section className="px-6 max-w-screen-2xl mx-auto mb-20">
+            <section className="mb-14 w-full px-4 sm:mb-20 sm:px-6">
                 <SectionHeader title="MÔ HÌNH CUSTOM" subtitle="Giao Hàng Toàn Quốc"/>
                 <ProductSlider products={mappedProducts.slice().reverse()}/>
                 <div className="flex justify-center mt-8">
@@ -185,7 +220,7 @@ export default function HomePage() {
             </section>
 
             {/* 5. THỂ LOẠI MÔ HÌNH */}
-            <section className="px-6 max-w-screen-2xl mx-auto text-center mb-20">
+            <section className="mb-14 w-full px-4 text-center sm:mb-20 sm:px-6">
                 <h2 className="text-3xl font-black text-on-surface mb-12 uppercase">Thể loại mô hình</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
                     {['Marvel', 'DC', 'Hot Wheels', 'Transformer', 'Naruto', 'Pacific Rim'].map((cat) => (
@@ -223,7 +258,7 @@ export default function HomePage() {
             <section className="grid grid-cols-1 md:grid-cols-2 mb-20">
                 <div className="flex flex-col h-full">
                     <div
-                        className="relative overflow-hidden text-white p-12 h-[300px] flex flex-col items-start justify-center">
+                        className="relative flex h-[300px] flex-col items-start justify-center overflow-hidden p-6 text-white sm:p-12">
                         <img
                             src="https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg"
                             className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 1"/>
@@ -241,7 +276,7 @@ export default function HomePage() {
                     </div>
 
                     <div
-                        className="relative overflow-hidden text-white p-12 h-[300px] flex flex-col items-start justify-end">
+                        className="relative flex h-[300px] flex-col items-start justify-end overflow-hidden p-6 text-white sm:p-12">
                         <img src="https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg"
                              className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 2"/>
                         <div className="absolute inset-0 bg-black/40 z-10"></div>
@@ -255,7 +290,7 @@ export default function HomePage() {
 
                 <div className="flex flex-col h-full">
                     <div
-                        className="relative overflow-hidden text-white p-12 h-[300px] flex flex-col items-start justify-center">
+                        className="relative flex h-[300px] flex-col items-start justify-center overflow-hidden p-6 text-white sm:p-12">
                         <img src="https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg"
                              className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 3"/>
                         <div className="absolute inset-0 bg-black/40 z-10"></div>
@@ -267,7 +302,7 @@ export default function HomePage() {
                     </div>
 
                     <div
-                        className="relative overflow-hidden text-white p-12 h-[300px] flex flex-col items-start justify-center">
+                        className="relative flex h-[300px] flex-col items-start justify-center overflow-hidden p-6 text-white sm:p-12">
                         <img
                             src="https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg"
                             className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 4"/>
@@ -301,7 +336,7 @@ export default function HomePage() {
             />
 
             {/* 11. TIN TỨC */}
-            <section className="px-6 max-w-screen-2xl mx-auto mb-20">
+            <section className="mb-14 w-full px-4 sm:mb-20 sm:px-6">
                 <h2 className="text-2xl font-black text-on-surface mb-8 uppercase">Tin Tức</h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     {mockBlogs.slice(0, 4).map(blog => (
@@ -348,7 +383,7 @@ export default function HomePage() {
                 <div
                     className="absolute -bottom-24 -right-20 w-80 h-80 bg-secondary/5 rounded-full blur-3xl pointer-events-none"></div>
 
-                <div className="max-w-screen-2xl mx-auto px-6 text-center relative z-10">
+                <div className="relative z-10 mx-auto w-full px-4 text-center sm:px-6">
                     <h2 className="text-xs font-black tracking-[0.3em] uppercase text-outline/80 mb-10">
                         Đối tác chiến lược & Thương hiệu đồng hành
                     </h2>
@@ -402,7 +437,7 @@ export default function HomePage() {
             </section>
 
             {/* 13. ĐÁNH GIÁ */}
-            <section className="max-w-screen-xl mx-auto px-6 text-center">
+            <section className="mx-auto w-full px-4 text-center sm:px-6">
                 <h2 className="text-3xl font-black uppercase mb-12">Đánh giá từ khách hàng</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     {[1, 2, 3, 4, 5, 6].map(i => (

@@ -134,7 +134,7 @@ export default function CreateRequest() {
 
     if (successCreated) {
         return (
-            <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface text-center">
+            <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 text-center sm:px-6 sm:pt-32">
                 <div className="max-w-xl mx-auto bg-surface-container-lowest rounded-[2rem] p-10 shadow-[0_20px_50px_-15px_rgba(14,48,78,0.06)] border border-surface-container/60 flex flex-col items-center justify-center">
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6">
                         <CheckCircle className="w-10 h-10 stroke-[2]" />
@@ -169,7 +169,7 @@ export default function CreateRequest() {
     }
 
     return (
-        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
+        <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
             {/* Navigation & Back */}
             <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
@@ -240,7 +240,7 @@ export default function CreateRequest() {
                             >
                                 <option value="PREORDER">Đặt trước mô hình</option>
                                 <option value="FINDING">Tìm kiếm hàng hiếm</option>
-                                <option value="CUSTOM">Custom ráp độ / Đắp LED / Sơn phủs</option>
+                                <option value="CUSTOM">Custom ráp độ / Đắp LED / Sơn phủ</option>
                             </select>
                         </div>
                     </div>

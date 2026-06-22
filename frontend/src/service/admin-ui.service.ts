@@ -1,10 +1,23 @@
 import apiClient from "../api/api-client";
 import {PageResponse} from "../interface/api-response";
-import {BannerDTO, WebsiteConfigurationDTO} from "../interface/public-ui-config.model";
+import {
+    BannerDTO,
+    BannerMutationPayload,
+    UiSearchParams,
+    WebsiteConfigurationDTO,
+    WebsiteConfigurationMutationPayload
+} from "../interface/public-ui-config.model";
+
+export const buildBannerFormData = (payload: BannerMutationPayload, image?: File | null) => {
+    const formData = new FormData();
+    formData.append('banner', new Blob([JSON.stringify(payload)], {type: 'application/json'}));
+    if (image) formData.append('image', image);
+    return formData;
+};
 
 export const AdminUiService = {
     // --- BANNERS ---
-    searchBanners: (searchTerm: string, params?: any): Promise<PageResponse<BannerDTO>> => {
+    searchBanners: (searchTerm: string, params?: UiSearchParams): Promise<PageResponse<BannerDTO>> => {
         return apiClient.post('/api/admin/banners/search', { searchTerm, ...params });
     },
 
@@ -25,12 +38,12 @@ export const AdminUiService = {
         });
     },
 
-    deleteBanner: (id: string | number): Promise<any> => {
+    deleteBanner: (id: string | number): Promise<void> => {
         return apiClient.delete(`/api/admin/banners/${id}`);
     },
 
     // --- CONFIGURATIONS ---
-    searchConfigs: (searchTerm: string, params?: any): Promise<PageResponse<WebsiteConfigurationDTO>> => {
+    searchConfigs: (searchTerm: string, params?: UiSearchParams): Promise<PageResponse<WebsiteConfigurationDTO>> => {
         return apiClient.post('/api/admin/configs/search', { searchTerm, ...params });
     },
 
@@ -38,15 +51,15 @@ export const AdminUiService = {
         return apiClient.get(`/api/admin/configs/${id}`);
     },
 
-    createConfig: (data: any): Promise<WebsiteConfigurationDTO> => {
+    createConfig: (data: WebsiteConfigurationMutationPayload): Promise<WebsiteConfigurationDTO> => {
         return apiClient.post('/api/admin/configs', data);
     },
 
-    updateConfig: (id: string | number, data: any): Promise<WebsiteConfigurationDTO> => {
+    updateConfig: (id: string | number, data: WebsiteConfigurationMutationPayload): Promise<WebsiteConfigurationDTO> => {
         return apiClient.put(`/api/admin/configs/${id}`, data);
     },
 
-    deleteConfig: (id: string | number): Promise<any> => {
+    deleteConfig: (id: string | number): Promise<void> => {
         return apiClient.delete(`/api/admin/configs/${id}`);
     },
 };

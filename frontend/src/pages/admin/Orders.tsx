@@ -67,6 +67,10 @@ const getSyncStatusColor = (status?: string) => {
             return 'border-green-200 bg-green-50 text-green-700';
         case 'FAILED':
             return 'border-red-200 bg-red-50 text-red-700';
+        case 'NEED_RECONCILE':
+            return 'border-orange-200 bg-orange-50 text-orange-700';
+        case 'DEAD':
+            return 'border-slate-300 bg-slate-100 text-slate-700';
         case 'PENDING':
             return 'border-amber-200 bg-amber-50 text-amber-700';
         default:
@@ -80,6 +84,10 @@ const getSyncStatusText = (status?: string) => {
             return 'Đã đồng bộ';
         case 'FAILED':
             return 'Thất bại';
+        case 'NEED_RECONCILE':
+            return 'Cần đối soát';
+        case 'DEAD':
+            return 'Đã dừng retry';
         case 'PENDING':
             return 'Đang chờ';
         default:
@@ -87,10 +95,15 @@ const getSyncStatusText = (status?: string) => {
     }
 };
 
+const canRetrySync = (status?: string) =>
+    status === 'FAILED' || status === 'NEED_RECONCILE' || status === 'DEAD';
+
 export default function AdminOrders() {
     const {
         workflowOrders,
         fetchOrders,
+        retryOrderSync,
+        retryingOrderIds,
         isOrdersLoading,
         ordersError,
         ordersPage
@@ -125,6 +138,14 @@ export default function AdminOrders() {
 
     const refresh = () => {
         fetchOrders({ page, size: 10, sortBy, sortDirection });
+    };
+
+    const handleRetrySync = async (orderId: number) => {
+        try {
+            await retryOrderSync(orderId);
+        } catch {
+            // The store exposes the backend error through ordersError.
+        }
     };
 
     return (
@@ -191,6 +212,8 @@ export default function AdminOrders() {
                         <option value="SYNCED">Đã đồng bộ</option>
                         <option value="PENDING">Đang chờ</option>
                         <option value="FAILED">Thất bại</option>
+                        <option value="NEED_RECONCILE">Cần đối soát</option>
+                        <option value="DEAD">Đã dừng retry</option>
                     </select>
                     <select
                         value={sortBy}
@@ -292,13 +315,26 @@ export default function AdminOrders() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <Link
-                                            to={`/admin/orders/${order.id}`}
-                                            className="inline-block p-1 text-secondary transition-colors hover:text-primary"
-                                            aria-label={`Xem đơn ${order.orderCode || order.id}`}
-                                        >
-                                            <Eye className="h-5 w-5" />
-                                        </Link>
+                                        <div className="flex items-center justify-center gap-2">
+                                            {canRetrySync(order.syncStatus) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleRetrySync(order.id)}
+                                                    disabled={retryingOrderIds.includes(order.id)}
+                                                    className="p-1 text-primary transition-colors hover:text-primary-container disabled:opacity-50"
+                                                    aria-label={`Retry đồng bộ đơn ${order.orderCode || order.id}`}
+                                                >
+                                                    <RefreshCw className={`h-5 w-5 ${retryingOrderIds.includes(order.id) ? 'animate-spin' : ''}`} />
+                                                </button>
+                                            )}
+                                            <Link
+                                                to={`/admin/orders/${order.id}`}
+                                                className="inline-block p-1 text-secondary transition-colors hover:text-primary"
+                                                aria-label={`Xem đơn ${order.orderCode || order.id}`}
+                                            >
+                                                <Eye className="h-5 w-5" />
+                                            </Link>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

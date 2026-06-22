@@ -2,12 +2,13 @@ import {useState, useEffect, useRef, useMemo} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {
     ShoppingCart, User, Search, Shield, ChevronDown, ChevronRight,
-    Car, Box, Wrench, Diamond, Layers, Trash2, LogOut, FileText
+    Car, Box, Wrench, Diamond, Layers, Trash2, LogOut, FileText, Menu, X
 } from 'lucide-react';
 import {useCartStore} from "../../store/useCartStore";
 import {useProductStore} from "../../store/useProductStore";
 import {useAuthStore} from "../../store/useAuthStore";
 import {formatCurrency} from "../../utils/format";
+import {getPublicConfigValue, usePublicUiStore} from '../../store/usePublicUiStore';
 
 
 const getCategoryIcon = (catCode: string) => {
@@ -34,6 +35,8 @@ const getCategoryIcon = (catCode: string) => {
 
 export default function Header() {
     const navigate = useNavigate();
+    const configs = usePublicUiStore((state) => state.configs);
+    const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
 
     const {items, removeFromCart, getTotals} = useCartStore();
     const {subtotal} = getTotals();
@@ -51,6 +54,7 @@ export default function Header() {
     
     const [activeParentId, setActiveParentId] = useState<number | null>(null);
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const cartRef = useRef<HTMLDivElement>(null);
 
@@ -119,12 +123,12 @@ export default function Header() {
 
     return (
         <header className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
-            <div className="flex items-center justify-between px-6 py-4 max-w-screen-2xl mx-auto">
+            <div className="mx-auto flex max-w-[1504px] items-center justify-between px-4 py-4 sm:px-6">
                 {/* Logo */}
-                <div className="flex items-center gap-10">
+                <div className="flex min-w-0 items-center gap-10">
                     <Link to="/"
                           className="bg-primary-container text-white px-6 py-2 rounded-xl font-black text-xl tracking-widest hover:scale-105 transition-transform shadow-md">
-                        SOBU
+                        {siteName}
                     </Link>
 
                     {/* Navigation */}
@@ -136,7 +140,7 @@ export default function Header() {
                                 Danh mục <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180"/>
                             </Link>
                             <div
-                                className="absolute top-full -left-20 w-[950px] bg-surface-container-lowest rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(14,48,78,0.15)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 p-8 cursor-default flex flex-col gap-6">
+                                className="fixed left-4 right-4 top-[76px] z-50 flex cursor-default flex-col gap-6 rounded-[2rem] bg-surface-container-lowest p-8 opacity-0 invisible shadow-[0_30px_60px_-15px_rgba(14,48,78,0.15)] transition-all duration-300 group-hover:visible group-hover:opacity-100 xl:absolute xl:-left-20 xl:right-auto xl:top-full xl:w-[950px]">
                                 <div className="grid grid-cols-12 gap-6 min-h-[300px]">
                                     <div
                                         className="col-span-4 border-r border-surface-container pr-4 flex flex-col gap-1.5">
@@ -217,7 +221,7 @@ export default function Header() {
                 </div>
 
                 {/* Right Actions */}
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-1 sm:gap-3 lg:gap-6">
                     <form onSubmit={(e) => {
                         e.preventDefault();
                         if (searchQuery.trim()) {
@@ -235,11 +239,6 @@ export default function Header() {
                     </form>
 
                     <div className="flex items-center gap-3">
-                        <Link to="/admin"
-                              className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors"
-                              title="Admin">
-                            <Shield className="w-5 h-5"/>
-                        </Link>
 
                         <div className="relative" ref={cartRef}>
                             <button
@@ -259,7 +258,7 @@ export default function Header() {
                             {/* MINI CART DROPDOWN*/}
                             {isMiniCartOpen && (
                                 <div
-                                    className="absolute top-full right-0 mt-2 w-[340px] bg-surface-container-lowest rounded-2xl shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] border border-surface-container/60 p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                                    className="fixed left-3 right-3 top-[76px] z-50 rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-4 shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] animate-in fade-in slide-in-from-top-3 duration-200 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[340px]">
                                     <div
                                         className="flex items-center justify-between pb-3 border-b border-surface-container-high/60 mb-3">
                                         <span className="text-xs font-black uppercase tracking-wider text-on-surface">Giỏ hàng sản phẩm ({itemCount})</span>
@@ -428,9 +427,61 @@ export default function Header() {
                                 </div>
                             )}
                         </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setIsMobileMenuOpen((open) => !open)}
+                            className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface transition-colors hover:bg-surface-container lg:hidden"
+                            aria-expanded={isMobileMenuOpen}
+                            aria-controls="mobile-navigation"
+                            aria-label={isMobileMenuOpen ? 'Đóng menu' : 'Mở menu'}
+                        >
+                            {isMobileMenuOpen ? <X className="h-5 w-5"/> : <Menu className="h-5 w-5"/>}
+                        </button>
                     </div>
                 </div>
             </div>
+
+            {isMobileMenuOpen && (
+                <div id="mobile-navigation" className="border-t border-outline-variant/20 bg-surface-container-lowest px-4 pb-5 pt-4 shadow-lg lg:hidden">
+                    <form
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            setIsMobileMenuOpen(false);
+                            navigate(searchQuery.trim() ? `/products?search=${encodeURIComponent(searchQuery.trim())}` : '/products');
+                        }}
+                        className="relative mx-auto mb-4 max-w-[1120px]"
+                    >
+                        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
+                        <input
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
+                            className="w-full rounded-full bg-surface-container py-3 pl-10 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/30"
+                            placeholder="Tìm kiếm mô hình..."
+                            type="search"
+                        />
+                    </form>
+                    <nav className="mx-auto grid max-w-[1120px] grid-cols-2 gap-2 text-sm font-bold text-on-surface sm:grid-cols-3">
+                        {[
+                            ['Trang chủ', '/'],
+                            ['Sản phẩm', '/products'],
+                            ['Dịch vụ', '/services'],
+                            ['Thẻ thành viên', '/membership'],
+                            ['Tin tức', '/blog'],
+                            ['Tra cứu đơn', '/tracking'],
+                        ].map(([label, path]) => (
+                            <Link
+                                key={path}
+                                to={path}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="rounded-xl bg-surface-container-low px-4 py-3 transition-colors hover:bg-surface-container"
+                            >
+                                {label}
+                            </Link>
+                        ))}
+                    </nav>
+                </div>
+            )}
         </header>
     );
 }

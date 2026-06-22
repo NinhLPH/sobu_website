@@ -69,6 +69,10 @@ const getSyncStatusColor = (status?: string) => {
             return 'border-green-200 bg-green-50 text-green-700';
         case 'FAILED':
             return 'border-red-200 bg-red-50 text-red-700';
+        case 'NEED_RECONCILE':
+            return 'border-orange-200 bg-orange-50 text-orange-700';
+        case 'DEAD':
+            return 'border-slate-300 bg-slate-100 text-slate-700';
         case 'PENDING':
             return 'border-amber-200 bg-amber-50 text-amber-700';
         default:
@@ -82,12 +86,19 @@ const getSyncStatusText = (status?: string) => {
             return 'Đã đồng bộ';
         case 'FAILED':
             return 'Đồng bộ thất bại';
+        case 'NEED_RECONCILE':
+            return 'Cần đối soát';
+        case 'DEAD':
+            return 'Đã dừng retry';
         case 'PENDING':
             return 'Chờ đồng bộ';
         default:
             return status || 'Chưa cập nhật';
     }
 };
+
+const canRetrySync = (status?: string) =>
+    status === 'FAILED' || status === 'NEED_RECONCILE' || status === 'DEAD';
 
 export default function AdminOrderDetail() {
     const { id } = useParams();
@@ -103,12 +114,13 @@ export default function AdminOrderDetail() {
         clearOrdersError,
         clearOrderActionMessage,
         isOrderDetailLoading,
-        isRetryingOrderSync,
+        retryingOrderIds,
         isCreatingFinalPayment,
         confirmingPaymentCode,
         ordersError,
         orderActionMessage
     } = useAdminStore();
+    const isRetryingOrderSync = id ? retryingOrderIds.includes(Number(id)) : false;
 
     useEffect(() => {
         if (id) {
@@ -149,6 +161,12 @@ export default function AdminOrderDetail() {
     const handleConfirmPayment = async (paymentCode: string) => {
         const normalizedCode = paymentCode.trim();
         if (!normalizedCode) {
+            return;
+        }
+        const confirmed = window.confirm(
+            `Xác nhận payment ${normalizedCode} đã thanh toán? Thao tác này chỉ dành cho giao dịch giả lập.`
+        );
+        if (!confirmed) {
             return;
         }
         clearOrdersError();
@@ -236,7 +254,7 @@ export default function AdminOrderDetail() {
                 </div>
             )}
 
-            {order.syncStatus === 'FAILED' && (order.lastSyncMessage || order.syncError) && (
+            {canRetrySync(order.syncStatus) && (order.lastSyncMessage || order.syncError) && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium leading-relaxed text-red-800">
                     <span className="mb-1 block font-black uppercase tracking-wide text-red-600">
                         Chi tiết lỗi đồng bộ
@@ -459,7 +477,7 @@ export default function AdminOrderDetail() {
                             )}
                         </div>
 
-                        {order.syncStatus === 'FAILED' && (
+                        {canRetrySync(order.syncStatus) && (
                             <button
                                 type="button"
                                 onClick={handleRetrySync}

@@ -61,8 +61,8 @@ export default function Membership() {
     ];
 
     return (
-        <main className="pt-24 pb-16 bg-surface px-6 min-h-screen">
-            <div className="max-w-screen-xl mx-auto flex flex-col gap-12">
+        <main className="min-h-screen w-full min-w-0 bg-surface px-4 pb-16 pt-24 sm:px-6">
+            <div className="mx-auto flex w-full flex-col gap-12">
                 <div className="text-center">
                     <span
                         className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary-container/20 px-3 py-1 rounded-full">

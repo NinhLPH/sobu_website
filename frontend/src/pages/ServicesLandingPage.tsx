@@ -74,14 +74,14 @@ export default function ServicesLandingPage() {
                 <div className="absolute -left-32 top-8 h-80 w-80 rounded-full bg-primary-container/20 blur-3xl"/>
                 <div className="absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-tertiary-container/20 blur-3xl"/>
 
-                <div className="relative mx-auto grid max-w-screen-2xl items-center gap-12 lg:grid-cols-12">
+                <div className="relative mx-auto grid w-full items-center gap-8 lg:grid-cols-12 lg:gap-12">
                     <div className="lg:col-span-7">
                         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-primary">
                             <Sparkles className="h-4 w-4"/>
                             Dịch vụ dành cho collector
                         </div>
 
-                        <h1 className="max-w-4xl text-4xl font-black leading-tight tracking-tight text-on-surface sm:text-5xl lg:text-7xl">
+                        <h1 className="max-w-4xl text-3xl font-black leading-tight tracking-tight text-on-surface sm:text-5xl lg:text-6xl">
                             Biến ý tưởng sưu tầm thành
                             <span className="block text-primary">hiện thực cùng SOBU.</span>
                         </h1>
@@ -146,7 +146,7 @@ export default function ServicesLandingPage() {
             </section>
 
             <section id="service-list" className="scroll-mt-28 bg-surface-container-low px-6 py-20 md:py-24">
-                <div className="mx-auto max-w-screen-2xl">
+                <div className="mx-auto w-full">
                     <div className="mx-auto mb-12 max-w-3xl text-center">
                         <p className="text-xs font-black uppercase tracking-[0.25em] text-primary">Dịch vụ của chúng tôi</p>
                         <h2 className="mt-3 text-3xl font-black tracking-tight text-on-surface md:text-5xl">
@@ -204,7 +204,7 @@ export default function ServicesLandingPage() {
             </section>
 
             <section className="px-6 py-20 md:py-24">
-                <div className="mx-auto max-w-screen-2xl">
+                <div className="mx-auto w-full">
                     <div className="grid gap-12 lg:grid-cols-12">
                         <div className="lg:col-span-4">
                             <p className="text-xs font-black uppercase tracking-[0.25em] text-primary">Cách hoạt động</p>
@@ -245,7 +245,7 @@ export default function ServicesLandingPage() {
             </section>
 
             <section className="px-6 pb-24">
-                <div className="relative mx-auto max-w-screen-2xl overflow-hidden rounded-[2.5rem] bg-inverse-surface px-7 py-12 text-inverse-on-surface md:px-12 lg:px-16 lg:py-16">
+                <div className="relative mx-auto w-full overflow-hidden rounded-[2rem] bg-inverse-surface px-6 py-10 text-inverse-on-surface sm:rounded-[2.5rem] md:px-12 lg:px-16 lg:py-16">
                     <div className="absolute -right-20 -top-32 h-80 w-80 rounded-full bg-primary/30 blur-3xl"/>
                     <div className="relative grid items-center gap-10 lg:grid-cols-12">
                         <div className="lg:col-span-7">

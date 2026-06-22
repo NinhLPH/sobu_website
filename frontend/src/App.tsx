@@ -15,6 +15,7 @@ import AdminCategories from "./pages/admin/Categories";
 import AdminBrands from "./pages/admin/Brands";
 import AdminOrders from "./pages/admin/Orders";
 import AdminRequests from "./pages/admin/Requests";
+import AdminRequestDetail from "./pages/admin/RequestDetails";
 import AdminOrderDetail from "./pages/admin/OrderDetails";
 import BlogList from "./pages/BlogList";
 import BlogDetail from "./pages/BlogDetail";
@@ -29,37 +30,51 @@ import OrderTracking from "./pages/OrderTracking";
 import PaymentResult from "./pages/PaymentResult";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Toast from "./components/common/Toast";
+import SiteLayout from './components/layout/SiteLayout';
+import {useEffect} from 'react';
+import {usePublicUiStore} from './store/usePublicUiStore';
+import AdminBanners from './pages/admin/Banners';
+import AdminConfigs from './pages/admin/Configs';
+import ScrollToTop from './components/common/ScrollToTop';
 
 export default function App() {
+    const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
+
+    useEffect(() => {
+        void fetchConfigs();
+    }, [fetchConfigs]);
+
     return (
         <Router>
+            <ScrollToTop/>
             <div className="flex flex-col min-h-screen">
                 <Header/>
                 <Routes>
-                    <Route path="/" element={<HomePage/>}/>
                     <Route path="/login" element={<LoginPage/>}/>
                     <Route path="/activate" element={<ActivateAccount/>}/>
                     <Route path="/verify-email" element={<VerifyEmailPage/>}/>
-                    <Route path="/products" element={<ProductList/>}/>
-                    <Route path="/product/:id" element={<ProductDetail/>}/>
-                    <Route path="/category/:category" element={<ProductList/>}/>
-                    <Route path="/blog" element={<BlogList/>}/>
-                    <Route path="/blog/:id" element={<BlogDetail/>}/>
-                    <Route path="/services" element={<ServicesLandingPage/>}/>
-                    <Route path="/membership" element={<Membership/>}/>
 
-                    {/* CUSTOMER ORDER TRACKING */}
-                    <Route path="/tracking" element={<OrderTracking/>}/>
-                    <Route path="/payment-result" element={<PaymentResult/>}/>
-                    <Route path="/payment/return" element={<PaymentResult/>}/>
-                    <Route path="/payment/cancel" element={<PaymentResult/>}/>
+                    <Route element={<SiteLayout/>}>
+                        <Route path="/" element={<HomePage/>}/>
+                        <Route path="/products" element={<ProductList/>}/>
+                        <Route path="/product/:id" element={<ProductDetail/>}/>
+                        <Route path="/category/:category" element={<ProductList/>}/>
+                        <Route path="/blog" element={<BlogList/>}/>
+                        <Route path="/blog/:id" element={<BlogDetail/>}/>
+                        <Route path="/services" element={<ServicesLandingPage/>}/>
+                        <Route path="/membership" element={<Membership/>}/>
+                        <Route path="/tracking" element={<OrderTracking/>}/>
+                        <Route path="/payment-result" element={<PaymentResult/>}/>
+                        <Route path="/payment/return" element={<PaymentResult/>}/>
+                        <Route path="/payment/cancel" element={<PaymentResult/>}/>
 
-                    {/* CUSTOMER LOGGED IN PRIVATE ROUTES */}
-                    <Route element={<ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']} />}>
-                        <Route path="/cart" element={<Cart/>}/>
-                        <Route path="/requests" element={<MyRequests/>}/>
-                        <Route path="/requests/new" element={<CreateRequest/>}/>
-                        <Route path="/requests/:id" element={<RequestDetail/>}/>
+                        {/* CUSTOMER LOGGED IN PRIVATE ROUTES */}
+                        <Route element={<ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']} />}>
+                            <Route path="/cart" element={<Cart/>}/>
+                            <Route path="/requests" element={<MyRequests/>}/>
+                            <Route path="/requests/new" element={<CreateRequest/>}/>
+                            <Route path="/requests/:id" element={<RequestDetail/>}/>
+                        </Route>
                     </Route>
 
                     {/* ADMIN WORKFLOWS */}
@@ -72,6 +87,9 @@ export default function App() {
                             <Route path="orders" element={<AdminOrders/>}/>
                             <Route path="orders/:id" element={<AdminOrderDetail/>}/>
                             <Route path="requests" element={<AdminRequests/>}/>
+                            <Route path="requests/:id" element={<AdminRequestDetail/>}/>
+                            <Route path="banners" element={<AdminBanners/>}/>
+                            {/*<Route path="configs" element={<AdminConfigs/>}/>*/}
                             <Route path="sync" element={<AdminSync/>}/>
                             <Route path="nhanh/callback" element={<AdminNhanhCallback/>}/>
                         </Route>
