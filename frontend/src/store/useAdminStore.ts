@@ -15,6 +15,51 @@ import { mockProducts, mockCategories, mockRequests } from '../data/mockData';
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message || error?.message || fallback;
 
+const ACTIONABLE_SYNC_STATUSES = new Set(['FAILED', 'NEED_RECONCILE', 'DEAD']);
+
+const isActionableSyncOrder = (order: OrderResponseDto) =>
+    Boolean(order.syncStatus && ACTIONABLE_SYNC_STATUSES.has(order.syncStatus));
+
+const mergeSyncResult = (
+    order: OrderResponseDto,
+    result: OrderSyncResultDto
+): OrderResponseDto => ({
+    ...order,
+    id: result.orderId,
+    orderCode: result.orderCode ?? order.orderCode,
+    syncStatus: result.syncStatus,
+    nhanhSyncStage: result.nhanhSyncStage,
+    nhanhOrderId: result.nhanhOrderId,
+    nhanhOrderCode: result.nhanhOrderCode,
+    syncError: result.syncError,
+    lastSyncMessage: result.lastSyncMessage,
+    lastSyncAt: result.lastSyncAt
+});
+
+export interface OrderSyncBatchItemResult {
+    orderId: number;
+    outcome: 'SYNCED' | 'UNRESOLVED' | 'REQUEST_FAILED';
+    result?: OrderSyncResultDto;
+    error?: string;
+}
+
+export interface OrderSyncBatchProgress {
+    current: number;
+    total: number;
+    synced: number;
+    unresolved: number;
+    failed: number;
+    running: boolean;
+}
+
+export interface OrderSyncBatchResult {
+    total: number;
+    synced: number;
+    unresolved: number;
+    failed: number;
+    items: OrderSyncBatchItemResult[];
+}
+
 const upsertPayment = (
     payments: OrderPaymentResponseDto[],
     payment: OrderPaymentResponseDto
@@ -33,10 +78,17 @@ interface AdminState {
     workflowOrders: OrderResponseDto[];
     currentOrderDetail: OrderResponseDto | null;
     adminPayments: OrderPaymentResponseDto[];
+    orderSyncQueue: OrderResponseDto[];
+    pendingOrderSyncCount: number;
     ordersPage: Omit<PageResponse<OrderResponseDto>, 'content'>;
     isOrdersLoading: boolean;
     isOrderDetailLoading: boolean;
     isRetryingOrderSync: boolean;
+    retryingOrderIds: number[];
+    isOrderSyncQueueLoading: boolean;
+    orderSyncQueueError: string | null;
+    orderSyncBatchProgress: OrderSyncBatchProgress | null;
+    orderSyncBatchResult: OrderSyncBatchResult | null;
     isCreatingFinalPayment: boolean;
     confirmingPaymentCode: string | null;
     ordersError: string | null;
@@ -51,7 +103,9 @@ interface AdminState {
     updateRequest: (id: string, updates: Partial<ServiceRequest>) => void;
     fetchOrders: (params?: AdminOrderQueryParams) => Promise<void>;
     fetchOrderDetail: (id: string | number) => Promise<void>;
+    fetchOrderSyncQueue: () => Promise<void>;
     retryOrderSync: (id: string | number) => Promise<OrderSyncResultDto>;
+    retryOrderSyncBatch: (ids: Array<string | number>) => Promise<OrderSyncBatchResult>;
     createPreorderFinalPayment: (id: string | number) => Promise<OrderPaymentResponseDto>;
     confirmMockPayment: (paymentCode: string) => Promise<OrderPaymentResponseDto>;
     clearOrdersError: () => void;
@@ -59,13 +113,15 @@ interface AdminState {
     clearCurrentOrder: () => void;
 }
 
-export const useAdminStore = create<AdminState>((set) => ({
+export const useAdminStore = create<AdminState>((set, get) => ({
     products: mockProducts,
     categories: mockCategories,
     requests: mockRequests,
     workflowOrders: [],
     currentOrderDetail: null,
     adminPayments: [],
+    orderSyncQueue: [],
+    pendingOrderSyncCount: 0,
     ordersPage: {
         pageNumber: 0,
         pageSize: 10,
@@ -79,6 +135,11 @@ export const useAdminStore = create<AdminState>((set) => ({
     isOrdersLoading: false,
     isOrderDetailLoading: false,
     isRetryingOrderSync: false,
+    retryingOrderIds: [],
+    isOrderSyncQueueLoading: false,
+    orderSyncQueueError: null,
+    orderSyncBatchProgress: null,
+    orderSyncBatchResult: null,
     isCreatingFinalPayment: false,
     confirmingPaymentCode: null,
     ordersError: null,
@@ -204,41 +265,165 @@ export const useAdminStore = create<AdminState>((set) => ({
         }
     },
 
+    fetchOrderSyncQueue: async () => {
+        set({ isOrderSyncQueueLoading: true, orderSyncQueueError: null });
+        try {
+            const orders: OrderResponseDto[] = [];
+            let page = 0;
+            let totalPages = 1;
+
+            while (page < totalPages) {
+                const response = await AdminWorkflowService.getAdminOrders({
+                    page,
+                    size: 100,
+                    sortBy: 'updatedAt',
+                    sortDirection: 'ASC'
+                });
+                const data = response.data;
+                orders.push(...(data.content ?? []));
+                totalPages = Math.max(data.totalPages ?? 1, 1);
+                page += 1;
+            }
+
+            set({
+                orderSyncQueue: orders.filter(isActionableSyncOrder),
+                pendingOrderSyncCount: orders.filter(order => order.syncStatus === 'PENDING').length,
+                isOrderSyncQueueLoading: false
+            });
+        } catch (error) {
+            set({
+                orderSyncQueueError: getErrorMessage(error, 'Không thể tải hàng đợi đồng bộ đơn hàng.'),
+                isOrderSyncQueueLoading: false
+            });
+        }
+    },
+
     retryOrderSync: async (id) => {
-        set({
+        const orderId = Number(id);
+        if (get().retryingOrderIds.includes(orderId)) {
+            throw new Error('Đơn hàng này đang được đồng bộ.');
+        }
+
+        set((state) => ({
             isRetryingOrderSync: true,
+            retryingOrderIds: [...state.retryingOrderIds, orderId],
             ordersError: null,
+            orderSyncQueueError: null,
             orderActionMessage: null
-        });
+        }));
         try {
             const response = await AdminWorkflowService.retryOrderSync(id);
             const result = response.data;
-            set((state) => ({
-                currentOrderDetail: state.currentOrderDetail
-                    ? {
-                        ...state.currentOrderDetail,
-                        id: result.orderId,
-                        orderCode: result.orderCode ?? state.currentOrderDetail.orderCode,
-                        syncStatus: result.syncStatus,
-                        nhanhSyncStage: result.nhanhSyncStage,
-                        nhanhOrderId: result.nhanhOrderId,
-                        nhanhOrderCode: result.nhanhOrderCode,
-                        syncError: result.syncError,
-                        lastSyncMessage: result.lastSyncMessage,
-                        lastSyncAt: result.lastSyncAt
-                    }
-                    : null,
-                isRetryingOrderSync: false,
-                orderActionMessage: response.message || 'Đã thử đồng bộ lại đơn hàng.'
-            }));
+            set((state) => {
+                const nextRetryingIds = state.retryingOrderIds.filter(item => item !== orderId);
+                const queueOrder = state.orderSyncQueue.find(order => order.id === orderId);
+                const updatedQueueOrder = queueOrder ? mergeSyncResult(queueOrder, result) : null;
+                return {
+                    currentOrderDetail: state.currentOrderDetail?.id === orderId
+                        ? mergeSyncResult(state.currentOrderDetail, result)
+                        : state.currentOrderDetail,
+                    workflowOrders: state.workflowOrders.map(order =>
+                        order.id === orderId ? mergeSyncResult(order, result) : order
+                    ),
+                    orderSyncQueue: updatedQueueOrder && isActionableSyncOrder(updatedQueueOrder)
+                        ? state.orderSyncQueue.map(order => order.id === orderId ? updatedQueueOrder : order)
+                        : state.orderSyncQueue.filter(order => order.id !== orderId),
+                    pendingOrderSyncCount: result.syncStatus === 'PENDING' && queueOrder
+                        ? state.pendingOrderSyncCount + 1
+                        : state.pendingOrderSyncCount,
+                    retryingOrderIds: nextRetryingIds,
+                    isRetryingOrderSync: nextRetryingIds.length > 0,
+                    orderActionMessage: response.message || 'Đã thử đồng bộ lại đơn hàng.'
+                };
+            });
             return result;
         } catch (error) {
-            set({
-                ordersError: getErrorMessage(error, 'Không thể đồng bộ lại đơn hàng.'),
-                isRetryingOrderSync: false
+            const message = getErrorMessage(error, 'Không thể đồng bộ lại đơn hàng.');
+            set((state) => {
+                const nextRetryingIds = state.retryingOrderIds.filter(item => item !== orderId);
+                return {
+                    ordersError: message,
+                    orderSyncQueueError: message,
+                    orderSyncQueue: state.orderSyncQueue.map(order =>
+                        order.id === orderId ? { ...order, syncError: message, lastSyncMessage: message } : order
+                    ),
+                    retryingOrderIds: nextRetryingIds,
+                    isRetryingOrderSync: nextRetryingIds.length > 0
+                };
             });
             throw error;
         }
+    },
+
+    retryOrderSyncBatch: async (ids) => {
+        if (get().orderSyncBatchProgress?.running) {
+            throw new Error('Một lượt đồng bộ đơn hàng đang chạy.');
+        }
+
+        const actionableIds = new Set(get().orderSyncQueue.map(order => order.id));
+        const uniqueIds = Array.from(new Set(ids.map(Number))).filter(id => actionableIds.has(id));
+        const items: OrderSyncBatchItemResult[] = [];
+        let synced = 0;
+        let unresolved = 0;
+        let failed = 0;
+
+        set({
+            orderSyncBatchResult: null,
+            orderSyncBatchProgress: {
+                current: 0,
+                total: uniqueIds.length,
+                synced: 0,
+                unresolved: 0,
+                failed: 0,
+                running: true
+            }
+        });
+
+        for (let index = 0; index < uniqueIds.length; index += 1) {
+            const orderId = uniqueIds[index];
+            try {
+                const result = await get().retryOrderSync(orderId);
+                if (result.syncStatus === 'SYNCED') {
+                    synced += 1;
+                    items.push({ orderId, outcome: 'SYNCED', result });
+                } else {
+                    unresolved += 1;
+                    items.push({ orderId, outcome: 'UNRESOLVED', result });
+                }
+            } catch (error) {
+                failed += 1;
+                items.push({
+                    orderId,
+                    outcome: 'REQUEST_FAILED',
+                    error: getErrorMessage(error, 'Không thể đồng bộ lại đơn hàng.')
+                });
+            }
+            set({
+                orderSyncBatchProgress: {
+                    current: index + 1,
+                    total: uniqueIds.length,
+                    synced,
+                    unresolved,
+                    failed,
+                    running: true
+                }
+            });
+        }
+
+        const batchResult = { total: uniqueIds.length, synced, unresolved, failed, items };
+        set({
+            orderSyncBatchResult: batchResult,
+            orderSyncBatchProgress: {
+                current: uniqueIds.length,
+                total: uniqueIds.length,
+                synced,
+                unresolved,
+                failed,
+                running: false
+            }
+        });
+        await get().fetchOrderSyncQueue();
+        return batchResult;
     },
 
     createPreorderFinalPayment: async (id) => {

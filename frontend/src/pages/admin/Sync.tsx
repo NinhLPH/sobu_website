@@ -1,15 +1,53 @@
 import {useState, useEffect} from 'react';
 import {useSearchParams} from 'react-router-dom';
-import {RefreshCw, CheckCircle2, AlertCircle, Loader2, Package, ListTree, Award} from 'lucide-react';
+import {
+    RefreshCw,
+    CheckCircle2,
+    AlertCircle,
+    Loader2,
+    Package,
+    ListTree,
+    Award,
+    ShoppingCart,
+    Clock3
+} from 'lucide-react';
 import {AdminSyncService} from '../../service/sync.service';
 import {ToastService} from '../../service/toast.service';
 import {useProductStore} from '../../store/useProductStore';
+import {useAdminStore} from '../../store/useAdminStore';
+
+const getOrderSyncStatusStyle = (status?: string) => {
+    switch (status) {
+        case 'FAILED':
+            return 'border-red-200 bg-red-50 text-red-700';
+        case 'NEED_RECONCILE':
+            return 'border-orange-200 bg-orange-50 text-orange-700';
+        case 'DEAD':
+            return 'border-slate-300 bg-slate-100 text-slate-700';
+        default:
+            return 'border-gray-200 bg-gray-50 text-gray-700';
+    }
+};
+
+const getOrderSyncStatusText = (status?: string) => {
+    switch (status) {
+        case 'FAILED':
+            return 'Thất bại';
+        case 'NEED_RECONCILE':
+            return 'Cần đối soát';
+        case 'DEAD':
+            return 'Đã dừng retry';
+        default:
+            return status || 'Chưa cập nhật';
+    }
+};
 
 export default function AdminSync() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [isConnecting, setIsConnecting] = useState(false);
     const [oauthStatus, setOauthStatus] = useState<'success' | 'error' | null>(null);
     const [oauthErrorMsg, setOauthErrorMsg] = useState<string | null>(null);
+    const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
 
     const {
         isSyncingProducts,
@@ -24,6 +62,18 @@ export default function AdminSync() {
         categories: isSyncingCategories,
         brands: isSyncingBrands
     };
+    const {
+        orderSyncQueue,
+        pendingOrderSyncCount,
+        retryingOrderIds,
+        isOrderSyncQueueLoading,
+        orderSyncQueueError,
+        orderSyncBatchProgress,
+        orderSyncBatchResult,
+        fetchOrderSyncQueue,
+        retryOrderSync,
+        retryOrderSyncBatch
+    } = useAdminStore();
 
     const [syncMessages, setSyncMessages] = useState<{ [key: string]: string | null }>({
         products: null,
@@ -61,6 +111,15 @@ export default function AdminSync() {
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
     }, []);
+
+    useEffect(() => {
+        void fetchOrderSyncQueue();
+    }, [fetchOrderSyncQueue]);
+
+    useEffect(() => {
+        const queueIds = new Set(orderSyncQueue.map(order => order.id));
+        setSelectedOrderIds(current => current.filter(id => queueIds.has(id)));
+    }, [orderSyncQueue]);
 
     const handleNhanhConnect = async () => {
         setIsConnecting(true);
@@ -100,6 +159,40 @@ export default function AdminSync() {
         } catch (err: any) {
             const errorMsg = 'Có lỗi xảy ra trong quá trình đồng bộ ERP!';
             setSyncErrors(prev => ({...prev, [type]: errorMsg}));
+        }
+    };
+
+    const isBatchRunning = Boolean(orderSyncBatchProgress?.running);
+    const allOrdersSelected = orderSyncQueue.length > 0
+        && orderSyncQueue.every(order => selectedOrderIds.includes(order.id));
+
+    const toggleOrderSelection = (orderId: number) => {
+        setSelectedOrderIds(current => current.includes(orderId)
+            ? current.filter(id => id !== orderId)
+            : [...current, orderId]);
+    };
+
+    const toggleAllOrders = () => {
+        setSelectedOrderIds(allOrdersSelected ? [] : orderSyncQueue.map(order => order.id));
+    };
+
+    const handleRetryOrder = async (orderId: number) => {
+        try {
+            await retryOrderSync(orderId);
+        } catch {
+            // The store keeps the backend error on the matching queue row.
+        }
+    };
+
+    const handleRetrySelectedOrders = async () => {
+        if (selectedOrderIds.length === 0) {
+            return;
+        }
+        try {
+            await retryOrderSyncBatch(selectedOrderIds);
+            setSelectedOrderIds([]);
+        } catch {
+            // The store exposes batch and request errors in the sync queue state.
         }
     };
 
@@ -324,6 +417,177 @@ export default function AdminSync() {
                 </div>
 
             </div>
+
+            <section className="overflow-hidden rounded-3xl border border-outline-variant/30 bg-white shadow-sm">
+                <div className="flex flex-col gap-5 border-b border-surface-container p-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                            <ShoppingCart className="h-6 w-6"/>
+                        </div>
+                        <div>
+                            <h2 className="text-base font-black uppercase text-on-surface">Đồng bộ đơn hàng</h2>
+                            <p className="mt-1 max-w-2xl text-xs font-semibold leading-relaxed text-outline">
+                                Theo dõi các đơn cần can thiệp và gửi retry tuần tự sang Nhanh.vn. Đơn đang chờ sẽ tiếp
+                                tục được backend tự động xử lý.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wide">
+                                <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-700">
+                                    Cần can thiệp: {orderSyncQueue.length}
+                                </span>
+                                <span className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-amber-700">
+                                    <Clock3 className="h-3 w-3"/>
+                                    Đang chờ tự động: {pendingOrderSyncCount}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => void fetchOrderSyncQueue()}
+                            disabled={isOrderSyncQueueLoading || isBatchRunning}
+                            className="flex items-center gap-2 rounded-xl bg-surface-container px-4 py-2.5 text-xs font-black uppercase tracking-wide text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${isOrderSyncQueueLoading ? 'animate-spin' : ''}`}/>
+                            Làm mới
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleRetrySelectedOrders}
+                            disabled={selectedOrderIds.length === 0 || isBatchRunning || isOrderSyncQueueLoading}
+                            className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary-container px-4 py-2.5 text-xs font-black uppercase tracking-wide text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isBatchRunning ? <Loader2 className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}
+                            Retry đã chọn ({selectedOrderIds.length})
+                        </button>
+                    </div>
+                </div>
+
+                {orderSyncBatchProgress && (
+                    <div className="border-b border-surface-container bg-surface-container/30 px-6 py-4">
+                        <div className="mb-2 flex justify-between gap-4 text-[11px] font-black uppercase tracking-wide text-on-surface">
+                            <span>{orderSyncBatchProgress.running ? 'Đang xử lý hàng đợi' : 'Đã hoàn tất lượt retry'}</span>
+                            <span>{orderSyncBatchProgress.current}/{orderSyncBatchProgress.total}</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-surface-container-high">
+                            <div
+                                className="h-full rounded-full bg-primary transition-all"
+                                style={{
+                                    width: `${orderSyncBatchProgress.total > 0
+                                        ? (orderSyncBatchProgress.current / orderSyncBatchProgress.total) * 100
+                                        : 0}%`
+                                }}
+                            />
+                        </div>
+                        <p className="mt-2 text-[10px] font-bold text-outline">
+                            Đã sync: {orderSyncBatchProgress.synced} · Còn cần xử lý: {orderSyncBatchProgress.unresolved}
+                            {' '}· Request lỗi: {orderSyncBatchProgress.failed}
+                        </p>
+                    </div>
+                )}
+
+                {orderSyncBatchResult && !isBatchRunning && (
+                    <div className="mx-6 mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 text-xs font-bold text-green-800">
+                        Hoàn tất {orderSyncBatchResult.total} đơn: {orderSyncBatchResult.synced} đã đồng bộ,
+                        {' '}{orderSyncBatchResult.unresolved} còn cần xử lý và {orderSyncBatchResult.failed} request lỗi.
+                    </div>
+                )}
+
+                {orderSyncQueueError && (
+                    <div className="mx-6 mt-5 flex items-start gap-2 rounded-2xl border border-error/20 bg-error/10 p-4 text-xs font-bold text-error">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>
+                        {orderSyncQueueError}
+                    </div>
+                )}
+
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px] text-left text-xs">
+                        <thead className="bg-surface-container/60 text-[10px] font-black uppercase tracking-wider text-outline">
+                        <tr>
+                            <th className="w-12 px-6 py-4">
+                                <input
+                                    type="checkbox"
+                                    checked={allOrdersSelected}
+                                    onChange={toggleAllOrders}
+                                    disabled={orderSyncQueue.length === 0 || isBatchRunning}
+                                    aria-label="Chọn tất cả đơn cần retry"
+                                    className="h-4 w-4 accent-primary"
+                                />
+                            </th>
+                            <th className="px-4 py-4">Đơn hàng</th>
+                            <th className="px-4 py-4">Trạng thái</th>
+                            <th className="px-4 py-4">Milestone</th>
+                            <th className="px-4 py-4">Nhanh ID</th>
+                            <th className="px-4 py-4">Lỗi gần nhất</th>
+                            <th className="px-4 py-4">Lần sync cuối</th>
+                            <th className="px-6 py-4 text-right">Thao tác</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-container">
+                        {orderSyncQueue.map(order => {
+                            const isRetrying = retryingOrderIds.includes(order.id);
+                            return (
+                                <tr key={order.id} className="hover:bg-surface-container/20">
+                                    <td className="px-6 py-4">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedOrderIds.includes(order.id)}
+                                            onChange={() => toggleOrderSelection(order.id)}
+                                            disabled={isBatchRunning || isRetrying}
+                                            aria-label={`Chọn đơn ${order.orderCode || order.id}`}
+                                            className="h-4 w-4 accent-primary"
+                                        />
+                                    </td>
+                                    <td className="px-4 py-4 font-black text-primary">#{order.orderCode || order.id}</td>
+                                    <td className="px-4 py-4">
+                                        <span className={`inline-block rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide ${getOrderSyncStatusStyle(order.syncStatus)}`}>
+                                            {getOrderSyncStatusText(order.syncStatus)}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-4 font-bold text-on-surface">{order.nhanhSyncStage || 'NONE'}</td>
+                                    <td className="px-4 py-4 font-semibold text-on-surface">{order.nhanhOrderId || '—'}</td>
+                                    <td className="max-w-xs px-4 py-4 font-semibold text-red-700">
+                                        <span className="line-clamp-2" title={order.lastSyncMessage || order.syncError}>
+                                            {order.lastSyncMessage || order.syncError || 'Không có chi tiết lỗi'}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-4 font-semibold text-outline">
+                                        {order.lastSyncAt ? new Date(order.lastSyncAt).toLocaleString('vi-VN') : 'Chưa có'}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleRetryOrder(order.id)}
+                                            disabled={isRetrying || isBatchRunning}
+                                            className="inline-flex items-center gap-1.5 rounded-xl bg-primary/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            {isRetrying ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <RefreshCw className="h-3.5 w-3.5"/>}
+                                            {isRetrying ? 'Đang retry' : 'Retry'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {!isOrderSyncQueueLoading && orderSyncQueue.length === 0 && (
+                            <tr>
+                                <td colSpan={8} className="px-6 py-14 text-center font-bold text-outline">
+                                    <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-green-500"/>
+                                    Không có đơn hàng nào cần can thiệp đồng bộ.
+                                </td>
+                            </tr>
+                        )}
+                        {isOrderSyncQueueLoading && (
+                            <tr>
+                                <td colSpan={8} className="px-6 py-14 text-center font-bold text-outline">
+                                    <Loader2 className="mx-auto mb-2 h-7 w-7 animate-spin text-primary"/>
+                                    Đang tải toàn bộ hàng đợi đồng bộ...
+                                </td>
+                            </tr>
+                        )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     );
 }
