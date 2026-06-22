@@ -88,7 +88,7 @@ export default function RequestDetail() {
 
     if (isLoading) {
         return (
-            <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh]">
+            <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
                 <Loader2 className="w-10 h-10 text-primary animate-spin" />
                 <p className="text-outline text-xs font-bold mt-4">Đang tải chi tiết yêu cầu...</p>
             </main>
@@ -97,7 +97,7 @@ export default function RequestDetail() {
 
     if (!currentRequestDetail) {
         return (
-            <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh] text-center">
+            <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 text-center sm:px-6 sm:pt-32">
                 <AlertCircle className="w-12 h-12 text-error mb-4" />
                 <h1 className="text-xl font-black text-on-surface uppercase">Không tìm thấy yêu cầu</h1>
                 <p className="text-outline text-sm mt-2 mb-6">Yêu cầu này không tồn tại hoặc bạn không có quyền xem.</p>
@@ -224,7 +224,7 @@ export default function RequestDetail() {
     };
 
     return (
-        <main className="w-full max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface">
+        <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
             {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
@@ -235,7 +235,7 @@ export default function RequestDetail() {
             </nav>
 
             {/* Title Bar */}
-            <div className="flex items-center gap-4 mb-8">
+            <div className="mb-8 flex items-start gap-3 sm:items-center sm:gap-4">
                 <button
                     type="button"
                     onClick={() => navigate('/requests')}
@@ -460,7 +460,7 @@ export default function RequestDetail() {
 
                 {/* Right side: Summary & Quotation details */}
                 <div className="lg:col-span-4 space-y-6">
-                    <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 sticky top-28 space-y-5">
+                    <div className="space-y-5 rounded-[2rem] border border-surface-container/60 bg-surface-container-lowest p-5 shadow-sm sm:p-6 lg:sticky lg:top-28">
                         <h2 className="text-xs font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">Phản hồi & Báo giá</h2>
 
                         <div className="space-y-4 text-xs">

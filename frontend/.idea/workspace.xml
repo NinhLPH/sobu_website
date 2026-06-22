@@ -4,16 +4,39 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="77d9b6aa-23b1-4102-9b38-833bd3b4e0bf" name="Changes" comment="base url for backend">
+    <list default="true" id="77d9b6aa-23b1-4102-9b38-833bd3b4e0bf" name="Changes" comment="feat(payment): stabilize payment flow and standardize PayOS lifecycle&#10;&#10;- Implement explicit COD/ONLINE selection on checkout with proper payment routing&#10;- Centralize PayOS redirection helper and store unified payment session contexts&#10;- Refactor payment verification to poll `/api/orders/{id}/payments` instead of trusting raw callback codes&#10;- Implement strict session expiration (30-min timeout) and cache-clearing on final states&#10;- Fix environment variables by migrating API base URL configuration to `REACT_APP_API_BASE_URL`&#10;- Enhance error handling and retry mechanics across checkout, tracking, and admin payment components">
+      <change afterPath="$PROJECT_DIR$/src/components/common/BannerCarousel.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/common/BannerMedia.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/layout/BannerPlaceholder.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/layout/LeftBannerSidebar.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/layout/RightBannerSidebar.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/layout/SiteLayout.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/hooks/useResponsiveDeviceType.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/pages/admin/Banners.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/pages/admin/Configs.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/store/usePublicUiStore.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/api/api-client.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/api/api-client.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/App.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/App.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/admin/AdminLayout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/admin/AdminLayout.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/common/Footer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/common/Footer.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/common/Header.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/common/Header.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/interface/public-ui-config.model.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/interface/public-ui-config.model.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/BlogDetail.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/BlogDetail.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/BlogList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/BlogList.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/pages/Cart.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/Cart.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/CreateRequest.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/CreateRequest.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/HomePage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/HomePage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/Membership.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/Membership.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/MyRequests.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/MyRequests.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/pages/OrderTracking.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/OrderTracking.tsx" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/pages/PaymentResult.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/PaymentResult.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/admin/OrderDetails.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/admin/OrderDetails.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/ProductDetails.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/ProductDetails.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/ProductList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/ProductList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/RequestDetail.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/RequestDetail.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/ServicesLandingPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/ServicesLandingPage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/service/admin-ui.service.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/service/admin-ui.service.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/service/public-ui.service.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/service/public-ui.service.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/store/usePaymentStore.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/store/usePaymentStore.test.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/store/usePaymentStore.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/store/usePaymentStore.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/utils/payment-session.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/payment-session.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -35,14 +58,6 @@
     &quot;assignee&quot;: &quot;NinhLPH&quot;
   }
 }</component>
-  <component name="GithubProjectSettings">
-    <option name="branchProtectionPatterns">
-      <list>
-        <option value="main" />
-        <option value="develop" />
-      </list>
-    </option>
-  </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
     &quot;url&quot;: &quot;https://github.com/NinhLPH/sobu_website.git&quot;,
@@ -58,26 +73,26 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "#25 on fe-payment",
-    "javascript.preferred.runtime.type.id": "node",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "npm.start.executor": "Run",
-    "ts.external.directory.path": "C:\\Program Files\\JetBrains\\WebStorm 2026.1\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;#25 on fe-payment&quot;,
+    &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;npm.start.executor&quot;: &quot;Run&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;C:\\Program Files\\JetBrains\\WebStorm 2026.1\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration name="start" type="js.build_tools.npm" nameIsGenerated="true">
       <package-json value="$PROJECT_DIR$/package.json" />
@@ -106,6 +121,7 @@
       <updated>1781531315411</updated>
       <workItem from="1781531319073" duration="224000" />
       <workItem from="1781531550913" duration="1671000" />
+      <workItem from="1782100348752" duration="6929000" />
     </task>
     <task id="LOCAL-00001" summary="refactor(app)">
       <option name="closed" value="true" />
@@ -123,7 +139,15 @@
       <option name="project" value="LOCAL" />
       <updated>1781532765627</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="feat(payment): stabilize payment flow and standardize PayOS lifecycle&#10;&#10;- Implement explicit COD/ONLINE selection on checkout with proper payment routing&#10;- Centralize PayOS redirection helper and store unified payment session contexts&#10;- Refactor payment verification to poll `/api/orders/{id}/payments` instead of trusting raw callback codes&#10;- Implement strict session expiration (30-min timeout) and cache-clearing on final states&#10;- Fix environment variables by migrating API base URL configuration to `REACT_APP_API_BASE_URL`&#10;- Enhance error handling and retry mechanics across checkout, tracking, and admin payment components">
+      <option name="closed" value="true" />
+      <created>1781987621123</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1781987621123</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -143,6 +167,7 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="refactor(app)" />
     <MESSAGE value="base url for backend" />
-    <option name="LAST_COMMIT_MESSAGE" value="base url for backend" />
+    <MESSAGE value="feat(payment): stabilize payment flow and standardize PayOS lifecycle&#10;&#10;- Implement explicit COD/ONLINE selection on checkout with proper payment routing&#10;- Centralize PayOS redirection helper and store unified payment session contexts&#10;- Refactor payment verification to poll `/api/orders/{id}/payments` instead of trusting raw callback codes&#10;- Implement strict session expiration (30-min timeout) and cache-clearing on final states&#10;- Fix environment variables by migrating API base URL configuration to `REACT_APP_API_BASE_URL`&#10;- Enhance error handling and retry mechanics across checkout, tracking, and admin payment components" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat(payment): stabilize payment flow and standardize PayOS lifecycle&#10;&#10;- Implement explicit COD/ONLINE selection on checkout with proper payment routing&#10;- Centralize PayOS redirection helper and store unified payment session contexts&#10;- Refactor payment verification to poll `/api/orders/{id}/payments` instead of trusting raw callback codes&#10;- Implement strict session expiration (30-min timeout) and cache-clearing on final states&#10;- Fix environment variables by migrating API base URL configuration to `REACT_APP_API_BASE_URL`&#10;- Enhance error handling and retry mechanics across checkout, tracking, and admin payment components" />
   </component>
 </project>

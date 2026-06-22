@@ -65,7 +65,7 @@ export default function ProductDetail() {
 
     if (loadingDetail || !product) {
         return (
-            <main className="max-w-screen-2xl mx-auto px-6 pt-32 pb-24 bg-surface flex flex-col items-center justify-center min-h-[50vh]">
+            <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
                 <div className="animate-spin text-primary w-10 h-10 border-4 border-current border-t-transparent rounded-full" />
                 <p className="text-outline text-xs font-bold mt-4">Đang tải chi tiết sản phẩm...</p>
             </main>
@@ -73,7 +73,7 @@ export default function ProductDetail() {
     }
 
     return (
-        <main className="max-w-screen-2xl mx-auto px-6 pt-24 pb-16 bg-surface">
+        <main className="w-full min-w-0 bg-surface px-4 pb-16 pt-24 sm:px-6">
             <nav className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
                 <ChevronRight className="w-3.5 h-3.5"/>
@@ -98,7 +98,7 @@ export default function ProductDetail() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-4 gap-2 sm:gap-4">
                         {Array.from(new Set([product.imageUrl, ...(product.thumbnailUrls || [])])).map((url, index) => (
                             <div
                                 key={index}
@@ -153,7 +153,7 @@ export default function ProductDetail() {
                     <p className="text-on-surface-variant text-sm font-medium leading-relaxed">
                         {product.description}
                     </p>
-                    <div className="flex items-center gap-4 pt-4">
+                    <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:gap-4">
                         <div className="flex items-center bg-surface-container rounded-full px-1.5 py-1.5">
                             <button onClick={decreaseQuantity}
                                     className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm hover:text-primary transition-colors disabled:opacity-50">
@@ -166,11 +166,11 @@ export default function ProductDetail() {
                             </button>
                         </div>
                         <button onClick={handleAddToCart}
-                                className="flex-1 bg-gradient-to-br from-primary to-primary-container text-white h-12 rounded-full font-black text-sm flex items-center justify-center gap-2 shadow-[0_10px_20px_-5px_rgba(75,186,254,0.3)] hover:scale-[1.01] transition-transform">
+                                className="flex h-12 w-full flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-container text-sm font-black text-white shadow-[0_10px_20px_-5px_rgba(75,186,254,0.3)] transition-transform hover:scale-[1.01]">
                             <ShoppingBag className="w-4.5 h-4.5"/> Thêm vào giỏ
                         </button>
                     </div>
-                    <div className="flex items-center gap-6 pt-5 border-t border-outline-variant/20">
+                    <div className="flex flex-col gap-4 border-t border-outline-variant/20 pt-5 sm:flex-row sm:items-center sm:gap-6">
                         <div className="flex items-center gap-2.5 text-on-surface font-bold text-xs">
                             <div
                                 className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">

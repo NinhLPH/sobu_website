@@ -299,7 +299,7 @@ export default function Cart() {
 
     if (items.length === 0 && !isSubmitting && !isCreatingPayment) {
         return (
-            <main className="mx-auto flex min-h-[60vh] w-full max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
+            <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
                 <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-surface-container shadow-inner">
                     <ShoppingBag className="h-10 w-10 text-primary opacity-40" />
                 </div>
@@ -319,7 +319,7 @@ export default function Cart() {
 
     if (items.length === 0 && (isSubmitting || isCreatingPayment)) {
         return (
-            <main className="mx-auto flex min-h-[60vh] w-full max-w-screen-2xl flex-col items-center justify-center bg-surface px-6 py-32">
+            <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
                 <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
                 <p className="text-xs font-bold text-outline">
                     {isCreatingPayment
@@ -331,7 +331,7 @@ export default function Cart() {
     }
 
     return (
-        <main className="mx-auto w-full max-w-screen-2xl bg-surface px-6 pb-16 pt-24">
+        <main className="w-full min-w-0 bg-surface px-4 pb-16 pt-24 sm:px-6">
             <header className="mb-8 flex items-center gap-3">
                 <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface md:text-3xl">
                     Giỏ hàng
@@ -480,8 +480,8 @@ export default function Cart() {
                     </section>
                 </div>
 
-                <aside className="lg:col-span-5">
-                    <div className="rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-5 shadow-sm">
+                <aside className="min-w-0 lg:col-span-5">
+                    <div className="rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-4 shadow-sm sm:p-5 lg:sticky lg:top-28">
                         <h3 className="mb-4 border-b border-surface-container-high pb-3 text-sm font-black uppercase tracking-wider">
                             Đơn hàng của bạn
                         </h3>

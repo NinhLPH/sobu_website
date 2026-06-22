@@ -3,22 +3,22 @@ import {mockBlogs, placeholderImages} from '../data/mockData';
 
 export default function BlogList() {
     return (
-        <main className="pt-24 space-y-24 pb-24 bg-surface">
+        <main className="w-full min-w-0 space-y-16 bg-surface pb-24 pt-24 sm:space-y-24">
             {/* HERO */}
-            <section className="px-6 max-w-screen-2xl mx-auto">
+            <section className="w-full px-4 sm:px-6">
                 <div
                     className="w-full h-[300px] md:h-[400px] bg-surface-container-low rounded-[2rem] overflow-hidden relative">
                     <img src={placeholderImages.hero}
                          className="w-full h-full object-cover opacity-50 mix-blend-multiply" alt="Blog Hero"/>
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter text-on-surface">SOBU
+                        <h1 className="text-4xl font-black uppercase tracking-tighter text-on-surface sm:text-5xl md:text-6xl">SOBU
                             BLOG</h1>
                     </div>
                 </div>
             </section>
 
             {/* MAIN BLOGS */}
-            <section className="px-6 max-w-screen-2xl mx-auto">
+            <section className="w-full px-4 sm:px-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     {mockBlogs.slice(0, 3).map(blog => (
                         <Link to={`/blog/${blog.id}`} key={blog.id} className="group flex flex-col">
@@ -38,7 +38,7 @@ export default function BlogList() {
             </section>
 
             {/* PHOTO GALLERY */}
-            <section className="px-6 max-w-screen-2xl mx-auto text-center">
+            <section className="w-full px-4 text-center sm:px-6">
                 <h2 className="text-4xl font-black uppercase mb-12 text-on-surface">Photo Gallery</h2>
                 <div className="columns-2 md:columns-3 gap-4 space-y-4">
                     {placeholderImages.gallery.map((img, idx) => (
@@ -55,7 +55,7 @@ export default function BlogList() {
             </section>
 
             {/* MORE BLOGS */}
-            <section className="px-6 max-w-screen-2xl mx-auto">
+            <section className="w-full px-4 sm:px-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     {mockBlogs.map(blog => (
                         <Link

@@ -1,18 +1,23 @@
 import {HatGlasses, Mail} from 'lucide-react';
 import {Link} from 'react-router-dom';
+import {getPublicConfigValue, usePublicUiStore} from '../../store/usePublicUiStore';
 
 export default function Footer() {
+    const configs = usePublicUiStore((state) => state.configs);
+    const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
+    const supportHotline = getPublicConfigValue(configs, 'support_hotline', '1234567890');
+
     return (
         <footer
             className="bg-surface-container-high w-full pt-16 pb-6 mt-auto text-on-surface border-t border-surface-container-high/60">
-            <div className="max-w-screen-2xl mx-auto px-8">
+            <div className="mx-auto max-w-[1504px] px-4 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-12 mb-12">
                     <div className="col-span-1 md:col-span-4 pr-0 md:pr-12 flex flex-col justify-start">
                         <Link
                             to="/"
                             className="inline-block text-3xl lg:text-4xl font-black tracking-widest text-on-surface hover:text-primary transition-colors mb-4 w-fit select-none"
                         >
-                            SOBU
+                            {siteName}
                         </Link>
 
                         <p className="text-xs font-semibold text-on-surface-variant mb-6 leading-relaxed max-w-sm">
@@ -74,7 +79,7 @@ export default function Footer() {
                                 Info</h4>
                             <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant mb-5">
                                 <li className="flex flex-col"><span
-                                    className="text-[10px] uppercase font-black text-outline/60">Hotline:</span> 1234567890
+                                    className="text-[10px] uppercase font-black text-outline/60">Hotline:</span> {supportHotline}
                                 </li>
                                 <li className="flex flex-col"><span
                                     className="text-[10px] uppercase font-black text-outline/60">Email:</span> sobu.studio@email.com

@@ -1,10 +1,11 @@
 import apiClient from "../api/api-client";
 import {BannerDTO, WebsiteConfigurationDTO} from "../interface/public-ui-config.model";
+import {BannerPosition, DeviceType} from '../enum/union-types';
 
 
 export const PublicUiService = {
-    getBanners: (deviceType: 'WEB' | 'MOBILE' | 'ALL', position: 'HOME_TOP' | 'HOME_MIDDLE' | 'PRODUCT_SIDEBAR'): Promise<BannerDTO[]> => {
-        return apiClient.get('/api/public/ui/banners', { params: { deviceType, position } });
+    getBanners: (filters?: {deviceType?: DeviceType; position?: BannerPosition}): Promise<BannerDTO[]> => {
+        return apiClient.get('/api/public/ui/banners', {params: filters});
     },
 
     getConfigs: (): Promise<WebsiteConfigurationDTO[]> => {
