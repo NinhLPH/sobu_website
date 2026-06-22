@@ -15,6 +15,7 @@ import AdminCategories from "./pages/admin/Categories";
 import AdminBrands from "./pages/admin/Brands";
 import AdminOrders from "./pages/admin/Orders";
 import AdminRequests from "./pages/admin/Requests";
+import AdminRequestDetail from "./pages/admin/RequestDetails";
 import AdminOrderDetail from "./pages/admin/OrderDetails";
 import BlogList from "./pages/BlogList";
 import BlogDetail from "./pages/BlogDetail";
@@ -84,6 +85,7 @@ export default function App() {
                             <Route path="orders" element={<AdminOrders/>}/>
                             <Route path="orders/:id" element={<AdminOrderDetail/>}/>
                             <Route path="requests" element={<AdminRequests/>}/>
+                            <Route path="requests/:id" element={<AdminRequestDetail/>}/>
                             <Route path="banners" element={<AdminBanners/>}/>
                             {/*<Route path="configs" element={<AdminConfigs/>}/>*/}
                             <Route path="sync" element={<AdminSync/>}/>

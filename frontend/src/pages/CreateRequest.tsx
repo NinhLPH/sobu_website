@@ -240,7 +240,7 @@ export default function CreateRequest() {
                             >
                                 <option value="PREORDER">Đặt trước mô hình</option>
                                 <option value="FINDING">Tìm kiếm hàng hiếm</option>
-                                <option value="CUSTOM">Custom ráp độ / Đắp LED / Sơn phủs</option>
+                                <option value="CUSTOM">Custom ráp độ / Đắp LED / Sơn phủ</option>
                             </select>
                         </div>
                     </div>

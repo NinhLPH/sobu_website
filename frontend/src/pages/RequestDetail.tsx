@@ -7,11 +7,13 @@ import { formatCurrency } from '../utils/format';
 import { RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
 import { RequestItemDto, UpdateRequestDto } from '../interface/customer-request.model';
-import { isRequestOpen } from '../utils/request-workflow';
 import { useProductStore } from '../store/useProductStore';
 import CatalogProductCombobox, {
     CatalogProductSelection
 } from '../components/common/CatalogProductCombobox';
+import RequestWorkflow, { RequestStatusBadge } from '../components/request/RequestWorkflow';
+import { canCustomerEditRequest, REQUEST_STATUS_VIEWS } from '../utils/request-workflow';
+import { getPublicConfigValue, usePublicUiStore } from '../store/usePublicUiStore';
 
 export default function RequestDetail() {
     const { id } = useParams();
@@ -31,6 +33,7 @@ export default function RequestDetail() {
         fetchAllProducts,
         isAllProductsLoading
     } = useProductStore();
+    const publicConfigs = usePublicUiStore((state) => state.configs);
 
     // Local form states (synced from currentRequestDetail)
     const [phone, setPhone] = useState('');
@@ -75,7 +78,11 @@ export default function RequestDetail() {
     }, [currentRequestDetail]);
 
     useEffect(() => {
-        if (currentRequestDetail && currentRequestDetail.type !== 'NORMAL') {
+        if (
+            currentRequestDetail &&
+            currentRequestDetail.type !== 'NORMAL' &&
+            canCustomerEditRequest(currentRequestDetail.status)
+        ) {
             void fetchAllProducts();
         }
     }, [currentRequestDetail, fetchAllProducts]);
@@ -108,33 +115,9 @@ export default function RequestDetail() {
         );
     }
 
-    const isEditable = isRequestOpen(currentRequestDetail.status);
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'PENDING': return 'bg-amber-50 text-amber-700 border-amber-200';
-            case 'REVIEWING': return 'bg-blue-50 text-blue-700 border-blue-200';
-            case 'SOURCING': return 'bg-purple-50 text-purple-700 border-purple-200';
-            case 'WAITING_CUSTOMER': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-            case 'APPROVED': return 'bg-green-50 text-green-700 border-green-200';
-            case 'REJECTED': return 'bg-red-50 text-red-700 border-red-200';
-            case 'CANCELLED': return 'bg-gray-50 text-gray-700 border-gray-200';
-            default: return 'bg-gray-50 text-gray-700 border-gray-200';
-        }
-    };
-
-    const getStatusText = (status: string) => {
-        switch (status) {
-            case 'PENDING': return 'Đang Chờ Duyệt';
-            case 'REVIEWING': return 'Đang Xem Xét';
-            case 'SOURCING': return 'Đang Tìm Nguồn';
-            case 'WAITING_CUSTOMER': return 'Chờ Phản Hồi';
-            case 'APPROVED': return 'Đã Đồng Ý';
-            case 'REJECTED': return 'Từ Chối';
-            case 'CANCELLED': return 'Đã Hủy';
-            default: return status;
-        }
-    };
+    const isEditable = canCustomerEditRequest(currentRequestDetail.status);
+    const statusView = REQUEST_STATUS_VIEWS[currentRequestDetail.status];
+    const supportHotline = getPublicConfigValue(publicConfigs, 'support_hotline', '1234567890');
 
     const getTypeLabel = (type: string) => {
         switch (type) {
@@ -249,14 +232,16 @@ export default function RequestDetail() {
                         <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">
                             Yêu Cầu #{currentRequestDetail.requestCode || currentRequestDetail.id}
                         </h1>
-                        <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${getStatusColor(currentRequestDetail.status)}`}>
-                            {getStatusText(currentRequestDetail.status)}
-                        </span>
+                        <RequestStatusBadge status={currentRequestDetail.status} />
                     </div>
                     <p className="text-xs text-outline font-bold mt-1">
                         Ngày khởi tạo: {new Date(currentRequestDetail.createdAt).toLocaleString('vi-VN')}
                     </p>
                 </div>
+            </div>
+
+            <div className="mb-6 rounded-3xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+                <RequestWorkflow type={currentRequestDetail.type} status={currentRequestDetail.status} />
             </div>
 
             {/* Notifications */}
@@ -294,8 +279,13 @@ export default function RequestDetail() {
                                         )}`}
                                         className="mt-2 inline-flex text-xs font-black uppercase text-primary hover:underline"
                                     >
-                                        Theo dõi đơn hàng
+                                        Theo dõi đơn hàng & thanh toán
                                     </Link>
+                                    {(currentRequestDetail.type === 'CUSTOM' || currentRequestDetail.type === 'FINDING') && (
+                                        <p className="mt-2 text-[11px] font-semibold text-green-800">
+                                            Thanh toán trực tuyến cho loại yêu cầu này hiện phụ thuộc trạng thái đơn hàng do hệ thống trả về. Nếu chưa thấy lựa chọn thanh toán, vui lòng liên hệ SOBU.
+                                        </p>
+                                    )}
                                 </>
                             ) : (
                                 <p className="mt-1 text-xs font-semibold">
@@ -306,12 +296,23 @@ export default function RequestDetail() {
                     </div>
             )}
 
+            {currentRequestDetail.status === 'WAITING_CUSTOMER' && (
+                <div className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 text-indigo-950">
+                    <p className="text-xs font-black uppercase tracking-wide text-indigo-700">Báo giá đang chờ bạn xác nhận</p>
+                    <p className="mt-2 text-sm font-semibold leading-relaxed">
+                        Kiểm tra sản phẩm, ghi chú và tổng chi phí bên dưới. Hệ thống chưa hỗ trợ xác nhận trực tiếp; hãy liên hệ SOBU để Admin ghi nhận và duyệt yêu cầu.
+                    </p>
+                    <a href={`tel:${supportHotline.replace(/\s+/g, '')}`} className="mt-3 inline-flex rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-black uppercase text-white">
+                        Gọi hotline {supportHotline}
+                    </a>
+                </div>
+            )}
+
             {/* Read-only / Status lock notice */}
             {!isEditable && (
                 <div className="mb-6 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-medium leading-relaxed">
-                    <span className="font-black text-indigo-700 uppercase tracking-wide block mb-1">Trạng thái yêu cầu đã được khóa:</span>
-                    Yêu cầu hiện đang ở trạng thái <strong>{getStatusText(currentRequestDetail.status)}</strong> và đang được ban quản lý xử lý.
-                    Bạn không thể chỉnh sửa thông tin yêu cầu lúc này.
+                    <span className="font-black text-indigo-700 uppercase tracking-wide block mb-1">Bước tiếp theo</span>
+                    {statusView.description}
                 </div>
             )}
 
@@ -507,7 +508,7 @@ export default function RequestDetail() {
                             </button>
                         ) : (
                             <div className="p-4 bg-surface-container rounded-2xl text-[10px] text-outline font-bold leading-relaxed text-center uppercase tracking-wider">
-                                Đã chốt và khóa cập nhật
+                                {statusView.label}
                             </div>
                         )}
                     </div>

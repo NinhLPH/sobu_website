@@ -11,28 +11,9 @@ import {
 } from 'lucide-react';
 import { useRequestStore } from '../store/useRequestStore';
 import { formatCurrency } from '../utils/format';
-import { RequestStatus, RequestType } from '../enum/union-types';
+import { RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
-
-const statusStyles: Record<RequestStatus, string> = {
-    PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
-    REVIEWING: 'bg-blue-50 text-blue-700 border-blue-200',
-    SOURCING: 'bg-purple-50 text-purple-700 border-purple-200',
-    WAITING_CUSTOMER: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    APPROVED: 'bg-green-50 text-green-700 border-green-200',
-    REJECTED: 'bg-red-50 text-red-700 border-red-200',
-    CANCELLED: 'bg-gray-50 text-gray-700 border-gray-200'
-};
-
-const statusLabels: Record<RequestStatus, string> = {
-    PENDING: 'Chờ duyệt',
-    REVIEWING: 'Đang xem xét',
-    SOURCING: 'Đang tìm nguồn',
-    WAITING_CUSTOMER: 'Chờ phản hồi',
-    APPROVED: 'Đã duyệt',
-    REJECTED: 'Từ chối',
-    CANCELLED: 'Đã hủy'
-};
+import { RequestStatusBadge } from '../components/request/RequestWorkflow';
 
 const typeLabels: Record<RequestType, string> = {
     NORMAL: 'Thông thường',
@@ -108,9 +89,7 @@ export default function MyRequests() {
                                     <p className="font-black text-primary">#{request.requestCode || request.id}</p>
                                     <p className="mt-1 text-xs font-bold text-on-surface">{typeLabels[request.type]}</p>
                                 </div>
-                                <span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-black uppercase ${statusStyles[request.status]}`}>
-                                    {statusLabels[request.status]}
-                                </span>
+                                <RequestStatusBadge status={request.status} />
                             </div>
                             <p className="mt-4 line-clamp-2 text-xs font-bold text-on-surface">
                                 {request.items?.map((item) => item.name).join(', ') || 'Yêu cầu dịch vụ'}
@@ -190,9 +169,7 @@ export default function MyRequests() {
                                             : 'Chờ báo giá'}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${statusStyles[request.status]}`}>
-                                            {statusLabels[request.status]}
-                                        </span>
+                                        <RequestStatusBadge status={request.status} />
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <Link
