@@ -15,6 +15,10 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
+    private static final String TOKEN_TYPE_CLAIM = "type";
+    private static final String ACCESS_TOKEN_TYPE = "access";
+    private static final String REFRESH_TOKEN_TYPE = "refresh";
+
     @Value("${jwt.secret}")
     private String secretKey;
 
@@ -31,12 +35,14 @@ public class JwtService {
     // ─── Generate ────────────────────────────────────────────────
 
     public String generateAccessToken(UserDetails userDetails) {
-        return buildToken(new HashMap<>(), userDetails, accessTokenExpiration);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE);
+        return buildToken(claims, userDetails, accessTokenExpiration);
     }
 
     public String generateRefreshToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("type", "refresh");
+        claims.put(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE);
         return buildToken(claims, userDetails, refreshTokenExpiration);
     }
 
@@ -55,20 +61,44 @@ public class JwtService {
     // ─── Validate ────────────────────────────────────────────────
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        final String username = extractUsername(token);
-        return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
-    }
-
-    /**
-     * Validate token without UserDetails (used for refresh tokens)
-     */
-    public boolean isTokenValid(String token) {
         try {
-            extractAllClaims(token);
-            return !isTokenExpired(token);
+            final String username = extractUsername(token);
+            return ACCESS_TOKEN_TYPE.equals(extractTokenType(token))
+                    && username.equals(userDetails.getUsername())
+                    && !isTokenExpired(token);
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public boolean isAccessTokenValid(String token, UserDetails userDetails) {
+        return isTokenValid(token, userDetails);
+    }
+
+    public boolean isRefreshTokenValid(String token) {
+        try {
+            return REFRESH_TOKEN_TYPE.equals(extractTokenType(token)) && !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean isTokenValid(String token) {
+        try {
+            extractAllClaims(token);
+            final String username = extractUsername(token);
+            return username != null && !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public String extractTokenType(String token) {
+        return extractClaim(token, claims -> claims.get(TOKEN_TYPE_CLAIM, String.class));
+    }
+
+    public long getAccessTokenExpiresInSeconds() {
+        return accessTokenExpiration / 1000L;
     }
 
     public boolean isTokenExpired(String token) {

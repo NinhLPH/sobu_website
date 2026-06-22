@@ -1,21 +1,31 @@
 package com.vn.sodu.nhanh.service;
 
+import com.vn.sodu.global.exception.ExternalServiceException;
+import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhProperties;
+import com.vn.sodu.nhanh.NhanhTokenResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 public class NhanhServiceAuthTest {
+
+    private static final long FUTURE_EXPIRY = 4_102_444_800L;
+    private static final long PAST_EXPIRY = 946_684_800L;
 
     @Mock
     private NhanhIntegrationRepo nhanhIntegrationRepo;
@@ -26,11 +36,18 @@ public class NhanhServiceAuthTest {
     @Mock
     private NhanhProperties nhanhProperties;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private NhanhService nhanhService;
 
     @BeforeEach
     public void setUp() {
-        nhanhService = new NhanhService(nhanhClient, nhanhIntegrationRepo, nhanhProperties);
+        nhanhService = new NhanhService(
+                nhanhClient,
+                nhanhIntegrationRepo,
+                nhanhProperties,
+                eventPublisher);
     }
 
     @Test
@@ -41,6 +58,7 @@ public class NhanhServiceAuthTest {
         integration.setBusinessId(123L);
         integration.setAccessToken("real_access_token_12345");
         integration.setAppId("app1");
+        integration.setExpiredAt(FUTURE_EXPIRY);
 
         when(nhanhProperties.getBusinessId()).thenReturn("123");
         when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.of(integration));
@@ -61,9 +79,9 @@ public class NhanhServiceAuthTest {
         when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(RuntimeException.class, () -> {
+        assertThrows(ExternalServiceException.class, () -> {
             nhanhService.getValidAccessToken();
-        }, "Should throw RuntimeException when no integration found");
+        }, "Should throw ExternalServiceException when no integration found");
     }
 
     @Test
@@ -73,11 +91,13 @@ public class NhanhServiceAuthTest {
         integration1.setId(1L);
         integration1.setAccessToken("token_1");
         integration1.setBusinessId(123L);
+        integration1.setExpiredAt(FUTURE_EXPIRY);
 
         NhanhIntegration integration2 = new NhanhIntegration();
         integration2.setId(2L);
         integration2.setAccessToken("token_2");
         integration2.setBusinessId(456L);
+        integration2.setExpiredAt(FUTURE_EXPIRY);
 
         when(nhanhProperties.getBusinessId()).thenReturn("123");
         when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.of(integration1));
@@ -90,6 +110,62 @@ public class NhanhServiceAuthTest {
     }
 
     @Test
+    public void testGetValidAccessToken_MissingExpiryThrowsException() {
+        NhanhIntegration integration = new NhanhIntegration();
+        integration.setId(1L);
+        integration.setBusinessId(123L);
+        integration.setAccessToken("token");
+        integration.setAppId("app1");
+
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.of(integration));
+
+        ExternalServiceException ex = assertThrows(ExternalServiceException.class, () -> {
+            nhanhService.getValidAccessToken();
+        });
+
+        assertEquals("Nhanh integration token expiry is missing. Please authenticate again.", ex.getMessage());
+    }
+
+    @Test
+    public void testGetValidAccessToken_ExpiredTokenThrowsException() {
+        NhanhIntegration integration = new NhanhIntegration();
+        integration.setId(1L);
+        integration.setBusinessId(123L);
+        integration.setAccessToken("token");
+        integration.setAppId("app1");
+        integration.setExpiredAt(PAST_EXPIRY);
+
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.of(integration));
+
+        ExternalServiceException ex = assertThrows(ExternalServiceException.class, () -> {
+            nhanhService.getValidAccessToken();
+        });
+
+        assertEquals("Nhanh integration token has expired. Please authenticate again.", ex.getMessage());
+    }
+
+    @Test
+    public void testGetValidAccessToken_NearlyExpiredTokenThrowsException() {
+        NhanhIntegration integration = new NhanhIntegration();
+        integration.setId(1L);
+        integration.setBusinessId(123L);
+        integration.setAccessToken("token");
+        integration.setAppId("app1");
+        integration.setExpiredAt((System.currentTimeMillis() / 1000) + 30);
+
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.of(integration));
+
+        ExternalServiceException ex = assertThrows(ExternalServiceException.class, () -> {
+            nhanhService.getValidAccessToken();
+        });
+
+        assertEquals("Nhanh integration token has expired. Please authenticate again.", ex.getMessage());
+    }
+
+    @Test
     public void testBearerHeaderFormat() {
         // Verify header format is correct
         String token = "test_token_123";
@@ -97,5 +173,35 @@ public class NhanhServiceAuthTest {
         
         assertTrue(authHeader.startsWith("Bearer "), "Header should start with 'Bearer '");
         assertEquals("Bearer test_token_123", authHeader, "Header format should be 'Bearer <token>'");
+    }
+
+    @Test
+    public void handleCallbackExpiredAccessCodeThrowsBadRequestAndDoesNotPersist() {
+        when(nhanhClient.getAccessToken("expired-code"))
+                .thenThrow(new ExternalServiceException("Invalid accessCode or accessCode has expired"));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                nhanhService.handleCallback("expired-code"));
+
+        assertEquals(
+                "Nhanh access code is invalid or expired. Please start the Nhanh login flow again.",
+                ex.getMessage());
+        verify(nhanhIntegrationRepo, never()).save(any(NhanhIntegration.class));
+    }
+
+    @Test
+    public void handleCallbackValidTokenPersistsIntegration() {
+        NhanhTokenResponse response = new NhanhTokenResponse();
+        response.setAccessToken("access-token");
+        response.setBusinessId(123L);
+        response.setExpiredAt(FUTURE_EXPIRY);
+
+        when(nhanhClient.getAccessToken("valid-code")).thenReturn(response);
+        when(nhanhProperties.getClientId()).thenReturn("app1");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.empty());
+
+        nhanhService.handleCallback("valid-code");
+
+        verify(nhanhIntegrationRepo).save(any(NhanhIntegration.class));
     }
 }

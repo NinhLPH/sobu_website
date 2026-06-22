@@ -8,6 +8,10 @@
 /.gitnexus
 /.claude
 *.json
+!docs/
+!docs/postman/
+!docs/postman/*.md
+!docs/postman/*.json
 backend/Introduction.md
 # Added by code-review-graph
 .code-review-graph/
@@ -22,3 +26,8 @@ AGENTS.md
 .opencode.json
 .claude/settings.json
 .codex
+backend/src/main/resources/application-dev.properties
+/docs
+.github/copilot-instructions.md
+.github/copilot-instructions.md
+/uploads

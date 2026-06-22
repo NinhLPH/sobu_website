@@ -43,7 +43,7 @@ public class ProductSyncService {
 
     private static final String PRODUCT_LIST_PATH = "/v3.0/product/list";
 
-    @Scheduled(cron = "${nhanh.sync.cron:0 0 * * * *}")
+    @Scheduled(cron = "${nhanh.sync.cron:0 0 */12 * * *}")
     public synchronized void syncProducts() {
         // Phase 5: Get last sync time for incremental sync
         com.vn.sodu.nhanh.NhanhIntegration integration = nhanhService.getIntegration().orElse(null);

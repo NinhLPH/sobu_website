@@ -1,5 +1,8 @@
 package com.vn.sodu.nhanh.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhTokenResponse;
 import com.vn.sodu.global.exception.ExternalServiceException;
@@ -10,8 +13,11 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +31,7 @@ public class NhanhClient {
 
     private final RestTemplate restTemplate;
     private final NhanhProperties nhanhProperties;
+    private final ObjectMapper objectMapper;
 
     private static final String ACCESS_TOKEN_URL =
             "https://pos.open.nhanh.vn/v3.0/app/getaccesstoken?appId=%s";
@@ -43,43 +50,46 @@ public class NhanhClient {
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
-        Map<String, Object> resp = response.getBody();
-
-        if (resp == null) {
+        ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+        String rawBody = response.getBody();
+        if (rawBody == null || rawBody.isBlank()) {
             throw new ExternalServiceException("Nhanh response is null");
         }
 
-        // Removed raw logging to prevent leak
-        
-        Object code = resp.get("code");
-        if (code == null || Integer.parseInt(code.toString()) != 1) {
-            throw new ExternalServiceException("Nhanh API returned a non-success response");
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            if (!isSuccessCode(root.path("code"))) {
+                throw new ExternalServiceException(responseMessage(root));
+            }
+
+            JsonNode data = root.path("data");
+            if (data.isMissingNode() || data.isNull()) {
+                data = root;
+            }
+
+            String accessToken = textValue(data.get("accessToken"));
+            if (accessToken == null || accessToken.isBlank()) {
+                throw new ExternalServiceException("Nhanh token response is missing accessToken");
+            }
+
+            NhanhTokenResponse result = new NhanhTokenResponse();
+            result.setAccessToken(accessToken);
+
+            Long businessId = longValue(data.get("businessId"));
+            if (businessId != null) {
+                result.setBusinessId(businessId);
+            }
+
+            Long expiredAt = longValue(data.get("expiredAt"));
+            if (expiredAt != null) {
+                result.setExpiredAt(expiredAt);
+            }
+
+            return result;
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to parse Nhanh token response", ex);
+            throw new ExternalServiceException("Nhanh token response could not be parsed", ex);
         }
-
-        Map<String, Object> data;
-        if (resp.containsKey("data") && resp.get("data") instanceof Map) {
-            data = (Map<String, Object>) resp.get("data");
-        } else {
-            data = resp;
-        }
-
-        if (data.get("accessToken") == null) {
-            throw new ExternalServiceException("Nhanh token response is missing accessToken");
-        }
-
-        NhanhTokenResponse result = new NhanhTokenResponse();
-        result.setAccessToken((String) data.get("accessToken"));
-
-        if (data.get("businessId") != null) {
-            result.setBusinessId(Long.valueOf(data.get("businessId").toString()));
-        }
-
-        if (data.get("expiredAt") != null) {
-            result.setExpiredAt(Long.valueOf(data.get("expiredAt").toString()));
-        }
-
-        return result;
     }
 
     public <T> List<T> fetchAllPages(
@@ -132,7 +142,7 @@ public class NhanhClient {
 
             NhanhResponse<List<T>> resp;
             try {
-                resp = withRetry(call, 3, 500);
+                resp = withRetry(call, 3, 43000 );
             } catch (Exception ex) {
                 log.error("Failed to fetch data from Nhanh {} at request={}", apiPath, requestCount, ex);
                 throw new ExternalServiceException("Nhanh API fetch failed", ex);
@@ -182,35 +192,227 @@ public class NhanhClient {
             String accessToken,
             REQ body,
             ParameterizedTypeReference<RESP> responseType) {
+        return postWithAuthorization(apiPath, accessToken, body, responseType);
+    }
 
-        String url = UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
-                .replacePath(apiPath)
-                .queryParam("appId", nhanhProperties.getClientId())
-                .queryParam("businessId", nhanhProperties.getBusinessId())
-                .toUriString();
-
+    public <REQ, RESP> RESP postOnce(
+            String apiPath,
+            String accessToken,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
+        String url = buildApiUrl(apiPath);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", accessToken);
 
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    String.class);
+            return deserializeOnce(response.getBody(), responseType, apiPath, response.getStatusCode().value());
+        } catch (RestClientResponseException ex) {
+            throw apiException(ex.getResponseBodyAsString(), ex.getStatusCode().value(), ex);
+        } catch (RestClientException ex) {
+            throw new NhanhApiException(
+                    "Nhanh API transport failure",
+                    null,
+                    null,
+                    null,
+                    true,
+                    ex);
+        }
+    }
+
+    public <REQ, RESP> RESP postWithBearerAuthorization(
+            String apiPath,
+            String accessToken,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
+        return postWithAuthorization(apiPath, bearer(accessToken), body, responseType);
+    }
+
+    private <REQ, RESP> RESP postWithAuthorization(
+            String apiPath,
+            String authorizationHeader,
+            REQ body,
+            ParameterizedTypeReference<RESP> responseType) {
+
+        String url = buildApiUrl(apiPath);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", authorizationHeader);
+
         HttpEntity<REQ> request = new HttpEntity<>(body, headers);
 
         Supplier<RESP> call = () -> {
-            ResponseEntity<RESP> response =
+            ResponseEntity<String> response =
                     restTemplate.exchange(
                             url,
                             HttpMethod.POST,
                             request,
-                            responseType
+                            String.class
                     );
-            return response.getBody();
+            String rawBody = response.getBody();
+            logOrderAddRawResponse(apiPath, rawBody);
+            if (rawBody == null || rawBody.isBlank()) {
+                return null;
+            }
+            return deserialize(rawBody, responseType, apiPath);
         };
 
         try {
             return withRetry(call, 3, 500);
+        } catch (ExternalServiceException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error("Failed to post data to Nhanh {}", apiPath, ex);
             throw new ExternalServiceException("Nhanh API post failed", ex);
+        }
+    }
+
+    private String bearer(String accessToken) {
+        if (accessToken != null && accessToken.startsWith("Bearer ")) {
+            return accessToken;
+        }
+        return "Bearer " + accessToken;
+    }
+
+    private void logOrderAddRawResponse(String apiPath, String rawBody) {
+        if (!"/v3.0/order/add".equals(apiPath)) {
+            return;
+        }
+        if (rawBody == null || rawBody.isBlank()) {
+            log.warn("Nhanh order add raw response body is empty");
+            return;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            JsonNode firstData = root.path("data").isArray() && root.path("data").size() > 0
+                    ? root.path("data").get(0)
+                    : null;
+            String rawDataOrderId = textValue(firstData == null ? null : firstData.get("orderId"));
+            String rawDataId = textValue(firstData == null ? null : firstData.get("id"));
+
+            if (rawDataOrderId == null) {
+                log.warn(
+                        "Nhanh order add raw response before parse missing data[0].orderId: dataId={}, body={}",
+                        rawDataId,
+                        rawBody
+                );
+                return;
+            }
+
+            log.info(
+                    "Nhanh order add raw response before parse: dataOrderId={}, dataId={}, body={}",
+                    rawDataOrderId,
+                    rawDataId,
+                    rawBody
+            );
+        } catch (JsonProcessingException ex) {
+            log.warn("Nhanh order add raw response could not be inspected before parse: body={}", rawBody, ex);
+        }
+    }
+
+    private <RESP> RESP deserialize(
+            String rawBody,
+            ParameterizedTypeReference<RESP> responseType,
+            String apiPath) {
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+
+            if (!isSuccessCode(root.path("code"))) {
+                String errorCode = textValue(root.get("errorCode"));
+                String message = responseMessage(root);
+                if ("ERR_429".equals(errorCode)) {
+                    throw rateLimitException(root, message);
+                }
+                if (errorCode == null || errorCode.isBlank()) {
+                    throw new ExternalServiceException(message);
+                }
+                throw new ExternalServiceException(
+                        String.format("Nhanh API error [%s]: %s", errorCode, message)
+                );
+            }
+            return objectMapper.readValue(
+                    rawBody,
+                    objectMapper.getTypeFactory()
+                            .constructType(responseType.getType())
+            );
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to deserialize Nhanh response for {}: body={}", apiPath, rawBody, ex);
+            throw new ExternalServiceException("Nhanh API response could not be parsed", ex);
+        }
+    }
+
+    private NhanhRateLimitException rateLimitException(JsonNode root, String message) {
+        JsonNode data = root.path("data");
+        Long lockedSeconds = longValue(data.get("lockedSeconds"));
+        Long unlockedAtEpochSeconds = longValue(data.get("unlockedAt"));
+        Instant unlockedAt = unlockedAtEpochSeconds == null ? null : Instant.ofEpochSecond(unlockedAtEpochSeconds);
+        return new NhanhRateLimitException(message, lockedSeconds, unlockedAt);
+    }
+
+    private boolean isSuccessCode(JsonNode code) {
+        if (code == null || code.isMissingNode() || code.isNull()) {
+            return false;
+        }
+        if (code.isBoolean()) {
+            return code.booleanValue();
+        }
+        if (code.isNumber()) {
+            return code.asInt() == 1;
+        }
+        String text = code.asText();
+        return "1".equals(text) || "true".equalsIgnoreCase(text);
+    }
+
+    private String responseMessage(JsonNode root) {
+        JsonNode messages = root.get("messages");
+        if (messages != null && messages.isArray()) {
+            List<String> values = new ArrayList<>();
+            messages.forEach(message -> {
+                String value = textValue(message);
+                if (value != null && !value.isBlank()) {
+                    values.add(value);
+                }
+            });
+            if (!values.isEmpty()) {
+                return String.join("; ", values);
+            }
+        }
+
+        String message = textValue(messages);
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+
+        message = textValue(root.get("message"));
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+
+        return "Nhanh API returned a non-success response";
+    }
+
+    private String textValue(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        return node.isTextual() ? node.textValue() : node.asText();
+    }
+
+    private Long longValue(JsonNode node) {
+        String value = textValue(node);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException ex) {
+            throw new ExternalServiceException("Nhanh token response contains an invalid numeric value", ex);
         }
     }
 
@@ -221,6 +423,8 @@ public class NhanhClient {
             try {
                 attempt++;
                 return supplier.get();
+            } catch (ExternalServiceException ex) {
+                throw ex;
             } catch (Exception ex) {
                 if (attempt >= maxAttempts) {
                     log.error("Operation failed after {} attempts", attempt, ex);

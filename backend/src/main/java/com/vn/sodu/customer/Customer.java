@@ -29,6 +29,9 @@ public class Customer {
     private String district;
     private String ward;
     private String street;
+    private Long provinceId;
+    private Long districtId;
+    private Long wardId;
 
     // Loyalty summary
     private Double totalMoney = 0.0;

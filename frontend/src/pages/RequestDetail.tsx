@@ -1,0 +1,520 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ChevronRight, ArrowLeft, Loader2, Save, Trash2, Plus, CheckCircle2, AlertCircle, PackageCheck } from 'lucide-react';
+import ImageUploader from '../components/common/ImageUploader';
+import { useRequestStore } from '../store/useRequestStore';
+import { formatCurrency } from '../utils/format';
+import { RequestType } from '../enum/union-types';
+import { ToastService } from '../service/toast.service';
+import { RequestItemDto, UpdateRequestDto } from '../interface/customer-request.model';
+import { useProductStore } from '../store/useProductStore';
+import CatalogProductCombobox, {
+    CatalogProductSelection
+} from '../components/common/CatalogProductCombobox';
+import RequestWorkflow, { RequestStatusBadge } from '../components/request/RequestWorkflow';
+import { canCustomerEditRequest, REQUEST_STATUS_VIEWS } from '../utils/request-workflow';
+import { getPublicConfigValue, usePublicUiStore } from '../store/usePublicUiStore';
+
+export default function RequestDetail() {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const {
+        currentRequestDetail,
+        getRequestDetail,
+        updateRequestAction,
+        isLoading,
+        isSubmitting,
+        error,
+        clearError,
+        clearCurrentDetail
+    } = useRequestStore();
+    const {
+        allProducts,
+        fetchAllProducts,
+        isAllProductsLoading
+    } = useProductStore();
+    const publicConfigs = usePublicUiStore((state) => state.configs);
+
+    // Local form states (synced from currentRequestDetail)
+    const [phone, setPhone] = useState('');
+    const [type, setType] = useState<RequestType>('NORMAL');
+    const [requirements, setRequirements] = useState('');
+    const [items, setItems] = useState<RequestItemDto[]>([]);
+    const [attachments, setAttachments] = useState<string[]>([]);
+
+    // UI Helpers
+    const [uploadingFiles, setUploadingFiles] = useState(false);
+    const [localError, setLocalError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (id) {
+            getRequestDetail(id, 'user');
+        }
+        return () => {
+            clearCurrentDetail();
+        };
+    }, [id, getRequestDetail, clearCurrentDetail]);
+
+    // Populate local states when API detail resolves
+    useEffect(() => {
+        if (currentRequestDetail) {
+            setPhone(currentRequestDetail.customerPhone || '');
+            setType(currentRequestDetail.type || 'NORMAL');
+            setRequirements(currentRequestDetail.customRequirements || '');
+            setItems(currentRequestDetail.items?.map(item => ({
+                nhanhProductId: item.nhanhProductId,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                note: item.note || '',
+                metadataJson: item.metadataJson
+            })) || []);
+            setAttachments(currentRequestDetail.attachments?.map(att => att.url) || []);
+
+            setSuccessMessage(null);
+            setLocalError(null);
+        }
+    }, [currentRequestDetail]);
+
+    useEffect(() => {
+        if (
+            currentRequestDetail &&
+            currentRequestDetail.type !== 'NORMAL' &&
+            canCustomerEditRequest(currentRequestDetail.status)
+        ) {
+            void fetchAllProducts();
+        }
+    }, [currentRequestDetail, fetchAllProducts]);
+
+    useEffect(() => {
+        if (error) {
+            ToastService.error(error);
+        }
+    }, [error]);
+
+    if (isLoading) {
+        return (
+            <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                <p className="text-outline text-xs font-bold mt-4">Đang tải chi tiết yêu cầu...</p>
+            </main>
+        );
+    }
+
+    if (!currentRequestDetail) {
+        return (
+            <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 text-center sm:px-6 sm:pt-32">
+                <AlertCircle className="w-12 h-12 text-error mb-4" />
+                <h1 className="text-xl font-black text-on-surface uppercase">Không tìm thấy yêu cầu</h1>
+                <p className="text-outline text-sm mt-2 mb-6">Yêu cầu này không tồn tại hoặc bạn không có quyền xem.</p>
+                <Link to="/requests" className="px-6 py-2.5 bg-primary text-white rounded-full font-bold text-xs uppercase shadow-sm">
+                    Quay lại danh sách
+                </Link>
+            </main>
+        );
+    }
+
+    const isEditable = canCustomerEditRequest(currentRequestDetail.status);
+    const statusView = REQUEST_STATUS_VIEWS[currentRequestDetail.status];
+    const supportHotline = getPublicConfigValue(publicConfigs, 'support_hotline', '1234567890');
+
+    const getTypeLabel = (type: string) => {
+        switch (type) {
+            case 'NORMAL': return 'Thông thường';
+            case 'PREORDER': return 'Pre-order';
+            case 'FINDING': return 'Tìm hàng';
+            case 'CUSTOM': return 'Độ chế / ráp custom';
+            default: return type;
+        }
+    };
+
+    const handleAddItem = () => {
+        if (!isEditable) return;
+        setItems(prev => [...prev, { name: '', quantity: 1, note: '' }]);
+    };
+
+    const handleProductSelection = (
+        index: number,
+        selection: CatalogProductSelection
+    ) => {
+        if (!isEditable) return;
+        setItems(prev => prev.map((item, itemIndex) => (
+            itemIndex === index
+                ? {
+                    ...item,
+                    ...selection
+                }
+                : item
+        )));
+    };
+
+    const handleRemoveItem = (index: number) => {
+        if (!isEditable || items.length === 1) return;
+        setItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleItemChange = (index: number, field: string, value: any) => {
+        if (!isEditable) return;
+        setItems(prev => prev.map((item, i) => {
+            if (i === index) {
+                return { ...item, [field]: value };
+            }
+            return item;
+        }));
+    };
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!isEditable || !id) return;
+
+        clearError();
+        setLocalError(null);
+        setSuccessMessage(null);
+
+        const validItems = items.filter(item => item.name.trim());
+        if (validItems.length === 0) {
+            setLocalError('Danh sách sản phẩm cần ít nhất 1 mặt hàng có tên!');
+            return;
+        }
+        if (
+            (currentRequestDetail.type === 'CUSTOM' || currentRequestDetail.type === 'FINDING') &&
+            !requirements.trim()
+        ) {
+            setLocalError('Vui lòng nhập yêu cầu chi tiết cho loại yêu cầu này.');
+            return;
+        }
+
+        const payload: UpdateRequestDto = {
+            customRequirements: requirements.trim(),
+            items: validItems.map(item => ({
+                nhanhProductId: item.nhanhProductId,
+                name: item.name.trim(),
+                quantity: item.quantity,
+                note: item.note?.trim() || undefined,
+                metadataJson: item.metadataJson
+            })),
+            uploadedImageUrls: attachments
+        };
+
+        try {
+            await updateRequestAction(id, payload, 'user');
+            setSuccessMessage('Lưu thông tin thay đổi yêu cầu thành công!');
+            ToastService.success('Cập nhật yêu cầu thành công.');
+        } catch (err) {
+            // Error handled by store
+        }
+    };
+
+    return (
+        <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
+            {/* Breadcrumb */}
+            <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
+                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <Link to="/requests" className="hover:text-primary transition-colors">Yêu cầu</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <span className="text-primary">Chi tiết yêu cầu</span>
+            </nav>
+
+            {/* Title Bar */}
+            <div className="mb-8 flex items-start gap-3 sm:items-center sm:gap-4">
+                <button
+                    type="button"
+                    onClick={() => navigate('/requests')}
+                    className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer"
+                    title="Quay lại"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">
+                            Yêu Cầu #{currentRequestDetail.requestCode || currentRequestDetail.id}
+                        </h1>
+                        <RequestStatusBadge status={currentRequestDetail.status} />
+                    </div>
+                    <p className="text-xs text-outline font-bold mt-1">
+                        Ngày khởi tạo: {new Date(currentRequestDetail.createdAt).toLocaleString('vi-VN')}
+                    </p>
+                </div>
+            </div>
+
+            <div className="mb-6 rounded-3xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+                <RequestWorkflow type={currentRequestDetail.type} status={currentRequestDetail.status} />
+            </div>
+
+            {/* Notifications */}
+            {successMessage && (
+                <div className="mb-6 p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800 text-xs font-bold flex gap-3 items-center">
+                    <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                    <span>{successMessage}</span>
+                </div>
+            )}
+
+            {(error || localError) && (
+                <div className="mb-6 p-4 rounded-2xl bg-error/10 border border-error/20 text-error text-xs font-bold flex gap-3 items-start">
+                    <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />
+                    <span>{localError || error}</span>
+                </div>
+            )}
+
+            {currentRequestDetail.status === 'APPROVED' && (
+                    <div className="mb-6 flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-green-900">
+                        <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-wide text-green-700">
+                                Yêu cầu đã được duyệt thành đơn hàng
+                            </p>
+                            {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId ? (
+                                <>
+                                    <p className="mt-1 text-sm font-bold">
+                                        Mã đơn: {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
+                                    </p>
+                                    <Link
+                                        to={`/tracking?nhanhOrderId=${encodeURIComponent(
+                                            currentRequestDetail.nhanhOrderCode ||
+                                            currentRequestDetail.nhanhOrderId ||
+                                            ''
+                                        )}`}
+                                        className="mt-2 inline-flex text-xs font-black uppercase text-primary hover:underline"
+                                    >
+                                        Theo dõi đơn hàng & thanh toán
+                                    </Link>
+                                    {(currentRequestDetail.type === 'CUSTOM' || currentRequestDetail.type === 'FINDING') && (
+                                        <p className="mt-2 text-[11px] font-semibold text-green-800">
+                                            Thanh toán trực tuyến cho loại yêu cầu này hiện phụ thuộc trạng thái đơn hàng do hệ thống trả về. Nếu chưa thấy lựa chọn thanh toán, vui lòng liên hệ SOBU.
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="mt-1 text-xs font-semibold">
+                                    Đơn hàng đã được tạo nhưng chưa có mã tra cứu. Vui lòng quay lại sau.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+            )}
+
+            {currentRequestDetail.status === 'WAITING_CUSTOMER' && (
+                <div className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 text-indigo-950">
+                    <p className="text-xs font-black uppercase tracking-wide text-indigo-700">Báo giá đang chờ bạn xác nhận</p>
+                    <p className="mt-2 text-sm font-semibold leading-relaxed">
+                        Kiểm tra sản phẩm, ghi chú và tổng chi phí bên dưới. Hệ thống chưa hỗ trợ xác nhận trực tiếp; hãy liên hệ SOBU để Admin ghi nhận và duyệt yêu cầu.
+                    </p>
+                    <a href={`tel:${supportHotline.replace(/\s+/g, '')}`} className="mt-3 inline-flex rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-black uppercase text-white">
+                        Gọi hotline {supportHotline}
+                    </a>
+                </div>
+            )}
+
+            {/* Read-only / Status lock notice */}
+            {!isEditable && (
+                <div className="mb-6 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-medium leading-relaxed">
+                    <span className="font-black text-indigo-700 uppercase tracking-wide block mb-1">Bước tiếp theo</span>
+                    {statusView.description}
+                </div>
+            )}
+
+            <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                {/* Left side: Main Form details */}
+                <div className="lg:col-span-8 space-y-6">
+
+                    {/* Basic info section */}
+                    <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 space-y-4">
+                        <h2 className="text-xs font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">1. Thông tin liên hệ & Loại yêu cầu</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">Số điện thoại liên hệ</label>
+                                <input
+                                    type="tel"
+                                    value={phone}
+                                    readOnly
+                                    disabled
+                                    className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">Phân loại yêu cầu</label>
+                                <input
+                                    value={getTypeLabel(type)}
+                                    readOnly
+                                    disabled
+                                    className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold outline-none border border-transparent text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Items List */}
+                    <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 space-y-4">
+                        <div className="flex justify-between items-center border-b border-surface-container/80 pb-3">
+                            <h2 className="text-xs font-black text-on-surface uppercase tracking-wider">2. Danh sách sản phẩm mong muốn</h2>
+                            {isEditable && (
+                                <button
+                                    type="button"
+                                    onClick={handleAddItem}
+                                    disabled={isSubmitting}
+                                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-full text-xs font-black uppercase tracking-wider transition-colors"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Thêm dòng
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="space-y-3">
+                            {items.map((item, index) => (
+                                <div key={index} className="p-4 bg-surface-container rounded-2xl flex flex-col md:flex-row gap-4 items-start md:items-center relative">
+                                    <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-12 gap-3">
+                                        <div className="md:col-span-6">
+                                            <label className="block text-[9px] font-black text-outline uppercase tracking-wider mb-1">Tên mô hình / Sản phẩm</label>
+                                            {currentRequestDetail.type !== 'NORMAL' && isEditable ? (
+                                                <CatalogProductCombobox
+                                                    products={allProducts}
+                                                    value={item}
+                                                    onChange={(selection) => handleProductSelection(index, selection)}
+                                                    disabled={isSubmitting}
+                                                    isLoading={isAllProductsLoading}
+                                                    ariaLabel={`Sản phẩm yêu cầu ${index + 1}`}
+                                                />
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={item.name}
+                                                    onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                                                    disabled={!isEditable || isSubmitting}
+                                                    className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
+                                                    required
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-[9px] font-black text-outline uppercase tracking-wider mb-1">Số lượng</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={item.quantity}
+                                                onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
+                                                disabled={!isEditable || isSubmitting}
+                                                className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="md:col-span-4">
+                                            <label className="block text-[9px] font-black text-outline uppercase tracking-wider mb-1">Ghi chú</label>
+                                            <input
+                                                type="text"
+                                                value={item.note}
+                                                onChange={(e) => handleItemChange(index, 'note', e.target.value)}
+                                                disabled={!isEditable || isSubmitting}
+                                                className="w-full bg-surface-container-lowest rounded-xl px-3 py-2 text-xs font-semibold focus:ring-1 focus:ring-primary outline-none border border-transparent transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
+                                    {isEditable && items.length > 1 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveItem(index)}
+                                            disabled={isSubmitting}
+                                            className="text-outline/60 hover:text-error transition-colors p-2 shrink-0 md:mt-4 self-end md:self-center"
+                                            title="Xóa dòng này"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Requirements and images */}
+                    <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 space-y-4">
+                        <h2 className="text-xs font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">3. Yêu cầu chi tiết & Đính kèm hình ảnh</h2>
+                        <div>
+                            <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">Yêu cầu chi tiết cho Workshop</label>
+                            <textarea
+                                value={requirements}
+                                onChange={(e) => setRequirements(e.target.value)}
+                                disabled={!isEditable || isSubmitting}
+                                className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface disabled:opacity-75 disabled:cursor-not-allowed min-h-[120px]"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">Hình ảnh đính kèm minh họa</label>
+                            <ImageUploader
+                                uploadedUrls={attachments}
+                                onChange={(urls) => {
+                                    setAttachments(urls);
+                                    setLocalError(null);
+                                    setSuccessMessage(null);
+                                }}
+                                disabled={!isEditable || isSubmitting}
+                                subDirectory="requests"
+                                onUploadingChange={setUploadingFiles}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right side: Summary & Quotation details */}
+                <div className="lg:col-span-4 space-y-6">
+                    <div className="space-y-5 rounded-[2rem] border border-surface-container/60 bg-surface-container-lowest p-5 shadow-sm sm:p-6 lg:sticky lg:top-28">
+                        <h2 className="text-xs font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">Phản hồi & Báo giá</h2>
+
+                        <div className="space-y-4 text-xs">
+                            <div className="flex justify-between py-2 border-b border-surface-container-low font-bold">
+                                <span className="text-outline">Tổng chi phí dự kiến:</span>
+                                <span className="text-primary font-black text-base">
+                                    {currentRequestDetail.totalAmount > 0 ? formatCurrency(currentRequestDetail.totalAmount) : 'Chờ báo giá'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between py-2 border-b border-surface-container-low font-bold">
+                                <span className="text-outline">Cọc tối thiểu (Deposit):</span>
+                                <span className="text-on-surface font-black text-sm">
+                                    {currentRequestDetail.depositAmount > 0 ? formatCurrency(currentRequestDetail.depositAmount) : 'Chờ tính cọc'}
+                                </span>
+                            </div>
+
+                            <div className="flex justify-between py-2 border-b border-surface-container-low font-bold">
+                                <span className="text-outline">Loại yêu cầu gốc:</span>
+                                <span className="text-on-surface font-black uppercase">{getTypeLabel(currentRequestDetail.type)}</span>
+                            </div>
+                            {(currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId) && (
+                                <div className="flex justify-between py-2 border-b border-surface-container-low font-bold">
+                                    <span className="text-outline">Mã Đơn hàng Nhanh:</span>
+                                    <span className="text-primary font-black">
+                                        {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Save Action button */}
+                        {isEditable ? (
+                            <button
+                                type="submit"
+                                disabled={isSubmitting || uploadingFiles}
+                                className="w-full py-3.5 bg-gradient-to-br from-primary to-primary-container text-white rounded-2xl text-xs font-black uppercase tracking-widest text-center shadow-lg hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                {isSubmitting ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Save className="w-4 h-4" />
+                                )}
+                                <span>Lưu thay đổi</span>
+                            </button>
+                        ) : (
+                            <div className="p-4 bg-surface-container rounded-2xl text-[10px] text-outline font-bold leading-relaxed text-center uppercase tracking-wider">
+                                {statusView.label}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+            </form>
+        </main>
+    );
+}

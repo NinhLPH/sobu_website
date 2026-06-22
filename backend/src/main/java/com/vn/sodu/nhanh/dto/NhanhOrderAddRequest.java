@@ -15,6 +15,7 @@ public class NhanhOrderAddRequest {
     private Channel channel;
     private ShippingAddress shippingAddress;
     private List<Product> products;
+    private Carrier carrier;
     private Payment payment;
 
     @Getter
@@ -23,6 +24,7 @@ public class NhanhOrderAddRequest {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Info {
+        private Long depotId;
         private Integer type;
         private String description;
     }
@@ -47,6 +49,10 @@ public class NhanhOrderAddRequest {
         private String mobile;
         private String email;
         private String address;
+        private Long cityId;
+        private Long districtId;
+        private Long wardId;
+        private String locationVersion;
     }
 
     @Getter
@@ -56,6 +62,7 @@ public class NhanhOrderAddRequest {
     @AllArgsConstructor
     public static class Product {
         private Long id;
+        private String code;
         private BigDecimal price;
         private Integer quantity;
         private BigDecimal discount;
@@ -67,7 +74,21 @@ public class NhanhOrderAddRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class Carrier {
+        private Long id;
+        private Long serviceId;
+        private BigDecimal customerShipFee;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class Payment {
         private BigDecimal depositAmount;
+        private Long depositAccountId;
+        private BigDecimal transferAmount;
+        private Long transferAccountId;
     }
 }

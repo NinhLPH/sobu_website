@@ -34,6 +34,9 @@ class JwtAuthFilterTest {
     private UserDetailsService userDetailsService;
 
     @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Mock
     private HttpServletRequest request;
 
     @Mock
@@ -60,9 +63,10 @@ class JwtAuthFilterTest {
     void testValidTokenSetsAuthentication() throws ServletException, IOException {
         String token = "validJwtToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
-        when(jwtService.isTokenValid(token, testUserDetails)).thenReturn(true);
+        when(jwtService.isAccessTokenValid(token, testUserDetails)).thenReturn(true);
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -79,9 +83,10 @@ class JwtAuthFilterTest {
             Collections.singletonList(() -> "ROLE_USER"));
         
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(userWithAuthorities);
-        when(jwtService.isTokenValid(token, userWithAuthorities)).thenReturn(true);
+        when(jwtService.isAccessTokenValid(token, userWithAuthorities)).thenReturn(true);
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -146,9 +151,10 @@ class JwtAuthFilterTest {
     void testInvalidTokenSkipsAuthentication() throws ServletException, IOException {
         String token = "invalidToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
-        when(jwtService.isTokenValid(token, testUserDetails)).thenReturn(false);
+        when(jwtService.isAccessTokenValid(token, testUserDetails)).thenReturn(false);
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -161,9 +167,26 @@ class JwtAuthFilterTest {
     void testExceptionDuringTokenExtraction() throws ServletException, IOException {
         String token = "malformedToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenThrow(new RuntimeException("Invalid token"));
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("Should reject refresh token for request authentication")
+    void testRefreshTokenDoesNotAuthenticateRequest() throws ServletException, IOException {
+        String token = "refreshToken";
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
+        when(jwtService.extractUsername(token)).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
+        when(jwtService.isAccessTokenValid(token, testUserDetails)).thenReturn(false);
+
+        jwtAuthFilter.doFilterInternal(request, response, filterChain);
+
         assertNull(SecurityContextHolder.getContext().getAuthentication());
         verify(filterChain).doFilter(request, response);
     }
@@ -175,9 +198,10 @@ class JwtAuthFilterTest {
     void testLoadUserDetailsFromService() throws ServletException, IOException {
         String token = "validToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
-        when(jwtService.isTokenValid(token, testUserDetails)).thenReturn(true);
+        when(jwtService.isAccessTokenValid(token, testUserDetails)).thenReturn(true);
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -189,6 +213,7 @@ class JwtAuthFilterTest {
     void testUserNotFoundHandling() throws ServletException, IOException {
         String token = "validToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("nonexistent@example.com");
         when(userDetailsService.loadUserByUsername("nonexistent@example.com"))
             .thenThrow(new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found"));
@@ -205,9 +230,10 @@ class JwtAuthFilterTest {
     void testFilterChainContinuesAfterValidation() throws ServletException, IOException {
         String token = "validToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
-        when(jwtService.isTokenValid(token, testUserDetails)).thenReturn(true);
+        when(jwtService.isAccessTokenValid(token, testUserDetails)).thenReturn(true);
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -219,9 +245,10 @@ class JwtAuthFilterTest {
     void testFilterChainContinuesWithInvalidToken() throws ServletException, IOException {
         String token = "invalidToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
-        when(jwtService.isTokenValid(token, testUserDetails)).thenReturn(false);
+        when(jwtService.isAccessTokenValid(token, testUserDetails)).thenReturn(false);
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
@@ -239,6 +266,7 @@ class JwtAuthFilterTest {
         SecurityContextHolder.getContext().setAuthentication(existingAuth);
 
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
@@ -251,12 +279,50 @@ class JwtAuthFilterTest {
     void testSetsAuthenticationDetailsFromRequest() throws ServletException, IOException {
         String token = "validToken";
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
         when(jwtService.extractUsername(token)).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
-        when(jwtService.isTokenValid(token, testUserDetails)).thenReturn(true);
+        when(jwtService.isAccessTokenValid(token, testUserDetails)).thenReturn(true);
 
         jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
         assertNotNull(SecurityContextHolder.getContext().getAuthentication().getDetails());
+    }
+
+    @Test
+    @DisplayName("Should reject blacklisted token before authentication")
+    void testBlacklistedTokenSkipsAuthentication() throws ServletException, IOException {
+        String token = "blacklistedToken";
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(true);
+
+        jwtAuthFilter.doFilterInternal(request, response, filterChain);
+
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(jwtService, never()).extractUsername(token);
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("Should reject locked or disabled users even with valid token")
+    void testLockedUserDoesNotAuthenticate() throws ServletException, IOException {
+        String token = "validJwtToken";
+        UserDetails lockedUser = User.builder()
+                .username("test@example.com")
+                .password("password")
+                .authorities(Collections.emptyList())
+                .accountLocked(true)
+                .build();
+
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenBlacklistService.isBlacklisted(token)).thenReturn(false);
+        when(jwtService.extractUsername(token)).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(lockedUser);
+
+        jwtAuthFilter.doFilterInternal(request, response, filterChain);
+
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(jwtService, never()).isAccessTokenValid(token, lockedUser);
+        verify(filterChain).doFilter(request, response);
     }
 }

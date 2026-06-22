@@ -245,6 +245,109 @@ All endpoints tagged with module (e.g., `@Tag(name = "Authentication", ...)`) fo
 - Use `ProductSyncService` as example for consuming external data sources
 - Product filters are handled in `ProductService` query methods
 
+## AI Code Review & Repository Graph Tools
+
+Use these tools when the task requires repository-wide understanding, dependency tracing, impact analysis, or architectural review beyond a single file.
+
+### code-review-graph
+
+`code-review-graph` is best used for local codebase analysis where the agent needs to inspect relationships between classes, services, controllers, repositories, DTOs, and configuration files.
+
+**Recommended use cases:**
+- Review a pull request or feature implementation across multiple files
+- Trace call paths from controller → service → repository → entity
+- Find potentially affected files before refactoring
+- Detect duplicated logic, missing validation, weak error handling, or architectural drift
+- Check whether a change breaks existing module boundaries
+
+**Suggested workflow:**
+1. Index or refresh the repository graph before review.
+2. Start from the changed endpoint, service, or entity.
+3. Traverse related nodes: controller, DTO, mapper, service, repository, entity, config, and tests.
+4. Compare the implementation against the architecture conventions in this document.
+5. Produce review output grouped by severity: blocker, major, minor, suggestion.
+
+**Review checklist for this repository:**
+- Controller returns consistent `ApiResponseDTO`
+- Business rules stay in service layer, not controller
+- DTO mapping handles nulls and type conversions safely
+- Repository queries avoid unnecessary eager loading or N+1 behavior
+- Security rules match `SecurityConfig`
+- Nhanh.vn sync changes preserve OAuth/token handling and pagination
+- Tests cover success, validation failure, authorization failure, and integration failure paths
+
+**Example prompt:**
+```text
+Use code-review-graph to inspect the changed files. Start from the modified controller/service, trace related DTOs, mappers, repositories, entities, configs, and tests. Identify bugs, missing validation, security issues, and affected modules. Return findings by severity with file-level recommendations.
+```
+
+### GitNexus
+
+`GitNexus` is best used when the agent needs a broader repository graph, historical context, or cross-module search before making architectural or refactoring decisions.
+
+**Recommended use cases:**
+- Understand the whole repository structure before implementing a feature
+- Search for similar patterns already used in the codebase
+- Locate all usages of a class, method, DTO, endpoint, property, or config key
+- Analyze dependency impact before renaming, moving, or deleting code
+- Prepare implementation plans that need repository-wide context
+
+**Suggested workflow:**
+1. Ask GitNexus to locate the relevant modules and files first.
+2. Search for existing implementation patterns before creating new ones.
+3. Use graph relationships to find consumers and side effects.
+4. Only then modify code or propose changes.
+5. Re-run focused search after changes to verify no stale references remain.
+
+**Useful query patterns:**
+```text
+Find all usages of AuthService.refreshToken and related DTOs.
+Find endpoints that return ApiResponseDTO but do not handle exceptions consistently.
+Find all Nhanh.vn sync services, controllers, DTOs, and configuration properties.
+Find product-related mappers and show how entity-to-DTO conversion is currently handled.
+Find security whitelist rules and all public endpoints that depend on them.
+```
+
+### When to Use Which Tool
+
+| Situation | Preferred tool |
+|---|---|
+| Review changed code in detail | `code-review-graph` |
+| Understand repository-wide structure | `GitNexus` |
+| Trace dependencies around one feature | `code-review-graph` |
+| Search similar implementation patterns | `GitNexus` |
+| Refactor with impact analysis | Both: GitNexus first, then code-review-graph |
+| PR review before merge | Both: code-review-graph for findings, GitNexus for usage checks |
+
+### Output Format for AI-Assisted Reviews
+
+When using either tool for review, prefer this format:
+
+```markdown
+## Review Summary
+- Scope:
+- Risk level:
+- Main affected modules:
+
+## Findings
+### Blocker
+- [file/path] Problem → Impact → Fix
+
+### Major
+- [file/path] Problem → Impact → Fix
+
+### Minor
+- [file/path] Problem → Impact → Fix
+
+## Suggested Tests
+- Unit tests:
+- Integration tests:
+- Manual checks:
+
+## Final Recommendation
+- Approve / Request changes / Needs follow-up
+```
+
 ## Common Issues
 
 - **JWT Signature Errors**: Check `jwt.secret` length (must be sufficient for HS256)

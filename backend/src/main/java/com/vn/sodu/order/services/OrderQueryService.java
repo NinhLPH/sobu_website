@@ -1,6 +1,7 @@
 package com.vn.sodu.order.services;
 
 import com.vn.sodu.order.Order;
+import com.vn.sodu.order.OrderCustomerEmailMatcher;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.order.mapper.OrderResponseMapper;
 import com.vn.sodu.order.dtos.OrderResponseDto;
@@ -47,8 +48,9 @@ public class OrderQueryService {
             throw new IllegalArgumentException("Order id is required");
         }
 
-        String customerPhone = resolveCustomerPhone(authentication);
-        Order order = orderRepository.findCustomerOrderById(orderId, customerPhone)
+        String customerEmail = resolveCustomerEmail(authentication);
+        Order order = orderRepository.findWithItemsAndRequestById(orderId)
+                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(), customerEmail))
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         return orderResponseMapper.toDto(order);
     }
@@ -59,9 +61,10 @@ public class OrderQueryService {
             throw new IllegalArgumentException("Nhanh order id is required");
         }
 
-        String customerPhone = resolveCustomerPhone(authentication);
+        String customerEmail = resolveCustomerEmail(authentication);
         String safeNhanhOrderId = nhanhOrderId.trim();
-        Order order = orderRepository.findCustomerOrderByNhanhOrderIdOrCode(safeNhanhOrderId, customerPhone)
+        Order order = orderRepository.findWithItemsAndRequestByNhanhOrderIdOrCode(safeNhanhOrderId)
+                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(), customerEmail))
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + safeNhanhOrderId));
         return orderResponseMapper.toDto(order);
     }
@@ -79,7 +82,7 @@ public class OrderQueryService {
         return PageRequest.of(safePage, safeSize, Sort.by(direction, safeSortBy));
     }
 
-    private String resolveCustomerPhone(Authentication authentication) {
+    private String resolveCustomerEmail(Authentication authentication) {
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             throw new AccessDeniedException("Authentication is required");
         }
@@ -87,9 +90,9 @@ public class OrderQueryService {
         Account account = accountRepo.findByEmail(authentication.getName())
                 .orElseThrow(() -> new AccessDeniedException("Authenticated account not found"));
 
-        if (account.getPhone() == null || account.getPhone().isBlank()) {
-            throw new AccessDeniedException("Authenticated account does not have a phone number");
+        if (account.getEmail() == null || account.getEmail().isBlank()) {
+            throw new AccessDeniedException("Authenticated account does not have an email address");
         }
-        return account.getPhone().trim();
+        return account.getEmail().trim();
     }
 }

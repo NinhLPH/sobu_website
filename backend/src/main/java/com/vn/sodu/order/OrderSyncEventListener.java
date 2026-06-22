@@ -17,11 +17,11 @@ public class OrderSyncEventListener {
 
     @Async("nhanhSyncExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onOrderCreated(OrderCreatedEvent event) {
+    public void onOrderReadyForSync(OrderReadyForSyncEvent event) {
         if (event == null || event.orderId() == null) {
             log.warn("Skipping Nhanh order sync event with missing order id");
             return;
         }
-        orderSyncService.syncOrderToNhanh(event.orderId());
+        orderSyncService.syncOrderToNhanh(event.orderId(), event.paymentCode());
     }
 }

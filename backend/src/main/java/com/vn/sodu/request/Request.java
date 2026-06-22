@@ -19,7 +19,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name ="requests")
 public class Request {
-    @Id @GeneratedValue
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(unique = true, nullable = false)

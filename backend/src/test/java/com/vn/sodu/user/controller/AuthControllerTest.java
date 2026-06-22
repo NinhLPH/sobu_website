@@ -5,6 +5,7 @@ import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.user.dto.LoginRequest;
 import com.vn.sodu.user.dto.LoginResponse;
 import com.vn.sodu.user.dto.RefreshTokenRequest;
+import com.vn.sodu.user.dto.ResendActivationEmailRequest;
 import com.vn.sodu.global.exception.UnauthorizedException;
 import com.vn.sodu.user.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,6 +40,9 @@ class AuthControllerTest {
 
     @MockBean
     private com.vn.sodu.security.JwtService jwtService;
+
+    @MockBean
+    private com.vn.sodu.security.TokenBlacklistService tokenBlacklistService;
 
     @MockBean
     private org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
@@ -63,7 +68,33 @@ class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.accessToken").value("access-token"));
+                .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.data.expiresIn").value(3600));
+    }
+
+    @Test
+    @DisplayName("POST /auth/login - compatibility alias success")
+    void testLoginAliasSuccess() throws Exception {
+        LoginRequest req = new LoginRequest();
+        req.setEmail("test@example.com");
+        req.setPassword("password123");
+
+        LoginResponse resp = LoginResponse.builder()
+                .accessToken("access-token")
+                .refreshToken("refresh-token")
+                .tokenType("Bearer")
+                .expiresIn(3600L)
+                .build();
+
+        Mockito.when(authService.login(any(LoginRequest.class))).thenReturn(resp);
+
+        mockMvc.perform(post("/auth/login").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+                .andExpect(jsonPath("$.data.expiresIn").value(3600));
     }
 
     @Test
@@ -102,7 +133,8 @@ class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.accessToken").value("new-access-token"));
+                .andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
+                .andExpect(jsonPath("$.data.expiresIn").value(3600));
     }
 
     @Test
@@ -118,5 +150,40 @@ class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/resend-activation - success")
+    void testResendActivationEmailSuccess() throws Exception {
+        ResendActivationEmailRequest req = ResendActivationEmailRequest.builder()
+                .email("test@example.com")
+                .build();
+
+        mockMvc.perform(post("/api/auth/resend-activation")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Activation email sent"));
+
+        verify(authService).resendActivationEmail(any(ResendActivationEmailRequest.class));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/logout - success forwards access and refresh tokens")
+    void testLogoutSuccess() throws Exception {
+        RefreshTokenRequest req = new RefreshTokenRequest();
+        req.setRefreshToken("refresh-token");
+
+        mockMvc.perform(post("/api/auth/logout")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                .header("Authorization", "Bearer access-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(authService).logout(eq("access-token"), eq("refresh-token"));
     }
 }

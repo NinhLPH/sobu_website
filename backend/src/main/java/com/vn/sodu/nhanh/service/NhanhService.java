@@ -1,11 +1,15 @@
 package com.vn.sodu.nhanh.service;
 
+import com.vn.sodu.global.exception.ExternalServiceException;
+import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
+import com.vn.sodu.nhanh.NhanhOAuthConnectedEvent;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhTokenResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,9 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class NhanhService {
 
+    private static final long TOKEN_EXPIRY_SAFETY_SECONDS = 60;
+
     private final NhanhClient nhanhClient;
     private final NhanhIntegrationRepo nhanhIntegrationRepo;
     private final NhanhProperties nhanhProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 1. Generate login URL
     public String buildAuthUrl() {
@@ -29,12 +36,26 @@ public class NhanhService {
     @Transactional
     public void handleCallback(String accessCode) {
 
-        NhanhTokenResponse response = nhanhClient.getAccessToken(accessCode);
+        NhanhTokenResponse response;
+        try {
+            response = nhanhClient.getAccessToken(accessCode);
+        } catch (ExternalServiceException ex) {
+            if (isInvalidAccessCode(ex.getMessage())) {
+                throw new BadRequestException(
+                        "Nhanh access code is invalid or expired. Please start the Nhanh login flow again.");
+            }
+            throw ex;
+        }
 
         log.info("Nhanh response: {}", response);
 
         if (response == null || response.getAccessToken() == null) {
-            throw new RuntimeException("Failed to get accessToken from Nhanh");
+            throw new ExternalServiceException("Nhanh token response is missing accessToken");
+        }
+        Long configuredBusinessId = Long.valueOf(nhanhProperties.getBusinessId());
+        if (!configuredBusinessId.equals(response.getBusinessId())) {
+            throw new ExternalServiceException(
+                    "Nhanh OAuth businessId does not match the configured business");
         }
 
         // tìm theo businessId (QUAN TRỌNG)
@@ -48,15 +69,37 @@ public class NhanhService {
         entity.setExpiredAt(response.getExpiredAt());
 
         nhanhIntegrationRepo.save(entity);
+        eventPublisher.publishEvent(new NhanhOAuthConnectedEvent(response.getBusinessId()));
 
         log.info("Saved/Updated Nhanh token OK, businessId={}", response.getBusinessId());
     }
 
+    private boolean isInvalidAccessCode(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String normalized = message.toLowerCase();
+        return normalized.contains("accesscode")
+                && (normalized.contains("expired")
+                || normalized.contains("invalid")
+                || normalized.contains("not found"));
+    }
+
     // Get valid access token from first active integration
     public String getValidAccessToken() {
-        return getIntegration()
-                .map(NhanhIntegration::getAccessToken)
-                .orElseThrow(() -> new RuntimeException("No Nhanh integration found. Please authenticate first."));
+        NhanhIntegration integration = getIntegration()
+                .orElseThrow(() -> new ExternalServiceException("No Nhanh integration found. Please authenticate first."));
+
+        if (integration.getExpiredAt() == null) {
+            throw new ExternalServiceException("Nhanh integration token expiry is missing. Please authenticate again.");
+        }
+
+        long now = System.currentTimeMillis() / 1000;
+        if (integration.getExpiredAt() <= now + TOKEN_EXPIRY_SAFETY_SECONDS) {
+            throw new ExternalServiceException("Nhanh integration token has expired. Please authenticate again.");
+        }
+
+        return integration.getAccessToken();
     }
 
     public java.util.Optional<NhanhIntegration> getIntegration() {

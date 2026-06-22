@@ -19,7 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/auth"})
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Authentication", description = "Authentication and authorization endpoints for user login, registration, and token management")
@@ -99,6 +99,19 @@ public class AuthController {
                 .body(ApiResponseDTO.success(response, "Registration successful", HttpStatus.CREATED.value()));
     }
 
+    @PostMapping("/resend-activation")
+    @Operation(
+        summary = "Resend activation email",
+        description = "Resends the activation email for an inactive account. Requests are limited to once every 60 seconds."
+    )
+    public ResponseEntity<?> resendActivationEmail(@org.springframework.web.bind.annotation.RequestBody ResendActivationEmailRequest request) {
+        log.info("Resend activation email request for email: {}", request.getEmail());
+        authService.resendActivationEmail(request);
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(null, "Activation email sent", HttpStatus.OK.value())
+        );
+    }
+
     @GetMapping("/activate")
     @Operation(
         summary = "Activate user account",
@@ -131,16 +144,19 @@ public class AuthController {
     })
     public ResponseEntity<?> logout(
         @Parameter(description = "JWT token in Bearer format", example = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
-        @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        @RequestHeader(value = "Authorization", required = false) String authHeader,
+        @org.springframework.web.bind.annotation.RequestBody(required = false) RefreshTokenRequest request) {
         
         log.info("Logout request");
         
-        String token = null;
+        String accessToken = null;
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
+            accessToken = authHeader.substring(7);
         }
+
+        String refreshToken = request != null ? request.getRefreshToken() : null;
         
-        authService.logout(token);
+        authService.logout(accessToken, refreshToken);
         
         return ResponseEntity.ok(
                 ApiResponseDTO.success(null, "Logout successful", HttpStatus.OK.value())

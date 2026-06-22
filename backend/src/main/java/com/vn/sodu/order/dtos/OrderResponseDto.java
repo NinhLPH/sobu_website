@@ -1,7 +1,9 @@
 package com.vn.sodu.order.dtos;
 
+import com.vn.sodu.order.NhanhSyncStage;
 import com.vn.sodu.order.OrderStatus;
 import com.vn.sodu.order.OrderSyncStatus;
+import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.request.OrderType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -35,11 +37,26 @@ public class OrderResponseDto {
     @Schema(description = "Nhanh sync status")
     private OrderSyncStatus syncStatus;
 
+    @Schema(description = "Nhanh sync milestone stage")
+    private NhanhSyncStage nhanhSyncStage;
+
     @Schema(description = "Total order amount")
     private BigDecimal totalAmount;
 
     @Schema(description = "Deposit amount")
     private BigDecimal depositAmount;
+
+    @Schema(description = "Shipping fee")
+    private BigDecimal shippingFee;
+
+    @Schema(description = "Collected amount")
+    private BigDecimal paidAmount;
+
+    @Schema(description = "Remaining amount")
+    private BigDecimal remainingAmount;
+
+    @Schema(description = "Overall payment status")
+    private PaymentStatus paymentStatus;
 
     @Schema(description = "Order description")
     private String description;
@@ -65,6 +82,15 @@ public class OrderResponseDto {
     @Schema(description = "Customer ward")
     private String customerWardName;
 
+    @Schema(description = "Nhanh customer city id")
+    private Long customerCityId;
+
+    @Schema(description = "Nhanh customer district id")
+    private Long customerDistrictId;
+
+    @Schema(description = "Nhanh customer ward id")
+    private Long customerWardId;
+
     @Schema(description = "Nhanh order id")
     private String nhanhOrderId;
 
@@ -73,6 +99,18 @@ public class OrderResponseDto {
 
     @Schema(description = "Last sync error")
     private String syncError;
+
+    @Schema(description = "Last sync message")
+    private String lastSyncMessage;
+
+    @Schema(description = "Last sync timestamp")
+    private LocalDateTime lastSyncAt;
+
+    @Schema(description = "Carrier id selected for the order")
+    private Long carrierId;
+
+    @Schema(description = "Carrier service id selected for the order")
+    private Long carrierServiceId;
 
     @Schema(description = "Order items")
     private List<OrderItemResponseDto> items;

@@ -6,6 +6,7 @@ import com.vn.sodu.user.Account;
 import com.vn.sodu.user.AccountRepo;
 import com.vn.sodu.user.ActivationToken;
 import com.vn.sodu.user.ActivationTokenRepo;
+import com.vn.sodu.security.TokenBlacklistService;
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.mapper.AccountMapper;
 import com.vn.sodu.security.JwtService;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,6 +65,9 @@ class AuthServiceTest {
     @Mock
     private com.vn.sodu.customer.service.CustomerService customerService;
 
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -105,6 +110,7 @@ class AuthServiceTest {
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
         when(jwtService.generateAccessToken(testUserDetails)).thenReturn("accessToken");
         when(jwtService.generateRefreshToken(testUserDetails)).thenReturn("refreshToken");
+        when(jwtService.getAccessTokenExpiresInSeconds()).thenReturn(3600L);
 
         AccountDTO accountDTO = new AccountDTO();
         when(accountMapper.toDTO(testAccount)).thenReturn(accountDTO);
@@ -204,11 +210,12 @@ class AuthServiceTest {
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("validRefreshToken");
 
-        when(jwtService.isTokenValid("validRefreshToken")).thenReturn(true);
+        when(jwtService.isRefreshTokenValid("validRefreshToken")).thenReturn(true);
         when(jwtService.extractUsername("validRefreshToken")).thenReturn("test@example.com");
         when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
         when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
         when(jwtService.generateAccessToken(testUserDetails)).thenReturn("newAccessToken");
+        when(jwtService.getAccessTokenExpiresInSeconds()).thenReturn(3600L);
 
         AccountDTO accountDTO = new AccountDTO();
         when(accountMapper.toDTO(testAccount)).thenReturn(accountDTO);
@@ -218,7 +225,24 @@ class AuthServiceTest {
         assertNotNull(response);
         assertEquals("newAccessToken", response.getAccessToken());
         assertEquals("validRefreshToken", response.getRefreshToken());
-        verify(jwtService).isTokenValid("validRefreshToken");
+        assertEquals(3600L, response.getExpiresIn());
+        verify(jwtService).isRefreshTokenValid("validRefreshToken");
+    }
+
+    @Test
+    @DisplayName("Should fail refresh token when account is inactive")
+    void testRefreshTokenInactiveAccount() {
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("validRefreshToken");
+        testAccount.setStatus(Account.AccountStatus.INACTIVE);
+
+        when(jwtService.isRefreshTokenValid("validRefreshToken")).thenReturn(true);
+        when(jwtService.extractUsername("validRefreshToken")).thenReturn("test@example.com");
+        when(userDetailsService.loadUserByUsername("test@example.com")).thenReturn(testUserDetails);
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(request));
+        assertEquals("Account is not active. Please activate your account.", exception.getMessage());
     }
 
     @Test
@@ -227,7 +251,7 @@ class AuthServiceTest {
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("invalidToken");
 
-        when(jwtService.isTokenValid("invalidToken")).thenReturn(false);
+        when(jwtService.isRefreshTokenValid("invalidToken")).thenReturn(false);
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(request));
         assertEquals("Invalid or expired refresh token", exception.getMessage());
@@ -239,7 +263,7 @@ class AuthServiceTest {
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("expiredToken");
 
-        when(jwtService.isTokenValid("expiredToken")).thenReturn(false);
+        when(jwtService.isRefreshTokenValid("expiredToken")).thenReturn(false);
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(request));
         assertEquals("Invalid or expired refresh token", exception.getMessage());
@@ -251,13 +275,26 @@ class AuthServiceTest {
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken("validToken");
 
-        when(jwtService.isTokenValid("validToken")).thenReturn(true);
+        when(jwtService.isRefreshTokenValid("validToken")).thenReturn(true);
         when(jwtService.extractUsername("validToken")).thenReturn("nonexistent@example.com");
         when(userDetailsService.loadUserByUsername("nonexistent@example.com")).thenReturn(testUserDetails);
         when(accountRepo.findByEmail("nonexistent@example.com")).thenReturn(Optional.empty());
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(request));
         assertEquals("User not found", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("Should fail refresh token when access token is supplied")
+    void testRefreshTokenRejectsAccessToken() {
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("accessToken");
+
+        when(jwtService.isRefreshTokenValid("accessToken")).thenReturn(false);
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(request));
+        assertEquals("Invalid or expired refresh token", exception.getMessage());
+        verify(jwtService, never()).extractUsername("accessToken");
     }
 
     // ─── Register Tests ────────────────────────────────────────────────
@@ -267,6 +304,7 @@ class AuthServiceTest {
     void testRegisterSuccess() {
         Account newAccount = new Account();
         RegisterResponse registerResponse = new RegisterResponse();
+        ArgumentCaptor<ActivationToken> tokenCaptor = ArgumentCaptor.forClass(ActivationToken.class);
         
         when(accountRepo.findByEmail("newuser@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("newpassword123")).thenReturn("encryptedNewPassword");
@@ -281,6 +319,8 @@ class AuthServiceTest {
         verify(accountRepo).findByEmail("newuser@example.com");
         verify(passwordEncoder).encode("newpassword123");
         verify(accountRepo).save(any(Account.class));
+        verify(activationTokenRepo).save(tokenCaptor.capture());
+        assertNotNull(tokenCaptor.getValue().getLastSentAt());
         verify(emailService).sendActivationEmail(any(Account.class), anyString());
     }
 
@@ -368,19 +408,121 @@ class AuthServiceTest {
         assertEquals("Activation token expired", exception.getMessage());
     }
 
+    @Test
+    @DisplayName("Should resend activation email when cooldown has passed")
+    void testResendActivationEmailSuccess() {
+        testAccount.setStatus(Account.AccountStatus.INACTIVE);
+        ActivationToken activationToken = ActivationToken.builder()
+                .token("existing-token")
+                .account(testAccount)
+                .createdAt(LocalDateTime.now().minusMinutes(10))
+                .lastSentAt(LocalDateTime.now().minusSeconds(61))
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(activationTokenRepo.findTopByAccount_IdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(activationToken));
+        when(activationTokenRepo.save(activationToken)).thenReturn(activationToken);
+
+        ResendActivationEmailRequest request = ResendActivationEmailRequest.builder()
+                .email("test@example.com")
+                .build();
+
+        authService.resendActivationEmail(request);
+
+        assertNotNull(activationToken.getLastSentAt());
+        verify(activationTokenRepo).save(activationToken);
+        verify(emailService).sendActivationEmail(testAccount, "existing-token");
+    }
+
+    @Test
+    @DisplayName("Should reject resend activation email within cooldown")
+    void testResendActivationEmailCooldown() {
+        testAccount.setStatus(Account.AccountStatus.INACTIVE);
+        ActivationToken activationToken = ActivationToken.builder()
+                .token("existing-token")
+                .account(testAccount)
+                .createdAt(LocalDateTime.now().minusMinutes(10))
+                .lastSentAt(LocalDateTime.now().minusSeconds(30))
+                .expiresAt(LocalDateTime.now().plusHours(1))
+                .build();
+
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(activationTokenRepo.findTopByAccount_IdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(activationToken));
+
+        ResendActivationEmailRequest request = ResendActivationEmailRequest.builder()
+                .email("test@example.com")
+                .build();
+
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> authService.resendActivationEmail(request));
+
+        assertEquals("Please wait 60 seconds before requesting another activation email", exception.getMessage());
+        verify(activationTokenRepo, never()).save(any(ActivationToken.class));
+        verify(emailService, never()).sendActivationEmail(any(Account.class), anyString());
+    }
+
+    @Test
+    @DisplayName("Should create new activation token before resend when latest token is expired")
+    void testResendActivationEmailCreatesNewTokenWhenExpired() {
+        testAccount.setStatus(Account.AccountStatus.INACTIVE);
+        ActivationToken expiredToken = ActivationToken.builder()
+                .token("expired-token")
+                .account(testAccount)
+                .createdAt(LocalDateTime.now().minusDays(2))
+                .lastSentAt(LocalDateTime.now().minusDays(2))
+                .expiresAt(LocalDateTime.now().minusHours(1))
+                .build();
+        ArgumentCaptor<ActivationToken> tokenCaptor = ArgumentCaptor.forClass(ActivationToken.class);
+
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(activationTokenRepo.findTopByAccount_IdOrderByCreatedAtDesc(1L)).thenReturn(Optional.of(expiredToken));
+        when(activationTokenRepo.save(any(ActivationToken.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ResendActivationEmailRequest request = ResendActivationEmailRequest.builder()
+                .email("test@example.com")
+                .build();
+
+        authService.resendActivationEmail(request);
+
+        verify(activationTokenRepo).save(tokenCaptor.capture());
+        ActivationToken savedToken = tokenCaptor.getValue();
+        assertNotNull(savedToken.getToken());
+        assertNotEquals("expired-token", savedToken.getToken());
+        assertTrue(savedToken.getExpiresAt().isAfter(LocalDateTime.now()));
+        verify(emailService).sendActivationEmail(eq(testAccount), eq(savedToken.getToken()));
+    }
+
     // ─── Logout Tests ────────────────────────────────────────────────
 
     @Test
     @DisplayName("Should handle logout without error")
     void testLogoutSuccess() {
-        assertDoesNotThrow(() -> authService.logout("validToken"));
+        java.util.Date accessExpiry = java.util.Date.from(LocalDateTime.now().plusMinutes(5)
+                .atZone(java.time.ZoneId.systemDefault()).toInstant());
+        java.util.Date refreshExpiry = java.util.Date.from(LocalDateTime.now().plusMinutes(10)
+                .atZone(java.time.ZoneId.systemDefault()).toInstant());
+
+        when(jwtService.isTokenValid("validAccessToken")).thenReturn(true);
+        when(jwtService.extractTokenType("validAccessToken")).thenReturn("access");
+        when(jwtService.extractExpiration("validAccessToken")).thenReturn(accessExpiry);
+        when(jwtService.isTokenValid("validRefreshToken")).thenReturn(true);
+        when(jwtService.extractTokenType("validRefreshToken")).thenReturn("refresh");
+        when(jwtService.extractExpiration("validRefreshToken")).thenReturn(refreshExpiry);
+
+        assertDoesNotThrow(() -> authService.logout("validAccessToken", "validRefreshToken"));
+        verify(tokenBlacklistService).blacklist("validAccessToken", accessExpiry);
+        verify(tokenBlacklistService).blacklist("validRefreshToken", refreshExpiry);
     }
 
     @Test
     @DisplayName("Should handle logout with any token")
     void testLogoutWithAnyToken() {
+        when(jwtService.isTokenValid("anyToken")).thenReturn(false);
+
         assertDoesNotThrow(() -> authService.logout("anyToken"));
         assertDoesNotThrow(() -> authService.logout(""));
         assertDoesNotThrow(() -> authService.logout(null));
+        verify(tokenBlacklistService, never()).blacklist(eq("anyToken"), any(java.util.Date.class));
     }
 }
