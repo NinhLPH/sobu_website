@@ -1,6 +1,7 @@
 package com.vn.sodu.user.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vn.sodu.config.WebConfig;
 import com.vn.sodu.security.JwtAuthFilter;
 import com.vn.sodu.security.JwtService;
 import com.vn.sodu.security.SecurityConfig;
@@ -15,17 +16,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AuthController.class)
-@Import({SecurityConfig.class, JwtAuthFilter.class})
+@Import({SecurityConfig.class, JwtAuthFilter.class, WebConfig.class})
+@TestPropertySource(properties = "cors.allowed-origins=https://sobu-jet.vercel.app")
 @DisplayName("Auth Controller Security Tests")
 class AuthControllerSecurityTest {
 
@@ -69,5 +75,17 @@ class AuthControllerSecurityTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.accessToken").value("access-token"));
+    }
+
+    @Test
+    @DisplayName("Public API preflight allows Vercel frontend origin")
+    void publicApiPreflightAllowsVercelOrigin() throws Exception {
+        mockMvc.perform(options("/api/public/brands")
+                        .header(HttpHeaders.ORIGIN, "https://sobu-jet.vercel.app")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://sobu-jet.vercel.app"));
     }
 }

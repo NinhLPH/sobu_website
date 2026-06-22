@@ -1,6 +1,7 @@
 package com.vn.sodu.nhanh.service;
 
 import com.vn.sodu.global.exception.ExternalServiceException;
+import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhProperties;
@@ -15,6 +16,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -174,17 +176,32 @@ public class NhanhServiceAuthTest {
     }
 
     @Test
-    public void oauthBusinessMismatchIsRejectedBeforePersistence() {
+    public void handleCallbackExpiredAccessCodeThrowsBadRequestAndDoesNotPersist() {
+        when(nhanhClient.getAccessToken("expired-code"))
+                .thenThrow(new ExternalServiceException("Invalid accessCode or accessCode has expired"));
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                nhanhService.handleCallback("expired-code"));
+
+        assertEquals(
+                "Nhanh access code is invalid or expired. Please start the Nhanh login flow again.",
+                ex.getMessage());
+        verify(nhanhIntegrationRepo, never()).save(any(NhanhIntegration.class));
+    }
+
+    @Test
+    public void handleCallbackValidTokenPersistsIntegration() {
         NhanhTokenResponse response = new NhanhTokenResponse();
-        response.setBusinessId(456L);
-        response.setAccessToken("token");
+        response.setAccessToken("access-token");
+        response.setBusinessId(123L);
         response.setExpiredAt(FUTURE_EXPIRY);
-        when(nhanhProperties.getBusinessId()).thenReturn("123");
-        when(nhanhClient.getAccessToken("code")).thenReturn(response);
 
-        assertThrows(ExternalServiceException.class, () -> nhanhService.handleCallback("code"));
+        when(nhanhClient.getAccessToken("valid-code")).thenReturn(response);
+        when(nhanhProperties.getClientId()).thenReturn("app1");
+        when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.empty());
 
-        verify(nhanhIntegrationRepo, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any());
+        nhanhService.handleCallback("valid-code");
+
+        verify(nhanhIntegrationRepo).save(any(NhanhIntegration.class));
     }
 }

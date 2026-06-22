@@ -50,43 +50,46 @@ public class NhanhClient {
 
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
-        Map<String, Object> resp = response.getBody();
-
-        if (resp == null) {
+        ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+        String rawBody = response.getBody();
+        if (rawBody == null || rawBody.isBlank()) {
             throw new ExternalServiceException("Nhanh response is null");
         }
 
-        // Removed raw logging to prevent leak
-        
-        Object code = resp.get("code");
-        if (code == null || Integer.parseInt(code.toString()) != 1) {
-            throw new ExternalServiceException("Nhanh API returned a non-success response");
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            if (!isSuccessCode(root.path("code"))) {
+                throw new ExternalServiceException(responseMessage(root));
+            }
+
+            JsonNode data = root.path("data");
+            if (data.isMissingNode() || data.isNull()) {
+                data = root;
+            }
+
+            String accessToken = textValue(data.get("accessToken"));
+            if (accessToken == null || accessToken.isBlank()) {
+                throw new ExternalServiceException("Nhanh token response is missing accessToken");
+            }
+
+            NhanhTokenResponse result = new NhanhTokenResponse();
+            result.setAccessToken(accessToken);
+
+            Long businessId = longValue(data.get("businessId"));
+            if (businessId != null) {
+                result.setBusinessId(businessId);
+            }
+
+            Long expiredAt = longValue(data.get("expiredAt"));
+            if (expiredAt != null) {
+                result.setExpiredAt(expiredAt);
+            }
+
+            return result;
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to parse Nhanh token response", ex);
+            throw new ExternalServiceException("Nhanh token response could not be parsed", ex);
         }
-
-        Map<String, Object> data;
-        if (resp.containsKey("data") && resp.get("data") instanceof Map) {
-            data = (Map<String, Object>) resp.get("data");
-        } else {
-            data = resp;
-        }
-
-        if (data.get("accessToken") == null) {
-            throw new ExternalServiceException("Nhanh token response is missing accessToken");
-        }
-
-        NhanhTokenResponse result = new NhanhTokenResponse();
-        result.setAccessToken((String) data.get("accessToken"));
-
-        if (data.get("businessId") != null) {
-            result.setBusinessId(Long.valueOf(data.get("businessId").toString()));
-        }
-
-        if (data.get("expiredAt") != null) {
-            result.setExpiredAt(Long.valueOf(data.get("expiredAt").toString()));
-        }
-
-        return result;
     }
 
     public <T> List<T> fetchAllPages(
@@ -262,6 +265,8 @@ public class NhanhClient {
 
         try {
             return withRetry(call, 3, 500);
+        } catch (ExternalServiceException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.error("Failed to post data to Nhanh {}", apiPath, ex);
             throw new ExternalServiceException("Nhanh API post failed", ex);
@@ -318,22 +323,17 @@ public class NhanhClient {
         try {
             JsonNode root = objectMapper.readTree(rawBody);
 
-            int code = root.path("code").asInt();
-
-            if (code != 1) {
-
-                String errorCode =
-                        root.path("errorCode").asText();
-
-                String message =
-                        root.path("messages").asText();
-
+            if (!isSuccessCode(root.path("code"))) {
+                String errorCode = textValue(root.get("errorCode"));
+                String message = responseMessage(root);
+                if ("ERR_429".equals(errorCode)) {
+                    throw rateLimitException(root, message);
+                }
+                if (errorCode == null || errorCode.isBlank()) {
+                    throw new ExternalServiceException(message);
+                }
                 throw new ExternalServiceException(
-                        String.format(
-                                "Nhanh API error [%s]: %s",
-                                errorCode,
-                                message
-                        )
+                        String.format("Nhanh API error [%s]: %s", errorCode, message)
                 );
             }
             return objectMapper.readValue(
@@ -347,145 +347,54 @@ public class NhanhClient {
         }
     }
 
-    private <RESP> RESP deserializeOnce(
-            String rawBody,
-            ParameterizedTypeReference<RESP> responseType,
-            String apiPath,
-            int httpStatus) {
-        if (rawBody == null || rawBody.isBlank()) {
-            throw new NhanhApiException(
-                    "Nhanh API returned an empty response",
-                    httpStatus,
-                    null,
-                    null,
-                    false,
-                    null);
-        }
-        try {
-            JsonNode root = objectMapper.readTree(rawBody);
-            if (root.path("code").asInt() != 1) {
-                throw apiException(root, httpStatus, null);
-            }
-            return objectMapper.readValue(
-                    rawBody,
-                    objectMapper.getTypeFactory().constructType(responseType.getType()));
-        } catch (JsonProcessingException ex) {
-            log.error("Failed to deserialize Nhanh response for {}", apiPath, ex);
-            throw new NhanhApiException(
-                    "Nhanh API response could not be parsed",
-                    httpStatus,
-                    null,
-                    null,
-                    false,
-                    ex);
-        }
+    private NhanhRateLimitException rateLimitException(JsonNode root, String message) {
+        JsonNode data = root.path("data");
+        Long lockedSeconds = longValue(data.get("lockedSeconds"));
+        Long unlockedAtEpochSeconds = longValue(data.get("unlockedAt"));
+        Instant unlockedAt = unlockedAtEpochSeconds == null ? null : Instant.ofEpochSecond(unlockedAtEpochSeconds);
+        return new NhanhRateLimitException(message, lockedSeconds, unlockedAt);
     }
 
-    private NhanhApiException apiException(String rawBody, int httpStatus, Throwable cause) {
-        if (rawBody == null || rawBody.isBlank()) {
-            return new NhanhApiException(
-                    "Nhanh API request failed",
-                    httpStatus,
-                    null,
-                    null,
-                    false,
-                    cause);
+    private boolean isSuccessCode(JsonNode code) {
+        if (code == null || code.isMissingNode() || code.isNull()) {
+            return false;
         }
-        try {
-            return apiException(objectMapper.readTree(rawBody), httpStatus, cause);
-        } catch (JsonProcessingException ex) {
-            return new NhanhApiException(
-                    "Nhanh API request failed",
-                    httpStatus,
-                    null,
-                    null,
-                    false,
-                    cause);
+        if (code.isBoolean()) {
+            return code.booleanValue();
         }
+        if (code.isNumber()) {
+            return code.asInt() == 1;
+        }
+        String text = code.asText();
+        return "1".equals(text) || "true".equalsIgnoreCase(text);
     }
 
-    private NhanhApiException apiException(JsonNode root, int httpStatus, Throwable cause) {
-        String errorCode = firstText(root, "errorCode", "codeError");
-        Instant unlockedAt = parseInstant(findField(root, "unlockedAt"));
-        String message = firstText(root, "message", "error", "description");
-        if (message == null) {
-            JsonNode messages = root.get("messages");
-            message = messages == null ? null : messages.toString();
-        }
-        if (message == null || message.isBlank()) {
-            message = "Nhanh API request failed";
-        }
-        return new NhanhApiException(
-                message,
-                httpStatus,
-                errorCode,
-                unlockedAt,
-                false,
-                cause);
-    }
-
-    private String buildApiUrl(String apiPath) {
-        return UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
-                .replacePath(apiPath)
-                .queryParam("appId", nhanhProperties.getClientId())
-                .queryParam("businessId", nhanhProperties.getBusinessId())
-                .toUriString();
-    }
-
-    private JsonNode findField(JsonNode node, String fieldName) {
-        if (node == null || node.isNull()) {
-            return null;
-        }
-        JsonNode direct = node.get(fieldName);
-        if (direct != null) {
-            return direct;
-        }
-        if (node.isContainerNode()) {
-            for (JsonNode child : node) {
-                JsonNode found = findField(child, fieldName);
-                if (found != null) {
-                    return found;
+    private String responseMessage(JsonNode root) {
+        JsonNode messages = root.get("messages");
+        if (messages != null && messages.isArray()) {
+            List<String> values = new ArrayList<>();
+            messages.forEach(message -> {
+                String value = textValue(message);
+                if (value != null && !value.isBlank()) {
+                    values.add(value);
                 }
+            });
+            if (!values.isEmpty()) {
+                return String.join("; ", values);
             }
         }
-        return null;
-    }
 
-    private String firstText(JsonNode node, String... fieldNames) {
-        for (String fieldName : fieldNames) {
-            JsonNode value = findField(node, fieldName);
-            if (value != null && !value.isNull() && !value.isContainerNode()) {
-                String text = value.asText();
-                if (!text.isBlank()) {
-                    return text;
-                }
-            }
+        String message = textValue(messages);
+        if (message != null && !message.isBlank()) {
+            return message;
         }
-        return null;
-    }
 
-    private Instant parseInstant(JsonNode node) {
-        if (node == null || node.isNull()) {
-            return null;
+        message = textValue(root.get("message"));
+        if (message != null && !message.isBlank()) {
+            return message;
         }
-        try {
-            if (node.isNumber()) {
-                long value = node.asLong();
-                return Math.abs(value) >= 1_000_000_000_000L
-                        ? Instant.ofEpochMilli(value)
-                        : Instant.ofEpochSecond(value);
-            }
-            String value = node.asText();
-            if (value.matches("-?\\d+")) {
-                long epoch = Long.parseLong(value);
-                return Math.abs(epoch) >= 1_000_000_000_000L
-                        ? Instant.ofEpochMilli(epoch)
-                        : Instant.ofEpochSecond(epoch);
-            }
-            return Instant.parse(value);
-        } catch (RuntimeException ex) {
-            return null;
-        }
+
+        return "Nhanh API returned a non-success response";
     }
 
     private String textValue(JsonNode node) {
@@ -495,6 +404,18 @@ public class NhanhClient {
         return node.isTextual() ? node.textValue() : node.asText();
     }
 
+    private Long longValue(JsonNode node) {
+        String value = textValue(node);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException ex) {
+            throw new ExternalServiceException("Nhanh token response contains an invalid numeric value", ex);
+        }
+    }
+
     private <T> T withRetry(Supplier<T> supplier, int maxAttempts, long initialDelayMs) {
         int attempt = 0;
         long delay = initialDelayMs;
@@ -502,6 +423,8 @@ public class NhanhClient {
             try {
                 attempt++;
                 return supplier.get();
+            } catch (ExternalServiceException ex) {
+                throw ex;
             } catch (Exception ex) {
                 if (attempt >= maxAttempts) {
                     log.error("Operation failed after {} attempts", attempt, ex);
