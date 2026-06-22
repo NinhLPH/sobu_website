@@ -2,9 +2,12 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore';
+import { RoleName } from '../../interface/role.model';
+
+type AllowedRole = RoleName | `ROLE_${RoleName}`;
 
 interface ProtectedRouteProps {
-    allowedRoles: string[];
+    allowedRoles: AllowedRole[];
     children?: React.ReactNode;
 }
 
