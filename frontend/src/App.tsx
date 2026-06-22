@@ -35,6 +35,7 @@ import {useEffect} from 'react';
 import {usePublicUiStore} from './store/usePublicUiStore';
 import AdminBanners from './pages/admin/Banners';
 import AdminConfigs from './pages/admin/Configs';
+import ScrollToTop from './components/common/ScrollToTop';
 
 export default function App() {
     const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
@@ -45,6 +46,7 @@ export default function App() {
 
     return (
         <Router>
+            <ScrollToTop/>
             <div className="flex flex-col min-h-screen">
                 <Header/>
                 <Routes>
