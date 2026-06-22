@@ -1,7 +1,10 @@
 import axios from 'axios';
 import {authStorage} from '../utils/auth-storage';
 
-export const BASE_URL = 'https://suffocate-ground-keenness.ngrok-free.dev';
+export const BASE_URL =
+    process.env.REACT_APP_API_URL ||
+    process.env.VITE_API_URL ||
+    'https://suffocate-ground-keenness.ngrok-free.dev';
 
 const PUBLIC_ROUTES = [
     '/api/auth/login',
@@ -36,6 +39,7 @@ const apiClient = axios.create({
     baseURL: BASE_URL,
     headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
     },
 });
 
@@ -103,7 +107,11 @@ apiClient.interceptors.response.use(
             try {
                 const refreshToken = authStorage.getRefreshToken();
                 // Gọi API refresh token
-                const res = await axios.post(`${BASE_URL}/api/auth/refresh-token`, {refreshToken});
+                const res = await axios.post(`${BASE_URL}/api/auth/refresh-token`, {refreshToken}, {
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true',
+                    },
+                });
 
                 const session = res.data.data;
                 const newAccessToken = session.accessToken;
