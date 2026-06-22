@@ -273,6 +273,14 @@ public class NhanhClient {
         }
     }
 
+    private String buildApiUrl(String apiPath) {
+        return UriComponentsBuilder.fromHttpUrl(nhanhProperties.getBaseUrl())
+                .replacePath(apiPath)
+                .queryParam("appId", nhanhProperties.getClientId())
+                .queryParam("businessId", nhanhProperties.getBusinessId())
+                .toUriString();
+    }
+
     private String bearer(String accessToken) {
         if (accessToken != null && accessToken.startsWith("Bearer ")) {
             return accessToken;
@@ -316,6 +324,42 @@ public class NhanhClient {
         }
     }
 
+    private <RESP> RESP deserializeOnce(
+            String rawBody,
+            ParameterizedTypeReference<RESP> responseType,
+            String apiPath,
+            int httpStatus) {
+        if (rawBody == null || rawBody.isBlank()) {
+            throw new NhanhApiException(
+                    "Nhanh API response is empty",
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    null);
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            if (!isSuccessCode(root.path("code"))) {
+                throw apiException(rawBody, httpStatus, null);
+            }
+            return objectMapper.readValue(
+                    rawBody,
+                    objectMapper.getTypeFactory()
+                            .constructType(responseType.getType()));
+        } catch (JsonProcessingException ex) {
+            log.error("Failed to deserialize Nhanh response for {}: body={}", apiPath, rawBody, ex);
+            throw new NhanhApiException(
+                    "Nhanh API response could not be parsed",
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    ex);
+        }
+    }
+
     private <RESP> RESP deserialize(
             String rawBody,
             ParameterizedTypeReference<RESP> responseType,
@@ -344,6 +388,49 @@ public class NhanhClient {
         } catch (JsonProcessingException ex) {
             log.error("Failed to deserialize Nhanh response for {}: body={}", apiPath, rawBody, ex);
             throw new ExternalServiceException("Nhanh API response could not be parsed", ex);
+        }
+    }
+
+    private NhanhApiException apiException(
+            String rawBody,
+            int httpStatus,
+            Throwable cause) {
+        if (rawBody == null || rawBody.isBlank()) {
+            return new NhanhApiException(
+                    "Nhanh API returned HTTP " + httpStatus,
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    cause);
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(rawBody);
+            String errorCode = textValue(root.get("errorCode"));
+            String message = responseMessage(root);
+            JsonNode data = root.path("data");
+            Long unlockedAtEpochSeconds = longValue(data.get("unlockedAt"));
+            Instant unlockedAt = unlockedAtEpochSeconds == null
+                    ? null
+                    : Instant.ofEpochSecond(unlockedAtEpochSeconds);
+            return new NhanhApiException(
+                    errorCode == null || errorCode.isBlank()
+                            ? message
+                            : String.format("Nhanh API error [%s]: %s", errorCode, message),
+                    httpStatus,
+                    errorCode,
+                    unlockedAt,
+                    false,
+                    cause);
+        } catch (JsonProcessingException ex) {
+            return new NhanhApiException(
+                    "Nhanh API returned HTTP " + httpStatus,
+                    httpStatus,
+                    null,
+                    null,
+                    false,
+                    cause == null ? ex : cause);
         }
     }
 

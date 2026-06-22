@@ -83,5 +83,13 @@ public class NhanhProperties {
         private long requestIntervalMs = 250;
         private int rateLimitMaxAttempts = 5;
         private long rateLimitUnlockBufferSeconds = 1;
+        private int retryAfterSeconds = 30;
+        private long rollingWindowMs = 30_000;
+        private int rollingWindowMaxRequests = 120;
+        private long interChunkSleepMs = 60_000;
+        private int chunkSize = 5;
+        private int maxAttemptsPerRequest = 5;
+        private long extendedLockThresholdMs = 300_000;
+        private List<Long> retryBackoffSeconds = new ArrayList<>(List.of(1L, 2L, 5L));
     }
 }
