@@ -16,7 +16,7 @@ public class CreateBannerRequest {
     private String imageUrl;
     private String linkUrl;
     private Integer displayOrder;
-    private Banner.BannerPosition position;
+    private String position;
     private Boolean isActive;
     private LocalDateTime startDate;
     private LocalDateTime endDate;

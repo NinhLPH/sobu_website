@@ -385,20 +385,54 @@ device_type = VALUES(device_type),
 updated_at = VALUES(updated_at);
 
 INSERT INTO website_configurations (
-id, config_key, config_value, type, group_name, description, is_public, is_active, created_at, updated_at
+config_key, config_value, type, group_name, description, is_public, is_active, created_at, updated_at
 ) VALUES
-(1, 'site_name', 'Sodu Beauty', 'text', 'general', 'Tên website hiển thị ở giao diện.', true, true, '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
-(2, 'primary_color', '#D84F7A', 'color', 'theme', 'Màu thương hiệu chính.', true, true, '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
-(3, 'free_shipping_threshold', '500000', 'number', 'commerce', 'Ngưỡng miễn phí vận chuyển.', true, true, '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
-(4, 'support_hotline', '1900 636 999', 'text', 'support', 'Số hotline hỗ trợ khách hàng.', true, true, '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
-(5, 'homepage_sections', '{"sections":["banners","categories","bestSellers","newArrivals"]}', 'json', 'homepage', 'Cấu hình thứ tự block trang chủ.', true, true, '2026-05-01 08:00:00', '2026-05-01 08:00:00')
+('primary_color', '#00618e', 'color', 'THEME', NULL, true, true, NOW(), NOW()),
+('secondary_color', '#005f9c', 'color', 'THEME', NULL, true, true, NOW(), NOW()),
+('accent_color', '#5a4bb4', 'color', 'THEME', NULL, true, true, NOW(), NOW()),
+('background_color', '#f3f6ff', 'color', 'THEME', NULL, true, true, NOW(), NOW()),
+('surface_color', '#ffffff', 'color', 'THEME', NULL, true, true, NOW(), NOW()),
+('website_logo', 'https://placehold.co/240x80?text=SOBU', 'image', 'THEME', NULL, true, true, NOW(), NOW()),
+('website_favicon', '/assets/favicon.png', 'image', 'THEME', NULL, true, true, NOW(), NOW()),
+('product_placeholder_image', 'https://placehold.co/400x300?text=SOBU', 'image', 'THEME', NULL, true, true, NOW(), NOW()),
+('banner_placeholder_image', 'https://placehold.co/1200x420?text=SOBU', 'image', 'THEME', NULL, true, true, NOW(), NOW()),
+('seo_default_title', 'SOBU Studio - Mô hình sưu tầm & dịch vụ collector', 'text', 'SEO', NULL, true, true, NOW(), NOW()),
+('seo_default_description', 'SOBU Studio cung cấp mô hình sưu tầm, dịch vụ đặt trước, tìm hàng và custom dành cho collector.', 'text', 'SEO', NULL, true, true, NOW(), NOW()),
+('seo_default_keywords', 'sobu, sobu studio, mô hình sưu tầm, collector, pre-order, custom model', 'text', 'SEO', NULL, true, true, NOW(), NOW()),
+('seo_og_title', 'SOBU Studio', 'text', 'SEO', NULL, true, true, NOW(), NOW()),
+('seo_og_description', 'Khám phá mô hình sưu tầm, dịch vụ tìm hàng và đặt trước cùng SOBU.', 'text', 'SEO', NULL, true, true, NOW(), NOW()),
+('seo_og_image', 'https://placehold.co/1200x630?text=SOBU+Studio', 'image', 'SEO', NULL, true, true, NOW(), NOW()),
+('seo_robots_index_enabled', 'true', 'boolean_type', 'SEO', NULL, true, true, NOW(), NOW()),
+('site_name', 'SOBU', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('store_display_name', 'SOBU Studio', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('support_hotline', '1900 636 999', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('support_email', 'support@sobu.vn', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('company_name', 'SOBU Studio', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('company_address', 'Hà Nam, Việt Nam', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('working_hours', '09:00 - 21:00, Thứ 2 - Chủ nhật', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('footer_greeting_text', 'SOBU đồng hành cùng cộng đồng collector trong từng đơn hàng và yêu cầu đặc biệt.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('maintenance_mode_enabled', 'false', 'boolean_type', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('maintenance_message', 'Website đang được bảo trì. Vui lòng quay lại sau.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('social_links', '{"facebook":"","instagram":"","tiktok":"","youtube":"","zalo":""}', 'json', 'SOCIAL', NULL, true, true, NOW(), NOW()),
+('social_share_enabled', 'true', 'boolean_type', 'SOCIAL', NULL, true, true, NOW(), NOW()),
+('social_chat_widget_enabled', 'false', 'boolean_type', 'SOCIAL', NULL, true, true, NOW(), NOW()),
+('social_chat_config', '{"provider":"zalo","pageId":"","greetingText":"SOBU có thể hỗ trợ gì cho bạn?"}', 'json', 'SOCIAL', NULL, true, true, NOW(), NOW()),
+('free_shipping_threshold', '500000', 'number', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('max_cart_items', '99', 'number', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('checkout_guest_checkout_enabled', 'false', 'boolean_type', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('checkout_cod_enabled', 'true', 'boolean_type', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('checkout_online_payment_enabled', 'true', 'boolean_type', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('checkout_default_payment_method', 'ONLINE', 'text', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('checkout_shipping_fee_default', '0', 'number', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('checkout_order_note_enabled', 'true', 'boolean_type', 'CHECKOUT', NULL, true, true, NOW(), NOW()),
+('business_currency', 'VND', 'text', 'BUSINESS', NULL, true, true, NOW(), NOW()),
+('business_vat_rate', '10', 'number', 'BUSINESS', NULL, true, true, NOW(), NOW()),
+('business_inventory_hold_minutes', '15', 'number', 'BUSINESS', NULL, true, true, NOW(), NOW()),
+('business_order_auto_cancel_minutes', '30', 'number', 'BUSINESS', NULL, true, true, NOW(), NOW()),
+('business_return_period_days', '7', 'number', 'BUSINESS', NULL, true, true, NOW(), NOW()),
+('business_exchange_period_days', '7', 'number', 'BUSINESS', NULL, true, true, NOW(), NOW()),
+('business_low_stock_threshold', '5', 'number', 'BUSINESS', NULL, true, true, NOW(), NOW())
 ON DUPLICATE KEY UPDATE
-config_value = VALUES(config_value),
-type = VALUES(type),
-group_name = VALUES(group_name),
-description = VALUES(description),
-is_public = VALUES(is_public),
-is_active = VALUES(is_active),
-updated_at = VALUES(updated_at);
+config_key = VALUES(config_key);
 
 

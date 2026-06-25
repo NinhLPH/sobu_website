@@ -16,5 +16,5 @@ public interface BannerService {
     BannerDTO getBannerById(Long id);
     void deleteBanner(Long id);
     PageResponse<BannerDTO> getAllBanners(SearchRequest request);
-    List<BannerDTO> getActiveBanners(Banner.DeviceType deviceType, Banner.BannerPosition position);
+    List<BannerDTO> getActiveBanners(Banner.DeviceType deviceType, String position);
 }

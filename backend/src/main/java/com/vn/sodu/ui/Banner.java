@@ -31,9 +31,8 @@ public class Banner {
     @Column(name = "display_order")
     private Integer displayOrder;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private BannerPosition position;
+    @Column
+    private String position;
 
     @Column(name = "is_active")
     private Boolean isActive = true;
@@ -55,10 +54,6 @@ public class Banner {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    public enum BannerPosition {
-        HOME_TOP, HOME_MIDDLE, PRODUCT_SIDEBAR
-    }
 
     public enum DeviceType {
         WEB, MOBILE, ALL

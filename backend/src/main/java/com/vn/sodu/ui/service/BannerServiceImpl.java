@@ -114,7 +114,7 @@ public class BannerServiceImpl implements BannerService {
     }
 
     @Override
-    public List<BannerDTO> getActiveBanners(Banner.DeviceType deviceType, Banner.BannerPosition position) {
+    public List<BannerDTO> getActiveBanners(Banner.DeviceType deviceType, String position) {
         Specification<Banner> spec = (root, query, cb) -> {
             var predicate = cb.isTrue(root.get("isActive"));
             if (deviceType != null) {
