@@ -14,7 +14,7 @@ public class BannerRequest {
     private String imageUrl;
     private String linkUrl;
     private Integer displayOrder;
-    private Banner.BannerPosition position;
+    private String position;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private Banner.DeviceType deviceType;

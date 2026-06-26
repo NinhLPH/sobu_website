@@ -34,7 +34,6 @@ import SiteLayout from './components/layout/SiteLayout';
 import {useEffect} from 'react';
 import {usePublicUiStore} from './store/usePublicUiStore';
 import AdminBanners from './pages/admin/Banners';
-import AdminConfigs from './pages/admin/Configs';
 import ScrollToTop from './components/common/ScrollToTop';
 
 export default function App() {
@@ -68,8 +67,8 @@ export default function App() {
                         <Route path="/payment/return" element={<PaymentResult/>}/>
                         <Route path="/payment/cancel" element={<PaymentResult/>}/>
 
-                        {/* CUSTOMER LOGGED IN PRIVATE ROUTES */}
-                        <Route element={<ProtectedRoute allowedRoles={['CUSTOMER', 'ADMIN']} />}>
+                        {/* USER LOGGED IN PRIVATE ROUTES */}
+                        <Route element={<ProtectedRoute allowedRoles={['USER', 'ADMIN']} />}>
                             <Route path="/cart" element={<Cart/>}/>
                             <Route path="/requests" element={<MyRequests/>}/>
                             <Route path="/requests/new" element={<CreateRequest/>}/>
