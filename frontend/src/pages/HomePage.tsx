@@ -12,14 +12,14 @@ import BannerMedia from '../components/common/BannerMedia';
 import BannerCarousel from '../components/common/BannerCarousel';
 
 const SectionHeader = ({title, subtitle}: { title: string, subtitle?: string }) => (
-    <div className="mb-6 flex flex-wrap items-center gap-2 sm:gap-4">
-        <h2 className="text-xl font-black uppercase text-on-surface sm:text-2xl md:text-3xl">
+    <div className="mb-4 flex flex-wrap items-center gap-2 sm:mb-6 sm:gap-4">
+        <h2 className="text-lg font-black uppercase text-on-surface sm:text-2xl md:text-3xl">
             {title}
         </h2>
         {subtitle && (
             <>
                 <div className="w-[2px] h-6 bg-on-surface"></div>
-                <span className="text-sm font-medium text-on-surface sm:whitespace-nowrap">{subtitle}</span>
+                <span className="text-xs font-medium text-on-surface sm:whitespace-nowrap sm:text-sm">{subtitle}</span>
             </>
         )}
         <div className="flex-1 h-[1px] bg-on-surface/30 ml-4"></div>
@@ -27,22 +27,22 @@ const SectionHeader = ({title, subtitle}: { title: string, subtitle?: string }) 
 );
 
 const SectionWithBanner = ({title, subtitle, bannerImg, products, banners = []}: { title: string, subtitle?: string, bannerImg: string, products: any[], banners?: BannerDTO[] }) => (
-    <section className="mb-14 w-full px-4 sm:mb-20 sm:px-6">
+    <section className="mb-10 w-full px-3 sm:mb-20 sm:px-6">
         <SectionHeader title={title} subtitle={subtitle}/>
         <BannerCarousel
             banners={banners}
-            className="mb-8 h-[200px] w-full rounded-xl bg-surface-container md:h-[300px]"
+            className="mb-5 h-[150px] w-full rounded-xl bg-surface-container sm:mb-8 sm:h-[200px] md:h-[300px]"
             fallback={(
-                <div className="mb-8 h-[200px] w-full overflow-hidden rounded-xl bg-surface-container md:h-[300px]">
+                <div className="mb-5 h-[150px] w-full overflow-hidden rounded-xl bg-surface-container sm:mb-8 sm:h-[200px] md:h-[300px]">
                     <img src={bannerImg} className="h-full w-full object-cover" alt={`${title} banner`}/>
                 </div>
             )}
             imageFallback={<img src={bannerImg} className="h-full w-full object-cover" alt={`${title} banner fallback`}/>}
         />
         <ProductSlider products={products}/>
-        <div className="flex justify-center mt-8">
+        <div className="mt-5 flex justify-center sm:mt-8">
             <Link to="/products"
-                  className="px-8 py-2 border border-on-surface text-on-surface rounded-full font-bold hover:bg-on-surface hover:text-surface transition-all uppercase text-sm">
+                  className="rounded-full border border-on-surface px-6 py-2 text-xs font-bold uppercase text-on-surface transition-all hover:bg-on-surface hover:text-surface sm:px-8 sm:text-sm">
                 Xem thêm
             </Link>
         </div>
@@ -87,7 +87,7 @@ export default function HomePage() {
     }, [heroSlideCount]);
 
     return (
-        <main className="w-full min-w-0 space-y-14 bg-surface pb-20 pt-24 sm:space-y-20 sm:pb-24">
+        <main className="w-full min-w-0 space-y-10 bg-surface pb-16 pt-24 sm:space-y-20 sm:pb-24">
             <section
                 className="group/hero relative mx-4 flex h-[300px] items-center justify-center sm:mx-6 sm:h-[400px] md:h-[500px]">
                 <div className="absolute left-[5%] top-8 bottom-8 w-[80%] bg-outline-variant/20 rounded-3xl z-0"></div>
@@ -174,23 +174,23 @@ export default function HomePage() {
 
             {/* 3. DỊCH VỤ ĐỘ MÔ HÌNH  */}
             <section
-                className="mb-14 grid w-full grid-cols-1 items-center gap-8 px-4 sm:mb-20 sm:px-6 lg:grid-cols-12 lg:gap-12">
+                className="mb-10 grid w-full grid-cols-1 items-center gap-6 px-3 sm:mb-20 sm:px-6 lg:grid-cols-12 lg:gap-12">
                 <div className="lg:col-span-5 space-y-6">
-                    <h2 className="text-3xl md:text-4xl font-black text-on-surface uppercase tracking-tight leading-tight">
+                    <h2 className="text-2xl font-black uppercase leading-tight tracking-tight text-on-surface md:text-4xl">
                         DỊCH VỤ ĐỘ MÔ HÌNH SỐ 1 <br/> VIỆT NAM
                     </h2>
-                    <div className="flex flex-col gap-4 items-start pt-4">
+                    <div className="flex flex-col items-start gap-2 pt-2 sm:gap-4 sm:pt-4">
                         <span
-                            className="px-6 py-2 bg-primary text-white rounded-full font-bold text-sm">Độ Led cảm ứng</span>
-                        <span className="px-6 py-2 bg-primary text-white rounded-full font-bold text-sm">Sơn mô hình chuẩn phim</span>
-                        <span className="px-6 py-2 bg-primary text-white rounded-full font-bold text-sm">Custom theo ý thích</span>
+                            className="rounded-full bg-primary px-4 py-1.5 text-xs font-bold text-on-primary sm:px-6 sm:py-2 sm:text-sm">Độ Led cảm ứng</span>
+                        <span className="rounded-full bg-primary px-4 py-1.5 text-xs font-bold text-on-primary sm:px-6 sm:py-2 sm:text-sm">Sơn mô hình chuẩn phim</span>
+                        <span className="rounded-full bg-primary px-4 py-1.5 text-xs font-bold text-on-primary sm:px-6 sm:py-2 sm:text-sm">Custom theo ý thích</span>
                     </div>
                     <Link to="/services"
-                          className="mt-4 inline-block px-8 py-2 border border-on-surface text-on-surface rounded-full font-black uppercase tracking-widest hover:bg-on-surface hover:text-surface transition-colors">
+                          className="mt-3 inline-block rounded-full border border-on-surface px-6 py-2 text-xs font-black uppercase tracking-widest text-on-surface transition-colors hover:bg-on-surface hover:text-surface sm:mt-4 sm:px-8">
                         CUSTOM NGAY
                     </Link>
                 </div>
-                <div className="relative h-[300px] sm:h-[400px] lg:col-span-7">
+                <div className="relative h-[240px] sm:h-[400px] lg:col-span-7">
                     <div
                         className="absolute top-0 right-0 w-[55%] h-[60%] bg-surface-container rounded-lg overflow-hidden shadow-lg">
                         <img src={placeholderImages.custom1} className="w-full h-full object-cover" alt="Custom 1"/>
@@ -209,7 +209,7 @@ export default function HomePage() {
             </section>
 
             {/* 4. MÔ HÌNH CUSTOM */}
-            <section className="mb-14 w-full px-4 sm:mb-20 sm:px-6">
+            <section className="mb-10 w-full px-3 sm:mb-20 sm:px-6">
                 <SectionHeader title="MÔ HÌNH CUSTOM" subtitle="Giao Hàng Toàn Quốc"/>
                 <ProductSlider products={mappedProducts.slice().reverse()}/>
                 <div className="flex justify-center mt-8">
@@ -220,18 +220,18 @@ export default function HomePage() {
             </section>
 
             {/* 5. THỂ LOẠI MÔ HÌNH */}
-            <section className="mb-14 w-full px-4 text-center sm:mb-20 sm:px-6">
-                <h2 className="text-3xl font-black text-on-surface mb-12 uppercase">Thể loại mô hình</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+            <section className="mb-10 w-full px-3 text-center sm:mb-20 sm:px-6">
+                <h2 className="mb-6 text-2xl font-black uppercase text-on-surface sm:mb-12 sm:text-3xl">Thể loại mô hình</h2>
+                <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:gap-6 md:grid-cols-3">
                     {['Marvel', 'DC', 'Hot Wheels', 'Transformer', 'Naruto', 'Pacific Rim'].map((cat) => (
                         <Link to={`/category/${cat.toLowerCase()}`} key={cat}
-                              className="group relative h-40 md:h-56 rounded-2xl overflow-hidden bg-surface-container shadow-sm hover:shadow-md transition-all">
+                              className="group relative h-28 overflow-hidden rounded-xl bg-surface-container shadow-sm transition-all hover:shadow-md sm:h-40 sm:rounded-2xl md:h-56">
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
                             <img src={placeholderImages.hotwheels}
                                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                  alt={cat}/>
                             <div className="absolute inset-0 flex items-end justify-center pb-6 z-20">
-                                <h3 className="text-xl font-black text-white">{cat}</h3>
+                                <h3 className="text-sm font-black text-white sm:text-xl">{cat}</h3>
                             </div>
                         </Link>
                     ))}
@@ -255,34 +255,34 @@ export default function HomePage() {
             />
 
             {/* 7. KHỐI PROMO 2x2 */}
-            <section className="grid grid-cols-1 md:grid-cols-2 mb-20">
+            <section className="mb-14 grid grid-cols-2 sm:mb-20">
                 <div className="flex flex-col h-full">
                     <div
-                        className="relative flex h-[300px] flex-col items-start justify-center overflow-hidden p-6 text-white sm:p-12">
+                        className="relative flex h-36 flex-col items-start justify-center overflow-hidden p-3 text-white min-[390px]:h-40 sm:h-[300px] sm:p-12">
                         <img
                             src="https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg"
                             className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 1"/>
                         <div className="absolute inset-0 bg-black/50 z-10"></div>
 
                         <div className="relative z-20">
-                            <h2 className="text-3xl font-black uppercase mb-4">HOT WHEELS</h2>
-                            <p className="font-medium text-white/80 mb-6 max-w-sm text-sm">KHÁM PHÁ NHỮNG MẪU XE MÔ HÌNH
+                            <h2 className="mb-2 text-sm font-black uppercase leading-tight min-[390px]:text-base sm:mb-4 sm:text-3xl">HOT WHEELS</h2>
+                            <p className="mb-3 max-w-sm text-[10px] font-medium leading-snug text-white/85 sm:mb-6 sm:text-sm">KHÁM PHÁ NHỮNG MẪU XE MÔ HÌNH
                                 HOT NHẤT DÀNH CHO NGƯỜI ĐAM MÊ TỐC ĐỘ.</p>
                             <button
-                                className="px-8 py-2 bg-transparent text-white border border-white font-bold uppercase text-xs hover:bg-white hover:text-black transition-colors">Xem
+                                className="border border-white bg-transparent px-3 py-1.5 text-[9px] font-bold uppercase text-white transition-colors hover:bg-white hover:text-black sm:px-8 sm:py-2 sm:text-xs">Xem
                                 thêm
                             </button>
                         </div>
                     </div>
 
                     <div
-                        className="relative flex h-[300px] flex-col items-start justify-end overflow-hidden p-6 text-white sm:p-12">
+                        className="relative flex h-36 flex-col items-start justify-end overflow-hidden p-3 text-white min-[390px]:h-40 sm:h-[300px] sm:p-12">
                         <img src="https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg"
                              className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 2"/>
                         <div className="absolute inset-0 bg-black/40 z-10"></div>
 
                         <div className="relative z-20">
-                            <p className="font-medium text-sm max-w-sm uppercase">SƯU TẦM NHỮNG MẪU XE HUYỀN THOẠI - TỪ
+                            <p className="max-w-sm text-[10px] font-medium uppercase leading-snug sm:text-sm">SƯU TẦM NHỮNG MẪU XE HUYỀN THOẠI - TỪ
                                 SIÊU XE HIỆN ĐẠI ĐẾN CLASSIC CỔ ĐIỂN.</p>
                         </div>
                     </div>
@@ -290,30 +290,30 @@ export default function HomePage() {
 
                 <div className="flex flex-col h-full">
                     <div
-                        className="relative flex h-[300px] flex-col items-start justify-center overflow-hidden p-6 text-white sm:p-12">
+                        className="relative flex h-36 flex-col items-start justify-center overflow-hidden p-3 text-white min-[390px]:h-40 sm:h-[300px] sm:p-12">
                         <img src="https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg"
                              className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 3"/>
                         <div className="absolute inset-0 bg-black/40 z-10"></div>
 
                         <div className="relative z-20">
-                            <p className="font-medium text-sm max-w-sm uppercase">DISCOVER LIMITED EDITION CARS AND
+                            <p className="max-w-sm text-[10px] font-medium uppercase leading-snug sm:text-sm">DISCOVER LIMITED EDITION CARS AND
                                 EXCLUSIVE RELEASES FOR TRUE COLLECTORS.</p>
                         </div>
                     </div>
 
                     <div
-                        className="relative flex h-[300px] flex-col items-start justify-center overflow-hidden p-6 text-white sm:p-12">
+                        className="relative flex h-36 flex-col items-start justify-center overflow-hidden p-3 text-white min-[390px]:h-40 sm:h-[300px] sm:p-12">
                         <img
                             src="https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg"
                             className="absolute inset-0 w-full h-full object-cover" alt="Hot Wheels 4"/>
                         <div className="absolute inset-0 bg-black/50 z-10"></div>
 
                         <div className="relative z-20">
-                            <h2 className="text-3xl font-black uppercase mb-4">GIFT FOR COLLECTORS</h2>
-                            <p className="font-medium text-sm mb-6 max-w-sm uppercase text-white/80">MÓN QUÀ HOÀN HẢO
+                            <h2 className="mb-2 text-sm font-black uppercase leading-tight min-[390px]:text-base sm:mb-4 sm:text-3xl">GIFT FOR COLLECTORS</h2>
+                            <p className="mb-3 max-w-sm text-[10px] font-medium uppercase leading-snug text-white/85 sm:mb-6 sm:text-sm">MÓN QUÀ HOÀN HẢO
                                 CHO NGƯỜI YÊU XE VÀ ĐAM MÊ MÔ HÌNH.</p>
                             <button
-                                className="px-8 py-2 bg-white text-black font-bold uppercase text-xs hover:bg-transparent hover:text-white border border-white transition-colors">Xem
+                                className="border border-white bg-white px-3 py-1.5 text-[9px] font-bold uppercase text-black transition-colors hover:bg-transparent hover:text-white sm:px-8 sm:py-2 sm:text-xs">Xem
                                 thêm
                             </button>
                         </div>
@@ -336,14 +336,14 @@ export default function HomePage() {
             />
 
             {/* 11. TIN TỨC */}
-            <section className="mb-14 w-full px-4 sm:mb-20 sm:px-6">
-                <h2 className="text-2xl font-black text-on-surface mb-8 uppercase">Tin Tức</h2>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <section className="mb-10 w-full px-3 sm:mb-20 sm:px-6">
+                <h2 className="mb-5 text-xl font-black uppercase text-on-surface sm:mb-8 sm:text-2xl">Tin Tức</h2>
+                <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-4">
                     {mockBlogs.slice(0, 4).map(blog => (
                         <Link
                             to={`/blog/${blog.id}`}
                             key={blog.id}
-                            className="bg-surface-container rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all group flex flex-col"
+                            className="group flex flex-col overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-lowest shadow-sm transition-all hover:shadow-md sm:rounded-2xl"
                         >
                             <div className="aspect-[16/10] w-full overflow-hidden bg-surface-container-low">
                                 <img
@@ -352,7 +352,7 @@ export default function HomePage() {
                                     alt={blog.title}
                                 />
                             </div>
-                            <div className="p-5 flex flex-col flex-1 justify-between">
+                            <div className="flex flex-1 flex-col justify-between p-4 sm:p-5">
                                 <div>
                                     <h3 className="font-bold text-base text-on-surface group-hover:text-primary mb-2 line-clamp-2 transition-colors">
                                         {blog.title}
@@ -370,14 +370,14 @@ export default function HomePage() {
                 </div>
                 <div className="flex justify-end mt-6">
                     <Link to="/blog"
-                          className="px-6 py-2 bg-outline text-white rounded-full font-bold text-xs uppercase hover:bg-primary transition-all">MORE
+                          className="rounded-full bg-outline px-5 py-2 text-xs font-bold uppercase text-surface transition-all hover:bg-primary sm:px-6">MORE
                         →</Link>
                 </div>
             </section>
 
             {/* 12. ĐỐI TÁC CHIẾN LƯỢC */}
             <section
-                className="w-full bg-surface-container-low border-y border-outline-variant/10 py-16 mb-20 overflow-hidden relative">
+                className="relative mb-14 w-full overflow-hidden border-y border-outline-variant/10 bg-surface-container-low py-10 sm:mb-20 sm:py-16">
                 <div
                     className="absolute -top-24 -left-20 w-80 h-80 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
                 <div
@@ -388,7 +388,7 @@ export default function HomePage() {
                         Đối tác chiến lược & Thương hiệu đồng hành
                     </h2>
                     <div
-                        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 items-center justify-items-center">
+                        className="grid grid-cols-2 items-center justify-items-center gap-3 sm:grid-cols-3 sm:gap-6 lg:grid-cols-6">
                         {[
                             {
                                 name: 'BANDAI',
@@ -423,7 +423,7 @@ export default function HomePage() {
                         ].map((brand, index) => (
                             <div
                                 key={index}
-                                className={`group flex items-center justify-center h-14 w-full max-w-[160px] bg-surface/40 backdrop-blur-xs rounded-xl p-2 border border-outline-variant/10 opacity-60 hover:opacity-100 hover:bg-white hover:scale-105 transition-all duration-300 cursor-pointer shadow-xs ${brand.glow}`}
+                                className={`group flex h-12 w-full max-w-[150px] cursor-pointer items-center justify-center rounded-xl border border-outline-variant/20 bg-surface-container-lowest/70 p-2 opacity-75 shadow-sm backdrop-blur-xs transition-all duration-300 hover:scale-105 hover:bg-surface-container-lowest hover:opacity-100 sm:h-14 sm:max-w-[160px] ${brand.glow}`}
                             >
                                 <img
                                     src={brand.url}
@@ -437,12 +437,12 @@ export default function HomePage() {
             </section>
 
             {/* 13. ĐÁNH GIÁ */}
-            <section className="mx-auto w-full px-4 text-center sm:px-6">
-                <h2 className="text-3xl font-black uppercase mb-12">Đánh giá từ khách hàng</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <section className="mx-auto w-full px-3 text-center sm:px-6">
+                <h2 className="mb-6 text-2xl font-black uppercase text-on-surface sm:mb-12 sm:text-3xl">Đánh giá từ khách hàng</h2>
+                <div className="mb-6 grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
                     {[1, 2, 3, 4, 5, 6].map(i => (
                         <div key={i}
-                             className="border border-outline-variant/30 p-6 rounded-2xl text-left shadow-sm bg-white">
+                             className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4 text-left shadow-sm sm:rounded-2xl sm:p-6">
                             <div className="flex gap-1 mb-3 text-[#FFB800]">
                                 <Star className="w-4 h-4 fill-current"/> <Star className="w-4 h-4 fill-current"/> <Star
                                 className="w-4 h-4 fill-current"/> <Star className="w-4 h-4 fill-current"/> <Star
