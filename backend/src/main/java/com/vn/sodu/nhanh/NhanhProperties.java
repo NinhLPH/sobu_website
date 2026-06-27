@@ -44,6 +44,7 @@ public class NhanhProperties {
     private Webhooks webhooks = new Webhooks();
     private Accounting accounting = new Accounting();
     private Location location = new Location();
+    private Shipping shipping = new Shipping();
 
     @Getter
     @Setter
@@ -91,5 +92,30 @@ public class NhanhProperties {
         private int maxAttemptsPerRequest = 5;
         private long extendedLockThresholdMs = 300_000;
         private List<Long> retryBackoffSeconds = new ArrayList<>(List.of(1L, 2L, 5L));
+    }
+
+    @Getter
+    @Setter
+    public static class Shipping {
+        private String feePath = "/v3.0/shipping/fee";
+        private String type = "SHOPPING";
+        private ShippingDefaults defaults = new ShippingDefaults();
+        private Origin origin = new Origin();
+        private Integer sendCarrierType = 1;
+    }
+
+    @Getter
+    @Setter
+    public static class ShippingDefaults {
+        private java.math.BigDecimal weight = new java.math.BigDecimal("1000");
+    }
+
+    @Getter
+    @Setter
+    public static class Origin {
+        private String address;
+        private Long cityId;
+        private Long districtId;
+        private Long wardId;
     }
 }
