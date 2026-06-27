@@ -57,6 +57,7 @@ Some modules expose multiple base paths:
 - Auth: `/api/auth/...` and `/auth/...`
 - Public catalog: `/api/public/...` and `/api/v1/public/...`
 - Public Nhanh locations: `/api/public/locations` only
+- Public shipping quotes: `/api/public/shipping/quotes`
 - Requests: `/api/requests/...`, `/api/request/...`, `/api/v1/requests/...`, `/api/v1/request/...`
 - Orders: `/api/orders/...` and `/api/v1/orders/...`
 - Admin requests: `/api/admin/requests/...` and `/api/v1/admin/requests/...`
@@ -217,6 +218,105 @@ Uses the common error responses. Typical statuses: `400`, `401`, `500`.
 ### Notes
 
 * Token refresh should use `/api/auth/refresh-token`.
+
+## Endpoint
+
+**Google OAuth Login**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/auth/oauth/google`
+
+### Description
+
+Authenticate a user with a Google ID token, create or link an account if necessary, and return access token, refresh token, and account profile.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "idToken": "google-id-token"
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| idToken | String | Yes | Google ID token returned by Google Sign-In |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Google login successful",
+  "data": {
+    "accessToken": "eyJ...",
+    "refreshToken": "eyJ...",
+    "tokenType": "Bearer",
+    "expiresIn": 3600,
+    "account": {
+      "id": 1,
+      "email": "user@example.com",
+      "fullName": "Nguyen Van A",
+      "phone": "0901234567",
+      "status": "ACTIVE",
+      "role": {
+        "id": 2,
+        "name": "CUSTOMER"
+      }
+    }
+  },
+  "timestamp": "2026-06-27T10:00:00"
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `500`.
+
+### Business Rules
+
+* The ID token must be issued by Google and pass server-side validation.
+* The response payload shape matches normal login.
+
+### Notes
+
+* Alias available at `/auth/oauth/google`.
 
 ## Endpoint
 
@@ -399,179 +499,7 @@ Uses the common error responses. Typical statuses: `400`, `409`, `500`.
 
 ### Notes
 
-* Account activation may be required before login.
-
-## Endpoint
-
-**Resend Activation Email**
-
-### Method
-
-`POST`
-
-### URI
-
-`/api/auth/resend-activation`
-
-### Description
-
-Resend the activation email for an inactive account.
-
-### Authorization
-
-| Type | Required |
-| ---- | -------- |
-| None | No |
-
-### Headers
-
-| Header | Type | Required | Description |
-| ------ | ---- | -------- | ----------- |
-| Content-Type | String | Yes | `application/json` |
-
-### Path Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Request Body
-
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-#### Body Fields
-
-| Field | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| email | String | Yes | Valid account email |
-
-### Success Response
-
-#### HTTP Status
-
-`200 OK`
-
-```json
-{
-  "success": true,
-  "statusCode": 200,
-  "message": "Activation email sent",
-  "timestamp": "2026-06-11T10:00:00"
-}
-```
-
-### Error Responses
-
-Uses the common error responses. Typical statuses: `400`, `404`, `500`.
-
-### Business Rules
-
-* Requests are limited to once every 60 seconds.
-* The account must exist and still require activation.
-
-### Notes
-
-* This endpoint is public.
-
-## Endpoint
-
-**Activate Account**
-
-### Method
-
-`GET`
-
-### URI
-
-`/api/auth/activate`
-
-### Description
-
-Activate an account using an activation token.
-
-### Authorization
-
-| Type | Required |
-| ---- | -------- |
-| None | No |
-
-### Headers
-
-| Header | Type | Required | Description |
-| ------ | ---- | -------- | ----------- |
-| Content-Type | String | No | Optional for GET requests |
-
-### Path Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| token | String | Yes | Activation token |
-
-Example:
-
-```http
-GET /api/auth/activate?token=abc123
-```
-
-### Request Body
-
-No request body.
-
-### Success Response
-
-#### HTTP Status
-
-`200 OK`
-
-```json
-{
-  "success": true,
-  "statusCode": 200,
-  "message": "Account activated",
-  "data": {
-    "id": 1,
-    "email": "user@example.com",
-    "fullName": "Nguyen Van A",
-    "phone": "0901234567",
-    "role": {
-      "id": 2,
-      "name": "CUSTOMER",
-      "description": "Customer account"
-    },
-    "status": "ACTIVE",
-    "message": "Account activated"
-  },
-  "timestamp": "2026-06-11T10:00:00"
-}
-```
-
-### Error Responses
-
-Uses the common error responses. Typical statuses: `400`, `404`, `500`.
-
-### Business Rules
-
-* Activation token must be valid and not expired.
-
-### Notes
-
-* Usually called from an email link.
+* Current code registers the account through `AuthService.register`; no activation or resend activation endpoint is exposed by `AuthController`.
 
 ## Endpoint
 
@@ -1466,6 +1394,115 @@ Uses the common error responses. Typical statuses: `502`, `500`.
 * The stale-cache success message is `Locations retrieved from stale cache`.
 * City, district, and ward IDs are explicit as `cityId`, `districtId`, and `wardId` for shipping and order flows.
 * No `/api/v1/public/locations` alias is currently defined.
+
+## Endpoint
+
+**Get Public Shipping Quotes**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/public/shipping/quotes`
+
+### Description
+
+Get shipping fee quotes for a checkout address and cart subtotal using the Nhanh shipping quote integration.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "customerAddress": "12 Nguyen Trai",
+  "customerCityId": 254,
+  "customerDistrictId": 331,
+  "customerWardId": 1116,
+  "cartSubtotal": 500000,
+  "codAmount": 500000,
+  "shippingWeight": 1200,
+  "carrierId": 1,
+  "carrierServiceId": 2
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| customerAddress | String | No | Customer street address |
+| customerCityId | Long | Yes | Nhanh city ID |
+| customerDistrictId | Long | Yes | Nhanh district ID |
+| customerWardId | Long | Yes | Nhanh ward ID |
+| cartSubtotal | Number | Yes | Cart subtotal, must be greater than or equal to `0` |
+| codAmount | Number | No | COD amount, must be greater than or equal to `0` |
+| shippingWeight | Number | No | Shipping weight; when supplied it must be greater than `0` |
+| carrierId | Long | No | Optional preferred carrier ID |
+| carrierServiceId | Long | No | Optional preferred carrier service ID |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Shipping quotes retrieved successfully",
+  "data": [
+    {
+      "carrierId": 1,
+      "carrierName": "Nhanh Express",
+      "carrierServiceId": 2,
+      "carrierServiceName": "Standard",
+      "shipFee": 30000,
+      "customerShipFee": 30000,
+      "deliveryTime": "2-3 days",
+      "description": "Standard delivery"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `502`, `500`.
+
+### Business Rules
+
+* City, district, and ward IDs should come from `/api/public/locations`.
+* The endpoint returns shipping options from `NhanhShippingQuoteService`.
+
+### Notes
+
+* This endpoint returns `ApiResponseDTO<List<ShippingQuoteDto>>`.
+* No `/api/v1/public/shipping/quotes` alias is currently defined.
 
 ## Endpoint
 
@@ -4118,6 +4155,108 @@ Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `
 ### Notes
 
 * Returns `ApiResponseDTO<WebsiteConfigurationDTO>`.
+
+## Endpoint
+
+**Bulk Update Website Configs**
+
+### Method
+
+`PUT`
+
+### URI
+
+`/api/admin/configs/bulk`
+
+### Description
+
+Update multiple website configuration values by key.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+[
+  {
+    "key": "homepage.heroTitle",
+    "value": "New Hero"
+  },
+  {
+    "key": "homepage.heroSubtitle",
+    "value": "New Subtitle"
+  }
+]
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| key | String | Yes | Existing config key to update |
+| value | String | Yes | New config value |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Configurations updated successfully",
+  "data": [
+    {
+      "id": 1,
+      "key": "homepage.heroTitle",
+      "value": "New Hero",
+      "type": "text",
+      "groupName": "homepage",
+      "description": "Hero title",
+      "isPublic": true,
+      "createdAt": "2026-06-27T10:00:00",
+      "updatedAt": "2026-06-27T10:00:00"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* Each item identifies the target configuration by `key`.
+* The backend returns the updated configuration DTOs.
+
+### Notes
+
+* Returns `ApiResponseDTO<List<WebsiteConfigurationDTO>>`.
 
 ## Endpoint
 
