@@ -117,7 +117,7 @@ public class OrderService {
             order.getItems().add(item);
         }
 
-        order.setTotalAmount(money(total.add(money(dto.getShippingFee()))));
+        order.setTotalAmount(money(total));
         paymentService.initializeOrderPaymentState(order);
         return orderRepository.save(order);
     }
@@ -149,6 +149,18 @@ public class OrderService {
             if (item.getDiscount() != null && item.getDiscount().signum() < 0) {
                 throw new IllegalArgumentException("Item discount must be greater than or equal to 0");
             }
+        }
+        if (dto.getCustomerCityId() == null || dto.getCustomerCityId() <= 0
+                || dto.getCustomerDistrictId() == null || dto.getCustomerDistrictId() <= 0
+                || dto.getCustomerWardId() == null || dto.getCustomerWardId() <= 0) {
+            throw new IllegalArgumentException("Customer city, district, and ward ids are required");
+        }
+        if (dto.getCarrierId() == null || dto.getCarrierId() <= 0
+                || dto.getCarrierServiceId() == null || dto.getCarrierServiceId() <= 0) {
+            throw new IllegalArgumentException("Carrier id and carrier service id are required");
+        }
+        if (dto.getShippingFee() == null || dto.getShippingFee().signum() < 0) {
+            throw new IllegalArgumentException("Shipping fee must be greater than or equal to 0");
         }
     }
 
