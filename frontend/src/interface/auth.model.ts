@@ -10,8 +10,8 @@ export interface RegisterRequest {
     phone: string;
 }
 
-export interface ResendActivationRequest {
-    email: string;
+export interface GoogleLoginRequest {
+    idToken: string;
 }
 
 export interface RefreshTokenRequest {

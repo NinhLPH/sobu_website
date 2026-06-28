@@ -48,7 +48,3 @@ export interface RefreshTokenResponse {
 export interface RegisterResponse extends AccountDTO {
     message: string;
 }
-
-export interface ActivateAccountResponse extends AccountDTO {
-    message: string;
-}

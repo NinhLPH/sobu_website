@@ -13,7 +13,7 @@ jest.mock('react-router-dom', () => ({
     Route: ({path, element, children}: any) => (
         <div data-path={path || ''} data-element={element?.type?.name || ''}>{children}</div>
     ),
-    Navigate: () => null,
+    Navigate: function Navigate() { return null; },
     Outlet: () => null,
 }), {virtual: true});
 
@@ -27,8 +27,6 @@ jest.mock('./components/admin/AdminLayout', () => () => null);
 
 jest.mock('./pages/HomePage', () => () => null);
 jest.mock('./pages/LoginPage', () => () => null);
-jest.mock('./pages/ActivateAccount', () => () => null);
-jest.mock('./pages/VerifyEmailPage', () => () => null);
 jest.mock('./pages/ProductList', () => () => null);
 jest.mock('./pages/ProductDetails', () => () => null);
 jest.mock('./pages/BlogList', () => () => null);
@@ -61,8 +59,12 @@ describe('App route layout', () => {
         expect(siteLayout?.querySelector('[data-path="/cart"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/payment-result"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/login"]')).toBeNull();
+        expect(siteLayout?.querySelector('[data-path="/activate"]')).toBeNull();
+        expect(siteLayout?.querySelector('[data-path="/verify-email"]')).toBeNull();
         expect(siteLayout?.querySelector('[data-path="/admin"]')).toBeNull();
         expect(container.querySelector('[data-path="/login"]')).toBeTruthy();
+        expect(container.querySelector('[data-path="/activate"]')?.getAttribute('data-element')).toBe('Navigate');
+        expect(container.querySelector('[data-path="/verify-email"]')?.getAttribute('data-element')).toBe('Navigate');
         expect(container.querySelector('[data-path="/admin"]')).toBeTruthy();
         expect(container.querySelector('[data-path="banners"]')).toBeTruthy();
         expect(container.querySelector('[data-path="configs"]')).toBeTruthy();

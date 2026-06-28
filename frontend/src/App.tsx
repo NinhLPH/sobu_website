@@ -1,8 +1,6 @@
 import {BrowserRouter as Router, Routes, Route, Navigate} from 'react-router-dom';
 
 import LoginPage from './pages/LoginPage';
-import ActivateAccount from "./pages/ActivateAccount";
-import VerifyEmailPage from './pages/VerifyEmailPage';
 import Cart from './pages/Cart';
 import Header from "./components/common/Header";
 import Footer from "./components/common/Footer";
@@ -51,8 +49,8 @@ export default function App() {
                 <Header/>
                 <Routes>
                     <Route path="/login" element={<LoginPage/>}/>
-                    <Route path="/activate" element={<ActivateAccount/>}/>
-                    <Route path="/verify-email" element={<VerifyEmailPage/>}/>
+                    <Route path="/activate" element={<Navigate to="/login" replace/>}/>
+                    <Route path="/verify-email" element={<Navigate to="/login" replace/>}/>
 
                     <Route element={<SiteLayout/>}>
                         <Route path="/" element={<HomePage/>}/>
