@@ -1,77 +1,316 @@
-import {FormEvent, useCallback, useEffect, useState} from 'react';
-import {ChevronLeft, ChevronRight, Edit, FileJson, Loader2, Plus, Search, Trash2, X} from 'lucide-react';
+import {ChangeEvent, useCallback, useEffect, useMemo, useState} from 'react';
+import {
+    AlertCircle,
+    Check,
+    FileJson,
+    Image as ImageIcon,
+    Loader2,
+    RefreshCw,
+    Save,
+    UploadCloud
+} from 'lucide-react';
 import {AdminUiService} from '../../service/admin-ui.service';
-import {WebsiteConfigurationDTO, WebsiteConfigurationMutationPayload} from '../../interface/public-ui-config.model';
+import {WebsiteConfigurationDTO} from '../../interface/public-ui-config.model';
 import {PageResponse} from '../../interface/api-response';
 import {ToastService} from '../../service/toast.service';
 import {usePublicUiStore} from '../../store/usePublicUiStore';
+import {groupConfigsByGroupName} from '../../utils/website-config';
+import {FileService} from '../../service/file.service';
+import {getPublicImageUrl} from '../../utils/file-url';
+
+const CONFIG_PAGE_SIZE = 500;
+const GROUP_ORDER = ['THEME', 'GENERAL', 'SOCIAL', 'SEO', 'CHECKOUT', 'BUSINESS'];
 
 const emptyPage: PageResponse<WebsiteConfigurationDTO> = {
-    content: [], pageNumber: 1, pageSize: 10, totalElements: 0, totalPages: 0,
+    content: [], pageNumber: 1, pageSize: CONFIG_PAGE_SIZE, totalElements: 0, totalPages: 0,
     first: true, last: true, hasNext: false, hasPrevious: false,
 };
 
-const emptyConfig = (): WebsiteConfigurationMutationPayload => ({
-    key: '', value: '', type: 'text', groupName: '', description: '', isPublic: true,
-});
+type DraftValues = Record<string, string>;
+type GroupErrors = Record<string, string | null>;
 
-const errorMessage = (error: any) => error?.response?.data?.message || error?.message || 'Thao tác cấu hình thất bại.';
+const errorMessage = (error: any) =>
+    error?.response?.data?.message || error?.message || 'Thao tác cấu hình thất bại.';
+
+const isSupportedUrl = (value: string) =>
+    !value || value.startsWith('/') || /^https?:\/\//i.test(value);
+
+const isHexColor = (value: string) => /^#[0-9a-f]{6}$/i.test(value);
+
+const getConfigImagePreviewUrl = (value: string) => {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) return '';
+    if (/^https?:\/\//i.test(trimmedValue) || trimmedValue.startsWith('/assets/')) {
+        return trimmedValue;
+    }
+    return getPublicImageUrl(trimmedValue);
+};
+
+const toDraftValues = (configs: WebsiteConfigurationDTO[]) =>
+    configs.reduce<DraftValues>((accumulator, config) => {
+        accumulator[config.key] = config.value ?? '';
+        return accumulator;
+    }, {});
+
+const sortGroupNames = (groupNames: string[]) =>
+    [...groupNames].sort((left, right) => {
+        const leftIndex = GROUP_ORDER.indexOf(left);
+        const rightIndex = GROUP_ORDER.indexOf(right);
+        if (leftIndex !== -1 || rightIndex !== -1) {
+            return (leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex) -
+                (rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex);
+        }
+        return left.localeCompare(right);
+    });
+
+const getGroupTitle = (groupName: string) => {
+    switch (groupName) {
+        case 'THEME':
+            return 'Giao diện';
+        case 'GENERAL':
+            return 'Thông tin chung';
+        case 'SOCIAL':
+            return 'Mạng xã hội';
+        case 'SEO':
+            return 'SEO';
+        case 'CHECKOUT':
+            return 'Thanh toán';
+        case 'BUSINESS':
+            return 'Vận hành';
+        default:
+            return groupName;
+    }
+};
+
+function ConfigField({
+    config,
+    value,
+    disabled,
+    uploading,
+    onChange,
+    onJsonBlur,
+    onUpload,
+}: {
+    config: WebsiteConfigurationDTO;
+    value: string;
+    disabled?: boolean;
+    uploading?: boolean;
+    onChange: (value: string) => void;
+    onJsonBlur: () => void;
+    onUpload: (file: File) => void;
+}) {
+    if (config.type === 'boolean_type') {
+        const enabled = value === 'true';
+        return (
+            <button
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                disabled={disabled}
+                onClick={() => onChange(enabled ? 'false' : 'true')}
+                className={`inline-flex w-fit cursor-pointer items-center gap-3 rounded-full border px-1.5 py-1.5 pr-4 text-xs font-black transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    enabled
+                        ? 'border-primary/20 bg-primary/10 text-primary'
+                        : 'border-outline-variant/40 bg-surface-container text-outline'
+                }`}
+            >
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-white transition-colors ${
+                    enabled ? 'bg-primary' : 'bg-outline'
+                }`}>
+                    {enabled && <Check className="h-3.5 w-3.5"/>}
+                </span>
+                {enabled ? 'Bật' : 'Tắt'}
+            </button>
+        );
+    }
+
+    if (config.type === 'json') {
+        return (
+            <textarea
+                aria-label={`Giá trị ${config.key}`}
+                value={value}
+                disabled={disabled}
+                onChange={(event) => onChange(event.target.value)}
+                onBlur={onJsonBlur}
+                rows={7}
+                spellCheck={false}
+                className="min-h-[160px] w-full resize-y rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 font-mono text-xs font-semibold leading-relaxed text-on-surface outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+            />
+        );
+    }
+
+    if (config.type === 'color') {
+        return (
+            <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                    aria-label={`Chọn màu ${config.key}`}
+                    type="color"
+                    value={isHexColor(value) ? value : '#000000'}
+                    disabled={disabled}
+                    onChange={(event) => onChange(event.target.value)}
+                    className="h-11 w-full cursor-pointer rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-1 sm:w-20"
+                />
+                <input
+                    aria-label={`Giá trị ${config.key}`}
+                    value={value}
+                    disabled={disabled}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder="#00618e"
+                    className="h-11 flex-1 rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 font-mono text-xs font-bold text-on-surface outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                />
+            </div>
+        );
+    }
+
+    if (config.type === 'image') {
+        return (
+            <div className="space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                        aria-label={`Giá trị ${config.key}`}
+                        value={value}
+                        disabled={disabled}
+                        onChange={(event) => onChange(event.target.value)}
+                        placeholder="/api/public/files/configs/logo.png hoặc https://..."
+                        className="h-11 flex-1 rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 text-xs font-semibold text-on-surface outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                    />
+                    <label className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-primary/20 px-4 text-xs font-black uppercase text-primary transition-colors hover:bg-primary/10 ${
+                        disabled ? 'pointer-events-none opacity-50' : ''
+                    }`}>
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin"/> : <UploadCloud className="h-4 w-4"/>}
+                        Upload
+                        <input
+                            type="file"
+                            accept="image/*"
+                            disabled={disabled}
+                            className="hidden"
+                            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                                const file = event.target.files?.[0];
+                                if (file) onUpload(file);
+                                event.currentTarget.value = '';
+                            }}
+                        />
+                    </label>
+                </div>
+                {value && (
+                    <div className="flex items-center gap-3 rounded-xl bg-surface-container p-2">
+                        <div className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-container-lowest">
+                            <img src={getConfigImagePreviewUrl(value)} alt={`Preview ${config.key}`} className="h-full w-full object-cover"/>
+                        </div>
+                        <span className="line-clamp-2 break-all text-[11px] font-semibold text-outline">{value}</span>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <input
+            aria-label={`Giá trị ${config.key}`}
+            type={config.type === 'number' ? 'number' : 'text'}
+            value={value}
+            disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+            className="h-11 w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 text-sm font-semibold text-on-surface outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+        />
+    );
+}
 
 export default function AdminConfigs() {
     const [pageData, setPageData] = useState(emptyPage);
-    const [page, setPage] = useState(1);
-    const [searchInput, setSearchInput] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [editing, setEditing] = useState<WebsiteConfigurationDTO | null>(null);
-    const [form, setForm] = useState<WebsiteConfigurationMutationPayload>(emptyConfig);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [activeGroup, setActiveGroup] = useState('');
+    const [draftValues, setDraftValues] = useState<DraftValues>({});
+    const [groupErrors, setGroupErrors] = useState<GroupErrors>({});
+    const [savingGroup, setSavingGroup] = useState<string | null>(null);
+    const [uploadingKey, setUploadingKey] = useState<string | null>(null);
     const invalidateConfigs = usePublicUiStore((state) => state.invalidateConfigs);
     const fetchPublicConfigs = usePublicUiStore((state) => state.fetchConfigs);
 
     const load = useCallback(async () => {
         setLoading(true);
-        setError(null);
+        setLoadError(null);
         try {
-            setPageData(await AdminUiService.searchConfigs(searchTerm, {
-                page, pageSize: 10, sortBy: 'createdAt', sortDirection: 'DESC',
-            }));
-        } catch (loadError) {
-            setError(errorMessage(loadError));
+            const page = await AdminUiService.searchConfigs('', {
+                page: 1,
+                pageSize: CONFIG_PAGE_SIZE,
+                sortBy: 'groupName',
+                sortDirection: 'ASC',
+            });
+            setPageData(page);
+            setDraftValues(toDraftValues(page.content || []));
+        } catch (loadConfigError) {
+            setLoadError(errorMessage(loadConfigError));
         } finally {
             setLoading(false);
         }
-    }, [page, searchTerm]);
+    }, []);
 
-    useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        void load();
+    }, [load]);
 
-    const openCreate = () => {
-        setEditing(null);
-        setForm(emptyConfig());
-        setError(null);
-        setModalOpen(true);
-    };
+    const groupedConfigs = useMemo(
+        () => groupConfigsByGroupName(pageData.content || []),
+        [pageData.content]
+    );
+    const groupNames = useMemo(
+        () => sortGroupNames(Object.keys(groupedConfigs)),
+        [groupedConfigs]
+    );
+    const activeConfigs = activeGroup ? groupedConfigs[activeGroup] || [] : [];
 
-    const openEdit = (config: WebsiteConfigurationDTO) => {
-        setEditing(config);
-        setForm({
-            key: config.key, value: config.value, type: config.type,
-            groupName: config.groupName || '', description: config.description || '', isPublic: config.isPublic,
-        });
-        setError(null);
-        setModalOpen(true);
-    };
-
-    const validate = () => {
-        if (!form.key.trim()) return 'Key cấu hình là bắt buộc.';
-        if (!form.value.trim() && form.type !== 'text') return 'Giá trị cấu hình là bắt buộc.';
-        if (form.type === 'number' && !Number.isFinite(Number(form.value))) return 'Giá trị number không hợp lệ.';
-        if (form.type === 'json') {
-            try { JSON.parse(form.value); } catch { return 'Giá trị JSON không hợp lệ.'; }
+    useEffect(() => {
+        if (!activeGroup && groupNames.length) {
+            setActiveGroup(groupNames[0]);
+            return;
         }
-        if (form.type === 'image' && form.value && !form.value.startsWith('/') && !/^https?:\/\//i.test(form.value)) return 'URL ảnh không hợp lệ.';
+        if (activeGroup && groupNames.length && !groupNames.includes(activeGroup)) {
+            setActiveGroup(groupNames[0]);
+        }
+    }, [activeGroup, groupNames]);
+
+    const updateDraft = (groupName: string, key: string, value: string) => {
+        setDraftValues((current) => ({...current, [key]: value}));
+        setGroupErrors((current) => ({...current, [groupName]: null}));
+    };
+
+    const formatJson = (key: string) => {
+        const value = draftValues[key];
+        if (!value?.trim()) return;
+        try {
+            const parsed = JSON.parse(value);
+            setDraftValues((current) => ({
+                ...current,
+                [key]: JSON.stringify(parsed, null, 2),
+            }));
+        } catch {
+            // Validation is shown on save so typing invalid JSON remains possible.
+        }
+    };
+
+    const validateGroup = (groupName: string) => {
+        const configs = groupedConfigs[groupName] || [];
+        for (const config of configs) {
+            const value = draftValues[config.key] ?? '';
+            if (config.type === 'json') {
+                try {
+                    JSON.parse(value);
+                } catch {
+                    return `${config.key} phải là JSON hợp lệ.`;
+                }
+            }
+            if (config.type === 'number' && !Number.isFinite(Number(value))) {
+                return `${config.key} phải là số hợp lệ.`;
+            }
+            if (config.type === 'color' && value && !isHexColor(value)) {
+                return `${config.key} phải là mã màu hex hợp lệ.`;
+            }
+            if (config.type === 'image' && !isSupportedUrl(value.trim())) {
+                return `${config.key} phải là URL ảnh hợp lệ.`;
+            }
+        }
         return null;
     };
 
@@ -80,70 +319,193 @@ export default function AdminConfigs() {
         await fetchPublicConfigs(true);
     };
 
-    const submit = async (event: FormEvent) => {
-        event.preventDefault();
-        const validationError = validate();
-        if (validationError) return setError(validationError);
-        setSubmitting(true);
-        setError(null);
-        const payload = {...form, key: form.key.trim(), value: form.value.trim(), groupName: form.groupName?.trim() || undefined, description: form.description?.trim() || undefined};
+    const saveGroup = async (groupName: string) => {
+        const validationError = validateGroup(groupName);
+        if (validationError) {
+            setGroupErrors((current) => ({...current, [groupName]: validationError}));
+            return;
+        }
+
+        const configs = groupedConfigs[groupName] || [];
+        setSavingGroup(groupName);
+        setGroupErrors((current) => ({...current, [groupName]: null}));
         try {
-            if (editing) await AdminUiService.updateConfig(editing.id, payload);
-            else await AdminUiService.createConfig(payload);
+            await AdminUiService.bulkUpdateConfigs(configs.map((config) => ({
+                key: config.key,
+                value: draftValues[config.key] ?? '',
+            })));
             await Promise.all([load(), refreshPublic()]);
-            ToastService.success(editing ? 'Đã cập nhật cấu hình.' : 'Đã tạo cấu hình.');
-            setModalOpen(false);
-        } catch (submitError) {
-            setError(errorMessage(submitError));
+            ToastService.success(`Đã lưu nhóm ${getGroupTitle(groupName)}.`);
+        } catch (saveError) {
+            setGroupErrors((current) => ({...current, [groupName]: errorMessage(saveError)}));
         } finally {
-            setSubmitting(false);
+            setSavingGroup(null);
         }
     };
 
-    const remove = async (config: WebsiteConfigurationDTO) => {
-        if (!window.confirm(`Bạn có chắc muốn vô hiệu hóa hoặc xóa cấu hình “${config.key}”?`)) return;
-        setLoading(true);
-        setError(null);
+    const uploadImage = async (groupName: string, key: string, file: File) => {
+        setUploadingKey(key);
+        setGroupErrors((current) => ({...current, [groupName]: null}));
         try {
-            await AdminUiService.deleteConfig(config.id);
-            await Promise.all([load(), refreshPublic()]);
-            ToastService.success('Đã xử lý cấu hình.');
-        } catch (removeError) {
-            setError(errorMessage(removeError));
+            const result = await FileService.uploadFile(file, 'configs');
+            updateDraft(groupName, key, result.url);
+            ToastService.success('Đã upload ảnh cấu hình.');
+        } catch (uploadError) {
+            setGroupErrors((current) => ({...current, [groupName]: errorMessage(uploadError)}));
         } finally {
-            setLoading(false);
+            setUploadingKey(null);
         }
     };
 
-    const valueInput = form.type === 'boolean_type' ? (
-        <select aria-label="Giá trị" value={form.value || 'true'} onChange={(event) => setForm({...form, value: event.target.value})} className="w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm"><option value="true">true</option><option value="false">false</option></select>
-    ) : form.type === 'json' ? (
-        <textarea aria-label="Giá trị" value={form.value} onChange={(event) => setForm({...form, value: event.target.value})} rows={6} className="w-full rounded-xl border border-outline-variant px-4 py-3 font-mono text-xs" placeholder='{"key":"value"}'/>
-    ) : (
-        <input aria-label="Giá trị" type={form.type === 'number' ? 'number' : form.type === 'color' ? 'color' : form.type === 'image' ? 'url' : 'text'} value={form.value} onChange={(event) => setForm({...form, value: event.target.value})} className={`w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm ${form.type === 'color' ? 'h-12' : ''}`}/>
-    );
+    const isGroupDirty = (groupName: string) =>
+        (groupedConfigs[groupName] || []).some((config) =>
+            (draftValues[config.key] ?? '') !== (config.value ?? '')
+        );
 
     return (
         <div className="space-y-6 pt-6">
-            <div className="flex flex-wrap items-center justify-between gap-4"><div><h1 className="text-2xl font-black uppercase text-on-surface">Cấu hình website</h1><p className="mt-1 text-xs font-semibold text-outline">Quản lý key/value public và nội bộ.</p></div><button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-black uppercase text-white"><Plus className="h-4 w-4"/> Thêm cấu hình</button></div>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-black uppercase text-on-surface">Cấu hình website</h1>
+                    <p className="mt-1 text-xs font-semibold text-outline">
+                        Cập nhật các key có sẵn theo từng nhóm. Mỗi tab lưu riêng để tránh ghi đè ngoài phạm vi.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => void load()}
+                    disabled={loading}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-outline-variant/40 bg-white px-4 py-2.5 text-xs font-black uppercase text-on-surface transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}
+                    Tải lại
+                </button>
+            </div>
 
-            <form onSubmit={(event) => { event.preventDefault(); setPage(1); setSearchTerm(searchInput.trim()); }} className="flex gap-3 rounded-2xl border border-outline-variant/30 bg-white p-4"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/><input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Tìm key hoặc mô tả..." className="w-full rounded-xl bg-surface-container py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"/></div><button className="rounded-xl bg-surface-container px-4 text-xs font-black">Tìm kiếm</button></form>
-            {error && !modalOpen && <div className="rounded-xl border border-error/20 bg-error/10 p-4 text-xs font-bold text-error">{error}</div>}
+            {loadError && (
+                <div className="flex items-start gap-3 rounded-xl border border-error/20 bg-error/10 p-4 text-xs font-bold text-error">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>
+                    <span>{loadError}</span>
+                </div>
+            )}
 
-            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[800px] text-left text-xs"><thead className="bg-surface-variant text-on-surface-variant"><tr><th className="px-5 py-4">Key</th><th className="px-5 py-4">Giá trị</th><th className="px-5 py-4">Type</th><th className="px-5 py-4">Nhóm</th><th className="px-5 py-4">Public</th><th className="px-5 py-4 text-center">Thao tác</th></tr></thead><tbody>
-                {loading ? <tr><td colSpan={6} className="py-16 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/></td></tr> : pageData.content.map((config) => <tr key={config.id} className="border-t border-outline-variant/20"><td className="px-5 py-4 font-mono font-black text-primary">{config.key}</td><td className="max-w-sm px-5 py-4"><p className="line-clamp-2 break-all font-semibold text-on-surface">{config.value}</p><p className="mt-1 line-clamp-1 text-[10px] text-outline">{config.description || 'Không có mô tả'}</p></td><td className="px-5 py-4">{config.type}</td><td className="px-5 py-4">{config.groupName || '—'}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${config.isPublic ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{config.isPublic ? 'Public' : 'Private'}</span></td><td className="px-5 py-4"><div className="flex justify-center gap-2"><button type="button" onClick={() => openEdit(config)} aria-label={`Sửa config ${config.key}`} className="rounded-lg bg-primary/10 p-2 text-primary"><Edit className="h-4 w-4"/></button><button type="button" onClick={() => void remove(config)} aria-label={`Xóa config ${config.key}`} className="rounded-lg bg-error/10 p-2 text-error"><Trash2 className="h-4 w-4"/></button></div></td></tr>)}
-                {!loading && !pageData.content.length && <tr><td colSpan={6} className="py-16 text-center font-bold text-outline"><FileJson className="mx-auto mb-2 h-9 w-9 opacity-30"/>Không có cấu hình.</td></tr>}
-            </tbody></table></div>{pageData.totalPages > 1 && <div className="flex items-center justify-between border-t border-outline-variant/20 px-5 py-4"><span className="text-xs font-bold text-outline">Trang {pageData.pageNumber}/{pageData.totalPages}</span><div className="flex gap-2"><button type="button" disabled={!pageData.hasPrevious || loading} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-lg bg-surface-container p-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4"/></button><button type="button" disabled={!pageData.hasNext || loading} onClick={() => setPage((value) => value + 1)} className="rounded-lg bg-surface-container p-2 disabled:opacity-40"><ChevronRight className="h-4 w-4"/></button></div></div>}</div>
+            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                <div className="border-b border-outline-variant/20 bg-surface-container-lowest px-4 pt-4">
+                    <div className="flex gap-2 overflow-x-auto pb-3">
+                        {groupNames.map((groupName) => {
+                            const isActive = groupName === activeGroup;
+                            const dirty = isGroupDirty(groupName);
+                            return (
+                                <button
+                                    type="button"
+                                    key={groupName}
+                                    onClick={() => setActiveGroup(groupName)}
+                                    className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black uppercase transition-colors ${
+                                        isActive
+                                            ? 'bg-primary text-on-primary shadow-sm'
+                                            : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
+                                    }`}
+                                >
+                                    {getGroupTitle(groupName)}
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${
+                                        isActive ? 'bg-white/20 text-on-primary' : 'bg-white text-outline'
+                                    }`}>
+                                        {groupedConfigs[groupName]?.length || 0}
+                                    </span>
+                                    {dirty && <span className="h-2 w-2 rounded-full bg-amber-400" aria-label="Có thay đổi"/>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
 
-            {modalOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"><div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white shadow-xl"><div className="flex items-center justify-between border-b border-outline-variant/30 p-6"><h2 className="text-xl font-black">{editing ? 'Cập nhật cấu hình' : 'Thêm cấu hình'}</h2><button type="button" onClick={() => setModalOpen(false)} aria-label="Đóng"><X className="h-6 w-6"/></button></div><form onSubmit={submit} className="space-y-4 p-6">
-                <div><label className="mb-1 block text-xs font-black uppercase text-outline">Key</label><input aria-label="Key" required value={form.key} onChange={(event) => setForm({...form, key: event.target.value})} className="w-full rounded-xl border border-outline-variant px-4 py-2.5 font-mono text-sm" placeholder="homepage.heroTitle"/></div>
-                <div className="grid gap-4 sm:grid-cols-2"><div><label className="mb-1 block text-xs font-black uppercase text-outline">Type</label><select aria-label="Type" value={form.type} onChange={(event) => setForm({...form, type: event.target.value as WebsiteConfigurationMutationPayload['type'], value: event.target.value === 'boolean_type' ? 'true' : ''})} className="w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm"><option value="text">text</option><option value="color">color</option><option value="image">image</option><option value="boolean_type">boolean_type</option><option value="json">json</option><option value="number">number</option></select></div><div><label className="mb-1 block text-xs font-black uppercase text-outline">Nhóm</label><input value={form.groupName || ''} onChange={(event) => setForm({...form, groupName: event.target.value})} className="w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm"/></div></div>
-                <div><label className="mb-1 block text-xs font-black uppercase text-outline">Giá trị</label>{valueInput}</div>
-                <div><label className="mb-1 block text-xs font-black uppercase text-outline">Mô tả</label><textarea value={form.description || ''} onChange={(event) => setForm({...form, description: event.target.value})} rows={3} className="w-full rounded-xl border border-outline-variant px-4 py-3 text-sm"/></div>
-                <label className="flex items-center gap-3 text-sm font-bold"><input type="checkbox" checked={form.isPublic} onChange={(event) => setForm({...form, isPublic: event.target.checked})} className="h-4 w-4 accent-primary"/> Cho phép public API truy cập</label>
-                {error && <div className="rounded-xl bg-error/10 p-3 text-xs font-bold text-error">{error}</div>}
-                <div className="flex justify-end gap-3 border-t border-outline-variant/30 pt-4"><button type="button" onClick={() => setModalOpen(false)} className="rounded-xl px-5 py-2.5 text-xs font-black">Hủy</button><button disabled={submitting} className="flex items-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-xs font-black text-white disabled:opacity-50">{submitting && <Loader2 className="h-4 w-4 animate-spin"/>} Lưu cấu hình</button></div>
-            </form></div></div>}
+                {loading ? (
+                    <div className="flex min-h-[360px] items-center justify-center">
+                        <Loader2 className="h-9 w-9 animate-spin text-primary"/>
+                    </div>
+                ) : activeConfigs.length ? (
+                    <div className="p-4 sm:p-6">
+                        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h2 className="text-lg font-black uppercase text-on-surface">{getGroupTitle(activeGroup)}</h2>
+                                <p className="mt-1 text-xs font-semibold text-outline">
+                                    {activeConfigs.length} cấu hình trong nhóm {activeGroup}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void saveGroup(activeGroup)}
+                                disabled={savingGroup === activeGroup || uploadingKey !== null || !isGroupDirty(activeGroup)}
+                                className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-black uppercase text-on-primary shadow-sm transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {savingGroup === activeGroup ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}
+                                Lưu thay đổi
+                            </button>
+                        </div>
+
+                        {groupErrors[activeGroup] && (
+                            <div className="mb-5 flex items-start gap-3 rounded-xl border border-error/20 bg-error/10 p-4 text-xs font-bold text-error">
+                                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>
+                                <span>{groupErrors[activeGroup]}</span>
+                            </div>
+                        )}
+
+                        <div className="grid gap-4">
+                            {activeConfigs.map((config) => (
+                                <section
+                                    key={config.key}
+                                    className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-sm"
+                                >
+                                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <h3 className="break-all font-mono text-sm font-black text-primary">{config.key}</h3>
+                                                <span className="rounded-full bg-surface-container px-2.5 py-1 text-[10px] font-black uppercase text-outline">
+                                                    {config.type}
+                                                </span>
+                                                {config.isPublic && (
+                                                    <span className="rounded-full bg-green-100 px-2.5 py-1 text-[10px] font-black uppercase text-green-700">
+                                                        Public
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {config.description && (
+                                                <p className="mt-1 text-xs font-semibold leading-relaxed text-outline">
+                                                    {config.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-2 text-[10px] font-black uppercase text-outline">
+                                            {((draftValues[config.key] ?? '') !== (config.value ?? '')) ? 'Đã sửa' : 'Chưa đổi'}
+                                        </div>
+                                    </div>
+
+                                    <ConfigField
+                                        config={config}
+                                        value={draftValues[config.key] ?? ''}
+                                        disabled={savingGroup === activeGroup || uploadingKey === config.key}
+                                        uploading={uploadingKey === config.key}
+                                        onChange={(value) => updateDraft(activeGroup, config.key, value)}
+                                        onJsonBlur={() => formatJson(config.key)}
+                                        onUpload={(file) => void uploadImage(activeGroup, config.key, file)}
+                                    />
+                                </section>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex min-h-[360px] flex-col items-center justify-center p-8 text-center font-bold text-outline">
+                        <FileJson className="mb-3 h-10 w-10 opacity-40"/>
+                        Không có cấu hình website.
+                    </div>
+                )}
+            </div>
+
+            {pageData.totalPages > 1 && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800">
+                    Đang tải {pageData.content.length}/{pageData.totalElements} cấu hình. Hãy tăng CONFIG_PAGE_SIZE nếu database vượt quá giới hạn này.
+                </div>
+            )}
         </div>
     );
 }

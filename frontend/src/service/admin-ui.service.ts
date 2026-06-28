@@ -59,6 +59,10 @@ export const AdminUiService = {
         return apiClient.put(`/api/admin/configs/${id}`, data);
     },
 
+    bulkUpdateConfigs: (items: Array<{key: string; value: string}>): Promise<WebsiteConfigurationDTO[]> => {
+        return apiClient.put('/api/admin/configs/bulk', items);
+    },
+
     deleteConfig: (id: string | number): Promise<void> => {
         return apiClient.delete(`/api/admin/configs/${id}`);
     },

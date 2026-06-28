@@ -8,7 +8,8 @@ import {useCartStore} from "../../store/useCartStore";
 import {useProductStore} from "../../store/useProductStore";
 import {useAuthStore} from "../../store/useAuthStore";
 import {formatCurrency} from "../../utils/format";
-// import {getPublicConfigValue, usePublicUiStore} from '../../store/usePublicUiStore';
+import {usePublicUiStore} from '../../store/usePublicUiStore';
+import {getPublicImageUrl} from '../../utils/file-url';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -64,8 +65,9 @@ const getCategoryIcon = (catCode: string) => {
 export default function Header() {
     const navigate = useNavigate();
     const location = useLocation();
-    // const configs = usePublicUiStore((state) => state.configs);
-    // const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
+    const configMap = usePublicUiStore((state) => state.configMap);
+    const siteName = configMap?.site_name || 'SOBU';
+    const logoUrl = configMap?.website_logo;
 
     const {items, removeFromCart, getTotals} = useCartStore();
     const {subtotal} = getTotals();
@@ -168,7 +170,6 @@ export default function Header() {
         setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark');
     };
 
-    const themeToggleLabel = theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối';
     const mobileNavItems = [
         {label: 'Trang chủ', path: '/', icon: Home},
         {label: 'Sản phẩm', path: '/products', icon: Package},
@@ -196,9 +197,21 @@ export default function Header() {
 
                 {/* TRÁI: Logo & Desktop Nav */}
                 <div className="flex min-w-0 flex-1 items-center gap-4 xl:gap-6">
-                    <Link to="/"
-                          className="rounded-xl bg-primary px-6 py-2 text-xl font-black tracking-widest text-on-primary shadow-md transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/40">
-                        SOBU
+                    <Link
+                        to="/"
+                        className={`flex lg:h-22 h-16 items-center text-xl font-black tracking-widest transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                            logoUrl
+                                ? 'bg-transparent px-3 text-on-surface'
+                                : 'bg-primary px-6 text-on-primary'
+                        }`}
+                    >
+                        {logoUrl ? (
+                            <img
+                                src={getPublicImageUrl(logoUrl)}
+                                alt={siteName}
+                                className="max-h-12 max-w-[200px] lg:max-h-14 lg:max-w-[240px] object-contain"
+                            />
+                        ) : siteName}
                     </Link>
 
                     {/* Navigation (Chỉ hiện trên Desktop) */}

@@ -35,6 +35,7 @@ import {useEffect} from 'react';
 import {usePublicUiStore} from './store/usePublicUiStore';
 import AdminBanners from './pages/admin/Banners';
 import ScrollToTop from './components/common/ScrollToTop';
+import AdminConfigs from './pages/admin/Configs';
 
 export default function App() {
     const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
@@ -88,7 +89,7 @@ export default function App() {
                             <Route path="requests" element={<AdminRequests/>}/>
                             <Route path="requests/:id" element={<AdminRequestDetail/>}/>
                             <Route path="banners" element={<AdminBanners/>}/>
-                            {/*<Route path="configs" element={<AdminConfigs/>}/>*/}
+                            <Route path="configs" element={<AdminConfigs/>}/>
                             <Route path="sync" element={<AdminSync/>}/>
                             <Route path="nhanh/callback" element={<AdminNhanhCallback/>}/>
                         </Route>
