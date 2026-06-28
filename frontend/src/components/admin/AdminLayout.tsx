@@ -16,8 +16,8 @@ export default function AdminLayout() {
     ];
 
     return (
-        <div className="flex min-h-[calc(100vh-80px)] mt-20 max-w-7xl mx-auto w-full border-t border-outline-variant/30">
-            <aside className="w-64 flex-shrink-0 border-r border-outline-variant/30 bg-white">
+        <div className="admin-surface mx-auto mt-20 flex min-h-[calc(100vh-80px)] w-full max-w-7xl border-t border-outline-variant/30 bg-surface text-on-surface">
+            <aside className="w-64 flex-shrink-0 border-r border-outline-variant/30 bg-surface-container-lowest">
                 <div className="p-6 pt-16">
                     <h2 className="text-sm font-bold text-outline uppercase tracking-widest mb-6">Admin Panel</h2>
                     <nav className="space-y-2">
@@ -29,7 +29,7 @@ export default function AdminLayout() {
                                     to={item.path}
                                     className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${
                                         isActive
-                                            ? 'bg-primary text-white'
+                                            ? 'bg-primary text-on-primary'
                                             : 'text-on-surface hover:bg-surface-variant hover:text-primary'
                                     }`}
                                 >
@@ -41,7 +41,7 @@ export default function AdminLayout() {
                     </nav>
                 </div>
             </aside>
-            <main className="flex-1 p-8 bg-surface-container-lowest min-h-full">
+            <main className="min-h-full flex-1 bg-surface-container-lowest p-8">
                 <Outlet />
             </main>
         </div>

@@ -177,6 +177,82 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgb(var(--color-outline-variant));
   }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .bg-white {
+    background-color: rgb(var(--color-surface-container-lowest));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .text-white {
+    color: rgb(var(--color-on-primary));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface input:not([type='checkbox']):not([type='radio']),
+  :is(.dark, [data-theme='dark']) .admin-surface select,
+  :is(.dark, [data-theme='dark']) .admin-surface textarea {
+    border-color: rgb(var(--color-outline-variant) / 0.55);
+    background-color: rgb(var(--color-surface-container-lowest));
+    color: rgb(var(--color-on-surface));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface input::placeholder,
+  :is(.dark, [data-theme='dark']) .admin-surface textarea::placeholder {
+    color: rgb(var(--color-outline) / 0.7);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface input:disabled,
+  :is(.dark, [data-theme='dark']) .admin-surface select:disabled,
+  :is(.dark, [data-theme='dark']) .admin-surface textarea:disabled {
+    background-color: rgb(var(--color-surface-container));
+    color: rgb(var(--color-outline));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.bg-green-50, .bg-green-100) {
+    background-color: rgb(16 185 129 / 0.14);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.text-green-700, .text-green-800) {
+    color: rgb(110 231 183);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .border-green-200 {
+    border-color: rgb(16 185 129 / 0.35);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.bg-red-50, .bg-red-100, .bg-red-50\/50) {
+    background-color: rgb(var(--color-error) / 0.13);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.text-red-600, .text-red-700, .text-red-800) {
+    color: rgb(var(--color-error));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.border-red-200, .border-red-300) {
+    border-color: rgb(var(--color-error) / 0.35);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.bg-amber-50, .bg-amber-100) {
+    background-color: rgb(245 158 11 / 0.16);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .text-amber-700 {
+    color: rgb(251 191 36);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .border-amber-200 {
+    border-color: rgb(245 158 11 / 0.35);
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.bg-gray-100, .bg-gray-200) {
+    background-color: rgb(var(--color-surface-container-high));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface :is(.text-gray-600, .text-gray-700, .text-gray-800) {
+    color: rgb(var(--color-on-surface-variant));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .border-gray-200 {
+    border-color: rgb(var(--color-outline-variant) / 0.55);
+  }
 }
 
 @layer utilities {
