@@ -1,14 +1,17 @@
 import {describe, expect, it, jest} from '@jest/globals';
 import {AdminUiService, buildBannerFormData} from './admin-ui.service';
 
+const mockApiGet = jest.fn();
+const mockApiPost = jest.fn();
 const mockApiPut = jest.fn();
+const mockApiDelete = jest.fn();
 jest.mock('../api/api-client', () => ({
     __esModule: true,
     default: {
-        get: jest.fn(),
-        post: jest.fn(),
+        get: (...args: any[]) => mockApiGet(...args),
+        post: (...args: any[]) => mockApiPost(...args),
         put: (...args: any[]) => mockApiPut(...args),
-        delete: jest.fn(),
+        delete: (...args: any[]) => mockApiDelete(...args),
     },
 }));
 
@@ -17,7 +20,7 @@ describe('buildBannerFormData', () => {
         const file = new File(['banner'], 'banner.png', {type: 'image/png'});
         const formData = buildBannerFormData({
             title: 'Hero', imageUrl: '', linkUrl: '/products', displayOrder: 1,
-            position: 'HOME_TOP', isActive: true, deviceType: 'ALL',
+            position: 'home_hero_carousel', isActive: true, deviceType: 'ALL',
         }, file);
 
         const bannerPart = formData.get('banner') as Blob;
@@ -28,7 +31,7 @@ describe('buildBannerFormData', () => {
             reader.readAsText(bannerPart);
         });
         expect(JSON.parse(bannerJson)).toEqual(expect.objectContaining({
-            title: 'Hero', position: 'HOME_TOP', deviceType: 'ALL',
+            title: 'Hero', position: 'home_hero_carousel', deviceType: 'ALL',
         }));
         expect(formData.get('image')).toBe(file);
     });

@@ -11,10 +11,10 @@ jest.mock('../service/public-ui.service');
 const mockedPublicUiService = jest.mocked(PublicUiService);
 
 const banners = [
-    {id: 3, title: 'All second', imageUrl: 'three.jpg', position: 'HOME_TOP', deviceType: 'ALL', isActive: true, displayOrder: 2},
-    {id: 1, title: 'Web first', imageUrl: 'one.jpg', position: 'HOME_TOP', deviceType: 'WEB', isActive: true, displayOrder: 1},
-    {id: 2, title: 'Mobile', imageUrl: 'two.jpg', position: 'HOME_TOP', deviceType: 'MOBILE', isActive: true, displayOrder: 0},
-    {id: 4, title: 'Inactive', imageUrl: 'four.jpg', position: 'HOME_TOP', deviceType: 'ALL', isActive: false, displayOrder: 0},
+    {id: 3, title: 'All second', imageUrl: 'three.jpg', position: 'home_hero_carousel', deviceType: 'ALL', isActive: true, displayOrder: 2},
+    {id: 1, title: 'Web first', imageUrl: 'one.jpg', position: 'home_hero_carousel', deviceType: 'WEB', isActive: true, displayOrder: 1},
+    {id: 2, title: 'Mobile', imageUrl: 'two.jpg', position: 'home_hero_carousel', deviceType: 'MOBILE', isActive: true, displayOrder: 0},
+    {id: 4, title: 'Inactive', imageUrl: 'four.jpg', position: 'home_hero_carousel', deviceType: 'ALL', isActive: false, displayOrder: 0},
 ] as any;
 
 describe('usePublicUiStore', () => {
@@ -40,8 +40,8 @@ describe('usePublicUiStore', () => {
     });
 
     it('filters by placement/device and sorts by displayOrder', () => {
-        expect(getBannersForPlacement(banners, 'HOME_TOP', 'WEB').map((item) => item.id)).toEqual([1, 3]);
-        expect(getBannersForPlacement(banners, 'HOME_TOP', 'MOBILE').map((item) => item.id)).toEqual([2, 3]);
+        expect(getBannersForPlacement(banners, 'home_hero_carousel', 'WEB').map((item) => item.id)).toEqual([1, 3]);
+        expect(getBannersForPlacement(banners, 'home_hero_carousel', 'MOBILE').map((item) => item.id)).toEqual([2, 3]);
     });
 
     it('reads public config values and falls back for missing/private keys', () => {

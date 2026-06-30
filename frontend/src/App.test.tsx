@@ -35,6 +35,7 @@ jest.mock('./pages/ServicesLandingPage', () => () => null);
 jest.mock('./pages/Membership', () => () => null);
 jest.mock('./pages/OrderTracking', () => () => null);
 jest.mock('./pages/PaymentResult', () => () => null);
+jest.mock('./pages/StaticPage', () => () => null);
 jest.mock('./pages/Cart', () => () => null);
 jest.mock('./pages/MyRequests', () => () => null);
 jest.mock('./pages/CreateRequest', () => () => null);
@@ -49,6 +50,7 @@ jest.mock('./pages/admin/Sync', () => () => null);
 jest.mock('./pages/admin/NhanhCallback', () => () => null);
 jest.mock('./pages/admin/Banners', () => () => null);
 jest.mock('./pages/admin/Configs', () => () => null);
+jest.mock('./pages/admin/StaticPages', () => () => null);
 
 describe('App route layout', () => {
     it('places customer routes inside SiteLayout and keeps auth/admin routes outside', () => {
@@ -58,6 +60,11 @@ describe('App route layout', () => {
         expect(siteLayout?.querySelector('[data-path="/products"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/cart"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/payment-result"]')).toBeTruthy();
+        expect(siteLayout?.querySelector('[data-path="/about"]')).toBeTruthy();
+        expect(siteLayout?.querySelector('[data-path="/privacy"]')).toBeTruthy();
+        expect(siteLayout?.querySelector('[data-path="/terms"]')).toBeTruthy();
+        expect(siteLayout?.querySelector('[data-path="/policies/privacy"]')).toBeTruthy();
+        expect(siteLayout?.querySelector('[data-path="/policies/terms"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/login"]')).toBeNull();
         expect(siteLayout?.querySelector('[data-path="/activate"]')).toBeNull();
         expect(siteLayout?.querySelector('[data-path="/verify-email"]')).toBeNull();
@@ -68,5 +75,6 @@ describe('App route layout', () => {
         expect(container.querySelector('[data-path="/admin"]')).toBeTruthy();
         expect(container.querySelector('[data-path="banners"]')).toBeTruthy();
         expect(container.querySelector('[data-path="configs"]')).toBeTruthy();
+        expect(container.querySelector('[data-path="static-pages"]')).toBeTruthy();
     });
 });

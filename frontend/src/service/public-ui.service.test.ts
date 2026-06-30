@@ -14,9 +14,9 @@ describe('PublicUiService', () => {
     });
 
     it('passes supported banner filters and loads configs', () => {
-        PublicUiService.getBanners({deviceType: 'WEB', position: 'HOME_TOP'});
+        PublicUiService.getBanners({deviceType: 'WEB', position: 'home_hero_carousel'});
         PublicUiService.getConfigs();
-        expect(mockApiGet).toHaveBeenCalledWith('/api/public/ui/banners', {params: {deviceType: 'WEB', position: 'HOME_TOP'}});
+        expect(mockApiGet).toHaveBeenCalledWith('/api/public/ui/banners', {params: {deviceType: 'WEB', position: 'home_hero_carousel'}});
         expect(mockApiGet).toHaveBeenCalledWith('/api/public/ui/configs');
     });
 });

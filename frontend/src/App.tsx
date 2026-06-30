@@ -26,6 +26,7 @@ import AdminSync from "./pages/admin/Sync";
 import AdminNhanhCallback from "./pages/admin/NhanhCallback";
 import OrderTracking from "./pages/OrderTracking";
 import PaymentResult from "./pages/PaymentResult";
+import StaticPage from "./pages/StaticPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Toast from "./components/common/Toast";
 import SiteLayout from './components/layout/SiteLayout';
@@ -34,6 +35,7 @@ import {usePublicUiStore} from './store/usePublicUiStore';
 import AdminBanners from './pages/admin/Banners';
 import ScrollToTop from './components/common/ScrollToTop';
 import AdminConfigs from './pages/admin/Configs';
+import AdminStaticPages from './pages/admin/StaticPages';
 
 export default function App() {
     const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
@@ -61,6 +63,11 @@ export default function App() {
                         <Route path="/blog/:id" element={<BlogDetail/>}/>
                         <Route path="/services" element={<ServicesLandingPage/>}/>
                         <Route path="/membership" element={<Membership/>}/>
+                        <Route path="/about" element={<StaticPage slug="about"/>}/>
+                        <Route path="/privacy" element={<StaticPage slug="privacy-policy"/>}/>
+                        <Route path="/terms" element={<StaticPage slug="terms"/>}/>
+                        <Route path="/policies/privacy" element={<StaticPage slug="privacy-policy"/>}/>
+                        <Route path="/policies/terms" element={<StaticPage slug="terms"/>}/>
                         <Route path="/tracking" element={<OrderTracking/>}/>
                         <Route path="/payment-result" element={<PaymentResult/>}/>
                         <Route path="/payment/return" element={<PaymentResult/>}/>
@@ -88,6 +95,7 @@ export default function App() {
                             <Route path="requests/:id" element={<AdminRequestDetail/>}/>
                             <Route path="banners" element={<AdminBanners/>}/>
                             <Route path="configs" element={<AdminConfigs/>}/>
+                            <Route path="static-pages" element={<AdminStaticPages/>}/>
                             <Route path="sync" element={<AdminSync/>}/>
                             <Route path="nhanh/callback" element={<AdminNhanhCallback/>}/>
                         </Route>
