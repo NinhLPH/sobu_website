@@ -12,7 +12,7 @@ import {
     OrderResponseDto
 } from '../interface/order.model';
 import { createIdempotencyKey } from '../utils/idempotency';
-import { CartDto, CartItemDto } from '../interface/cart.dto';
+import { CartDto } from '../interface/cart.dto';
 
 export const CustomerService = {
     getMyRequests: (
