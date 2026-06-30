@@ -50,9 +50,15 @@ const cartWithItem = (item: typeof product, quantity: number) => ({
     }
 });
 
+it('does not fetch the server cart when the store module is imported', () => {
+    expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
+});
+
 describe('useCartStore order submission', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        window.sessionStorage.clear();
+        window.localStorage.clear();
         mockedCustomerService.getCart.mockResolvedValue(emptyCartResponse);
         mockedCustomerService.clearCart.mockResolvedValue({ success: true, statusCode: 200, message: 'Cart cleared', data: null as any });
         useCartStore.setState({
@@ -64,6 +70,42 @@ describe('useCartStore order submission', () => {
             pendingOrderKey: null,
             pendingOrderFingerprint: null
         });
+    });
+
+    it('does not call the cart API for guest sessions', async () => {
+        useCartStore.setState({
+            items: [{ product, quantity: 1 }],
+            isLoading: true
+        });
+
+        await useCartStore.getState().fetchCart();
+
+        expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
+        expect(useCartStore.getState().items).toEqual([]);
+        expect(useCartStore.getState().isLoading).toBe(false);
+    });
+
+    it('loads the server cart when an access token exists', async () => {
+        window.sessionStorage.setItem('accessToken', 'access-token');
+        mockedCustomerService.getCart.mockResolvedValue(cartWithItem(product, 3));
+
+        await useCartStore.getState().fetchCart();
+
+        expect(mockedCustomerService.getCart).toHaveBeenCalledTimes(1);
+        expect(useCartStore.getState().items).toEqual([{
+            product: {
+                id: product.id,
+                nhanhProductId: product.nhanhProductId,
+                name: product.name,
+                price: product.price,
+                imageUrl: product.imageUrl,
+                brand: '',
+                description: '',
+                stock: 999
+            },
+            quantity: 3
+        }]);
+        expect(useCartStore.getState().isLoading).toBe(false);
     });
 
     it('creates the API payload from cart items and clears the cart on success', async () => {

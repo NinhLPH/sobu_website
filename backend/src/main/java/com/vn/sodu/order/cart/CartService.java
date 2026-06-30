@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -19,7 +20,7 @@ public class CartService {
     public CartDto getCart(String email) {
         String key = buildKey(email);
         CartDto cart = cartRedisTemplate.opsForValue().get(key);
-        return cart != null ? cart : new CartDto();
+        return normalizeCart(cart);
     }
 
     public void addItem(String email, AddToCartRequest request) {
@@ -74,6 +75,16 @@ public class CartService {
 
     private void saveCart(String key, CartDto cart) {
         cartRedisTemplate.opsForValue().set(key, cart, CART_TTL_MINUTES, TimeUnit.MINUTES);
+    }
+
+    private CartDto normalizeCart(CartDto cart) {
+        CartDto safeCart = cart != null ? cart : new CartDto();
+        if (safeCart.getItems() == null) {
+            safeCart.setItems(new ArrayList<>());
+        } else {
+            safeCart.setItems(new ArrayList<>(safeCart.getItems()));
+        }
+        return safeCart;
     }
 
     private String buildKey(String email) {

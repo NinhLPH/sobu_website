@@ -9,6 +9,7 @@ import { CustomerService } from '../service/custom.service';
 import {ToastService} from "../service/toast.service";
 import { createIdempotencyKey } from '../utils/idempotency';
 import { CartItemDto } from '../interface/cart.dto';
+import { authStorage } from '../utils/auth-storage';
 
 type CheckoutDetails =
     Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
@@ -35,7 +36,7 @@ const mapCartItemDto = (dto: CartItemDto): CartItem => ({
 });
 
 const handleAuthError = (error: any) => {
-    if (error?.response?.status === 401) {
+    if (error?.response?.status === 401 || error?.response?.status === 403) {
         ToastService.error('Vui lòng đăng nhập để sử dụng giỏ hàng');
         return true;
     }
@@ -62,7 +63,7 @@ interface CartState {
 
 export const useCartStore = create<CartState>((set, get) => ({
     items: [],
-    isLoading: true,
+    isLoading: false,
     isSubmitting: false,
     checkoutError: null,
     lastCreatedOrder: null,
@@ -70,12 +71,20 @@ export const useCartStore = create<CartState>((set, get) => ({
     pendingOrderFingerprint: null,
 
     fetchCart: async () => {
+        if (!authStorage.getAccessToken()) {
+            set({ items: [], isLoading: false });
+            return;
+        }
+
+        set({ isLoading: true });
         try {
             const response = await CustomerService.getCart();
             if (response.success) {
                 const items = (response.data?.items || []).map(mapCartItemDto);
                 set({ items, isLoading: false });
+                return;
             }
+            set({ isLoading: false });
         } catch {
             set({ isLoading: false });
         }
@@ -235,5 +244,3 @@ export const useCartStore = create<CartState>((set, get) => ({
         return { subtotal, tax, total, itemCount };
     }
 }));
-
-useCartStore.getState().fetchCart();

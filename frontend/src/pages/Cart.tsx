@@ -148,9 +148,11 @@ export default function Cart() {
 
     useEffect(() => {
         void fetchLocations(true);
-        void fetchCart();
+        if (isAuthenticated) {
+            void fetchCart();
+        }
         return cancelScheduledRetry;
-    }, [fetchLocations, cancelScheduledRetry, fetchCart]);
+    }, [fetchLocations, cancelScheduledRetry, fetchCart, isAuthenticated]);
 
     useEffect(() => {
         if (!user) {
