@@ -365,6 +365,15 @@ updated_at = VALUES(updated_at);
 -- ========================
 -- UI / CONFIGURATION
 -- ========================
+INSERT INTO static_pages (
+id, slug, title, html_content, is_published, created_at, updated_at
+) VALUES
+(1, 'about', 'About', '<h1>About SOBU</h1><p>SOBU Studio serves collectors with model products, preorder support, sourcing, and custom services.</p>', true, NOW(), NOW()),
+(2, 'privacy-policy', 'Privacy Policy', '<h1>Privacy Policy</h1><p>SOBU collects only the information needed to process orders, support requests, and improve customer service.</p>', true, NOW(), NOW()),
+(3, 'terms', 'Terms', '<h1>Terms</h1><p>By using SOBU services, customers agree to provide accurate order information and follow the published payment and delivery policies.</p>', true, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+slug = slug;
+
 INSERT INTO banners (
 id, title, image_url, link_url, display_order, position, is_active,
 start_date, end_date, device_type, created_at, updated_at
@@ -374,34 +383,25 @@ start_date, end_date, device_type, created_at, updated_at
 (3, 'MECHA & GUNDAM', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 3, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:20:00', '2026-05-01 08:20:00'),
 (4, 'Sidebar left promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_left_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:30:00', '2026-05-01 08:30:00'),
 (5, 'Sidebar right promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_right_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:40:00', '2026-05-01 08:40:00'),
-(6, 'Ban chay section banner', 'https://i0.wp.com/www.comicbookrevolution.com/wp-content/uploads/2023/12/transformers-4-previw-banner.jpg', '/products', 1, 'home_best_seller_section_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:50:00', '2026-05-01 08:50:00'),
+(6, 'Ban chay section banner', 'https://i0.wp.com/www.comicbookrevolution.com/wp-content/uploads/2023/12/transformers-4-previw-banner.jpg', '/products', 1, 'home_section_01_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:50:00', '2026-05-01 08:50:00'),
 (7, 'Custom service primary', 'https://images.unsplash.com/photo-1730110206448-10297c1902bd?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_primary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:00:00', '2026-05-01 09:00:00'),
 (8, 'Custom service secondary', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_secondary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:10:00', '2026-05-01 09:10:00'),
 (9, 'Custom service tertiary', 'https://images.unsplash.com/photo-1532581140115-3e355d1ed1de?q=80&w=600&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_tertiary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:20:00', '2026-05-01 09:20:00'),
-(10, 'Marvel category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/marvel', 1, 'home_category_marvel_card', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:30:00', '2026-05-01 09:30:00'),
-(11, 'DC category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/dc', 1, 'home_category_dc_card', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:40:00', '2026-05-01 09:40:00'),
-(12, 'Hot Wheels category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/hot wheels', 1, 'home_category_hot_wheels_card', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:50:00', '2026-05-01 09:50:00'),
-(13, 'Transformer category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/transformer', 1, 'home_category_transformer_card', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:00:00', '2026-05-01 10:00:00'),
-(14, 'Naruto category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/naruto', 1, 'home_category_naruto_card', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:10:00', '2026-05-01 10:10:00'),
-(15, 'Pacific Rim category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/pacific rim', 1, 'home_category_pacific_rim_card', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:20:00', '2026-05-01 10:20:00'),
-(16, 'Dung Cu section banner', 'https://tooltechvietnam.com/wp-content/uploads/2023/03/handtools.jpg', '/products', 1, 'home_tools_section_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:30:00', '2026-05-01 10:30:00'),
+(10, 'Marvel category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/marvel', 1, 'home_category_card_01', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:30:00', '2026-05-01 09:30:00'),
+(11, 'DC category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/dc', 1, 'home_category_card_02', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:40:00', '2026-05-01 09:40:00'),
+(12, 'Hot Wheels category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/hot wheels', 1, 'home_category_card_03', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:50:00', '2026-05-01 09:50:00'),
+(13, 'Transformer category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/transformer', 1, 'home_category_card_04', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:00:00', '2026-05-01 10:00:00'),
+(14, 'Naruto category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/naruto', 1, 'home_category_card_05', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:10:00', '2026-05-01 10:10:00'),
+(15, 'Pacific Rim category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/pacific rim', 1, 'home_category_card_06', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:20:00', '2026-05-01 10:20:00'),
+(16, 'Dung Cu section banner', 'https://tooltechvietnam.com/wp-content/uploads/2023/03/handtools.jpg', '/products', 1, 'home_section_02_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:30:00', '2026-05-01 10:30:00'),
 (17, 'Promo grid top left', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_top_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:40:00', '2026-05-01 10:40:00'),
 (18, 'Promo grid bottom left', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_bottom_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:50:00', '2026-05-01 10:50:00'),
 (19, 'Promo grid top right', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_top_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:00:00', '2026-05-01 11:00:00'),
 (20, 'Promo grid bottom right', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_bottom_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:10:00', '2026-05-01 11:10:00'),
-(21, 'Hotwheels section banner', 'https://images.unsplash.com/photo-1551522435-a13afa10f103?q=80&w=1600&auto=format&fit=crop', '/products', 1, 'home_hotwheels_section_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:20:00', '2026-05-01 11:20:00'),
-(22, 'Sale section banner', 'https://img.magnific.com/free-vector/modern-black-friday-holiday-sale-offer-banner-get-30-percent-price-drop-vector_1017-47794.jpg?semt=ais_hybrid&w=740&q=80', '/products', 1, 'home_sale_section_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:30:00', '2026-05-01 11:30:00')
+(21, 'Hotwheels section banner', 'https://images.unsplash.com/photo-1551522435-a13afa10f103?q=80&w=1600&auto=format&fit=crop', '/products', 1, 'home_section_03_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:20:00', '2026-05-01 11:20:00'),
+(22, 'Sale section banner', 'https://img.magnific.com/free-vector/modern-black-friday-holiday-sale-offer-banner-get-30-percent-price-drop-vector_1017-47794.jpg?semt=ais_hybrid&w=740&q=80', '/products', 1, 'home_section_04_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:30:00', '2026-05-01 11:30:00')
 ON DUPLICATE KEY UPDATE
-title = VALUES(title),
-image_url = VALUES(image_url),
-link_url = VALUES(link_url),
-display_order = VALUES(display_order),
-position = VALUES(position),
-is_active = VALUES(is_active),
-start_date = VALUES(start_date),
-end_date = VALUES(end_date),
-device_type = VALUES(device_type),
-updated_at = VALUES(updated_at);
+id = id;
 
 INSERT INTO website_configurations (
 config_key, config_value, type, group_name, description, is_public, is_active, created_at, updated_at
@@ -450,7 +450,7 @@ config_key, config_value, type, group_name, description, is_public, is_active, c
 ('home_section_02_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_02_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_category_title', 'The loai mo hinh', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_category_cards', '[{"label":"Marvel","href":"/category/marvel","bannerPosition":"home_category_marvel_card"},{"label":"DC","href":"/category/dc","bannerPosition":"home_category_dc_card"},{"label":"Hot Wheels","href":"/category/hot wheels","bannerPosition":"home_category_hot_wheels_card"},{"label":"Transformer","href":"/category/transformer","bannerPosition":"home_category_transformer_card"},{"label":"Naruto","href":"/category/naruto","bannerPosition":"home_category_naruto_card"},{"label":"Pacific Rim","href":"/category/pacific rim","bannerPosition":"home_category_pacific_rim_card"}]', 'json', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_category_cards', '[{"label":"Marvel","href":"/category/marvel","bannerPosition":"home_category_card_01"},{"label":"DC","href":"/category/dc","bannerPosition":"home_category_card_02"},{"label":"Hot Wheels","href":"/category/hot wheels","bannerPosition":"home_category_card_03"},{"label":"Transformer","href":"/category/transformer","bannerPosition":"home_category_card_04"},{"label":"Naruto","href":"/category/naruto","bannerPosition":"home_category_card_05"},{"label":"Pacific Rim","href":"/category/pacific rim","bannerPosition":"home_category_card_06"}]', 'json', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_03_title', 'Dung Cu', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_03_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_03_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
