@@ -1,3 +1,5 @@
+
+// @ts-ignore
 import 'react-quill-new/dist/quill.snow.css';
 
 import {FormEvent, useCallback, useEffect, useMemo, useState} from 'react';
