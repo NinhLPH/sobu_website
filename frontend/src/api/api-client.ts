@@ -25,6 +25,7 @@ const WRAPPED_RESPONSE_ROUTES = [
     '/api/auth',
     '/api/requests',
     '/api/orders',
+    '/api/cart',
     '/api/admin/requests',
     '/api/admin/orders',
     '/api/public/locations',

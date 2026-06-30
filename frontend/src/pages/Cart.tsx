@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
+import { Loader2, Minus, Plus, ShoppingBag, ShoppingCart, Trash2 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
@@ -117,13 +117,15 @@ function QuantityController({
 export default function Cart() {
     const {
         items,
+        isLoading,
         removeFromCart,
         updateQuantity,
         getTotals,
         submitOrder,
         isSubmitting,
         checkoutError,
-        clearCheckoutError
+        clearCheckoutError,
+        fetchCart
     } = useCartStore();
     const {
         createPayment,
@@ -146,8 +148,9 @@ export default function Cart() {
 
     useEffect(() => {
         void fetchLocations(true);
+        void fetchCart();
         return cancelScheduledRetry;
-    }, [fetchLocations, cancelScheduledRetry]);
+    }, [fetchLocations, cancelScheduledRetry, fetchCart]);
 
     useEffect(() => {
         if (!user) {
@@ -296,6 +299,15 @@ export default function Cart() {
             // The cart store exposes the backend error through checkoutError.
         }
     };
+
+    if (isLoading) {
+        return (
+            <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
+                <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
+                <p className="text-xs font-bold text-outline">Đang tải giỏ hàng...</p>
+            </main>
+        );
+    }
 
     if (items.length === 0 && !isSubmitting && !isCreatingPayment) {
         return (
