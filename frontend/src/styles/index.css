@@ -253,6 +253,157 @@
   :is(.dark, [data-theme='dark']) .admin-surface .border-gray-200 {
     border-color: rgb(var(--color-outline-variant) / 0.55);
   }
+
+  .static-page-editor .ql-toolbar,
+  .static-page-editor .ql-container {
+    border-color: rgb(var(--color-outline-variant) / 0.45);
+    font-family: inherit;
+  }
+
+  .static-page-editor .ql-toolbar {
+    border-top-left-radius: 0.75rem;
+    border-top-right-radius: 0.75rem;
+    background: rgb(var(--color-surface-container-lowest));
+  }
+
+  .static-page-editor .ql-container {
+    min-height: 320px;
+    border-bottom-left-radius: 0.75rem;
+    border-bottom-right-radius: 0.75rem;
+    background: rgb(var(--color-surface-container-lowest));
+    color: rgb(var(--color-on-surface));
+  }
+
+  .static-page-editor .ql-editor {
+    min-height: 320px;
+    font-size: 0.95rem;
+    line-height: 1.75;
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .static-page-editor .ql-toolbar,
+  :is(.dark, [data-theme='dark']) .admin-surface .static-page-editor .ql-container {
+    border-color: rgb(var(--color-outline-variant) / 0.55);
+    background: rgb(var(--color-surface-container-lowest));
+    color: rgb(var(--color-on-surface));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .static-page-editor .ql-stroke {
+    stroke: rgb(var(--color-on-surface));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .static-page-editor .ql-fill {
+    fill: rgb(var(--color-on-surface));
+  }
+
+  :is(.dark, [data-theme='dark']) .admin-surface .static-page-editor .ql-picker {
+    color: rgb(var(--color-on-surface));
+  }
+
+  .static-page-content {
+    max-width: 100%;
+    min-width: 0;
+    color: rgb(var(--color-on-surface));
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.85;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .static-page-content * {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .static-page-content > * + * {
+    margin-top: 1rem;
+  }
+
+  .static-page-content h1,
+  .static-page-content h2,
+  .static-page-content h3,
+  .static-page-content h4 {
+    color: rgb(var(--color-on-surface));
+    font-weight: 900;
+    line-height: 1.2;
+  }
+
+  .static-page-content h1 {
+    font-size: 2rem;
+  }
+
+  .static-page-content h2 {
+    font-size: 1.6rem;
+  }
+
+  .static-page-content h3 {
+    font-size: 1.25rem;
+  }
+
+  .static-page-content a {
+    color: rgb(var(--color-primary));
+    font-weight: 800;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .static-page-content ul,
+  .static-page-content ol {
+    padding-left: 1.5rem;
+  }
+
+  .static-page-content ul {
+    list-style: disc;
+  }
+
+  .static-page-content ol {
+    list-style: decimal;
+  }
+
+  .static-page-content blockquote {
+    border-left: 4px solid rgb(var(--color-primary));
+    background: rgb(var(--color-surface-container-lowest));
+    padding: 1rem 1.25rem;
+    color: rgb(var(--color-on-surface-variant));
+  }
+
+  .static-page-content pre,
+  .static-page-content code {
+    border-radius: 0.5rem;
+    background: rgb(var(--color-surface-container));
+    padding: 0.15rem 0.35rem;
+    font-size: 0.9em;
+  }
+
+  .static-page-content pre {
+    overflow-x: auto;
+    padding: 1rem;
+    white-space: pre-wrap;
+  }
+
+  .static-page-content table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+
+  .static-page-content img {
+    max-width: 100%;
+    border-radius: 0.75rem;
+  }
+
+  .static-page-content .ql-align-center {
+    text-align: center;
+  }
+
+  .static-page-content .ql-align-right {
+    text-align: right;
+  }
+
+  .static-page-content .ql-align-justify {
+    text-align: justify;
+  }
 }
 
 @layer utilities {

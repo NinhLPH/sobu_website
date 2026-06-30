@@ -37,9 +37,14 @@ const configs = [
     {id: 1, key: 'primary_color', value: '#00618e', type: 'color', groupName: 'THEME', description: 'Primary', isPublic: true},
     {id: 2, key: 'site_name', value: 'SOBU', type: 'text', groupName: 'GENERAL', description: 'Site name', isPublic: true},
     {id: 3, key: 'free_shipping_threshold', value: '500000', type: 'number', groupName: 'CHECKOUT', description: 'Free shipping', isPublic: true},
+    {id: 11, key: 'business_phone', value: '0900000000', type: 'text', groupName: 'BUSINESS', description: 'Business phone', isPublic: true},
     {id: 4, key: 'website_logo', value: 'https://placehold.co/logo.png', type: 'image', groupName: 'THEME', description: 'Logo', isPublic: true},
     {id: 5, key: 'maintenance_mode_enabled', value: 'false', type: 'boolean_type', groupName: 'GENERAL', description: 'Maintenance', isPublic: false},
     {id: 6, key: 'social_links', value: '{"facebook":""}', type: 'json', groupName: 'SOCIAL', description: 'Social', isPublic: true},
+    {id: 7, key: 'home_section_01_title', value: 'BAN CHAY', type: 'text', groupName: 'HOME_SECTION', description: 'Home section', isPublic: true},
+    {id: 8, key: 'home_promo_grid_top_left_title', value: 'HOT WHEELS', type: 'text', groupName: 'HOME_PROMO', description: 'Home promo', isPublic: true},
+    {id: 9, key: 'home_partners_title', value: 'Doi tac', type: 'text', groupName: 'HOME_PARTNER', description: 'Partners', isPublic: true},
+    {id: 10, key: 'footer_company_links', value: '[]', type: 'json', groupName: 'FOOTER', description: 'Footer links', isPublic: true},
 ];
 
 describe('AdminConfigs', () => {
@@ -49,12 +54,20 @@ describe('AdminConfigs', () => {
         mockedService.bulkUpdateConfigs.mockResolvedValue([]);
     });
 
-    it('renders tabs from groupName and does not expose create/delete actions', async () => {
+    it('renders visible tabs from groupName and hides temporarily disabled groups', async () => {
         render(<AdminConfigs/>);
 
-        expect(await screen.findByRole('button', {name: /Giao diện/i})).toBeTruthy();
-        expect(screen.getByRole('button', {name: /Thông tin chung/i})).toBeTruthy();
-        expect(screen.getByRole('button', {name: /Mạng xã hội/i})).toBeTruthy();
+        expect(await screen.findByRole('button', {name: /Giao/i})).toBeTruthy();
+        expect(screen.getByRole('button', {name: /chung/i})).toBeTruthy();
+        expect(screen.getByRole('button', {name: /Trang chủ/i})).toBeTruthy();
+        expect(screen.getByRole('button', {name: /Home promo/i})).toBeTruthy();
+        expect(screen.getByRole('button', {name: /Đối tác/i})).toBeTruthy();
+        expect(screen.getByRole('button', {name: /Footer/i})).toBeTruthy();
+        expect(screen.getByRole('button', {name: /xã hội/i})).toBeTruthy();
+        expect(screen.queryByRole('button', {name: /CHECKOUT/i})).toBeNull();
+        expect(screen.queryByRole('button', {name: /BUSINESS/i})).toBeNull();
+        expect(screen.queryByLabelText(/free_shipping_threshold/)).toBeNull();
+        expect(screen.queryByLabelText(/business_phone/)).toBeNull();
         expect(screen.queryByText(/Thêm cấu hình/i)).toBeNull();
         expect(screen.queryByText(/^Xóa$/i)).toBeNull();
     });
@@ -62,36 +75,38 @@ describe('AdminConfigs', () => {
     it('renders dynamic controls for supported config types', async () => {
         render(<AdminConfigs/>);
 
-        expect(await screen.findByLabelText('Giá trị primary_color')).toBeTruthy();
-        expect(screen.getByLabelText('Giá trị website_logo')).toBeTruthy();
+        expect((await screen.findAllByLabelText(/primary_color/)).length).toBeGreaterThan(1);
+        expect(screen.getByLabelText(/website_logo/)).toBeTruthy();
 
-        fireEvent.click(screen.getByRole('button', {name: /Thông tin chung/i}));
-        expect(screen.getByLabelText('Giá trị site_name')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: /chung/i}));
+        expect(screen.getByLabelText(/site_name/)).toBeTruthy();
         expect(screen.getByRole('switch')).toBeTruthy();
 
-        fireEvent.click(screen.getByRole('button', {name: /Thanh toán/i}));
-        expect(screen.getByLabelText('Giá trị free_shipping_threshold')).toBeTruthy();
-
-        fireEvent.click(screen.getByRole('button', {name: /Mạng xã hội/i}));
-        expect(screen.getByLabelText('Giá trị social_links')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: /xã hội/i}));
+        expect(await screen.findByText(/social_links/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: /Code/i}));
+        expect(screen.getByLabelText(/social_links/)).toBeTruthy();
     });
 
     it('validates invalid JSON before calling bulk update', async () => {
         render(<AdminConfigs/>);
 
-        fireEvent.click(await screen.findByRole('button', {name: /Mạng xã hội/i}));
-        fireEvent.change(screen.getByLabelText('Giá trị social_links'), {target: {value: '{invalid'}});
-        fireEvent.click(screen.getByRole('button', {name: /Lưu thay đổi/i}));
+        fireEvent.click(await screen.findByRole('button', {name: /xã hội/i}));
+        expect(await screen.findByText(/social_links/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: /Code/i}));
+        fireEvent.change(screen.getByLabelText(/social_links/), {target: {value: '{invalid'}});
+        fireEvent.click(screen.getByRole('button', {name: /Lưu/i}));
 
-        expect(await screen.findByText('social_links phải là JSON hợp lệ.')).toBeTruthy();
+        expect(await screen.findByText(/social_links.*JSON/i)).toBeTruthy();
         expect(mockedService.bulkUpdateConfigs).not.toHaveBeenCalled();
     });
 
     it('saves only the active group with key-value payloads', async () => {
         render(<AdminConfigs/>);
 
-        fireEvent.change(await screen.findByLabelText('Giá trị primary_color'), {target: {value: '#111111'}});
-        fireEvent.click(screen.getByRole('button', {name: /Lưu thay đổi/i}));
+        const primaryColorInputs = await screen.findAllByLabelText(/primary_color/);
+        fireEvent.change(primaryColorInputs[1], {target: {value: '#111111'}});
+        fireEvent.click(screen.getByRole('button', {name: /Lưu/i}));
 
         await waitFor(() => expect(mockedService.bulkUpdateConfigs).toHaveBeenCalledWith([
             {key: 'primary_color', value: '#111111'},

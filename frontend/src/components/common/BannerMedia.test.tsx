@@ -8,7 +8,7 @@ jest.mock('react-router-dom', () => ({
 
 const banner = {
     id: 1, title: 'Hero API', imageUrl: '/api/public/files/banners/hero.jpg',
-    linkUrl: '/products', displayOrder: 1, position: 'HOME_TOP', isActive: true, deviceType: 'ALL',
+    linkUrl: '/products', displayOrder: 1, position: 'home_hero_carousel', isActive: true, deviceType: 'ALL',
 } as const;
 
 describe('BannerMedia', () => {

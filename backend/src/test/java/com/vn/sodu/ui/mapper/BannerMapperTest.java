@@ -6,6 +6,8 @@ import com.vn.sodu.ui.dto.CreateBannerRequest;
 import com.vn.sodu.ui.dto.UpdateBannerRequest;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class BannerMapperTest {
@@ -41,18 +43,29 @@ class BannerMapperTest {
     }
 
     @Test
-    void updateEntityPreservesDynamicPositionString() {
+    void updateEntityKeepsSeededPositionAndUpdatesEditableFields() {
         Banner banner = Banner.builder()
                 .title("Existing promo")
                 .imageUrl("https://domain.com/image.png")
                 .position("home_top")
+                .isActive(true)
+                .startDate(LocalDateTime.parse("2026-05-01T00:00:00"))
+                .endDate(LocalDateTime.parse("2026-06-01T00:00:00"))
                 .build();
         UpdateBannerRequest request = UpdateBannerRequest.builder()
+                .title("Updated promo")
                 .position("category_shoes_top")
+                .isActive(false)
+                .startDate(null)
+                .endDate(null)
                 .build();
 
         mapper.updateEntity(banner, request);
 
-        assertThat(banner.getPosition()).isEqualTo("category_shoes_top");
+        assertThat(banner.getTitle()).isEqualTo("Updated promo");
+        assertThat(banner.getPosition()).isEqualTo("home_top");
+        assertThat(banner.getIsActive()).isFalse();
+        assertThat(banner.getStartDate()).isNull();
+        assertThat(banner.getEndDate()).isNull();
     }
 }

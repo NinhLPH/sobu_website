@@ -7,8 +7,8 @@ jest.mock('react-router-dom', () => ({
 }), {virtual: true});
 
 const banners = [
-    {id: 1, title: 'Banner một', imageUrl: 'one.jpg', position: 'HOME_MIDDLE', deviceType: 'ALL', isActive: true},
-    {id: 2, title: 'Banner hai', imageUrl: 'two.jpg', position: 'HOME_MIDDLE', deviceType: 'ALL', isActive: true},
+    {id: 1, title: 'Banner một', imageUrl: 'one.jpg', position: 'home_section_01_banner', deviceType: 'ALL', isActive: true},
+    {id: 2, title: 'Banner hai', imageUrl: 'two.jpg', position: 'home_section_01_banner', deviceType: 'ALL', isActive: true},
 ] as any;
 
 describe('BannerCarousel', () => {

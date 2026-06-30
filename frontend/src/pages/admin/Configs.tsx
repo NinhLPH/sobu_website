@@ -3,11 +3,14 @@ import {
     AlertCircle,
     Check,
     FileJson,
-    Image as ImageIcon,
     Loader2,
     RefreshCw,
     Save,
-    UploadCloud
+    UploadCloud,
+    Layout,
+    Code,
+    Plus,
+    Trash2
 } from 'lucide-react';
 import {AdminUiService} from '../../service/admin-ui.service';
 import {WebsiteConfigurationDTO} from '../../interface/public-ui-config.model';
@@ -19,7 +22,8 @@ import {FileService} from '../../service/file.service';
 import {getPublicImageUrl} from '../../utils/file-url';
 
 const CONFIG_PAGE_SIZE = 500;
-const GROUP_ORDER = ['THEME', 'GENERAL', 'SOCIAL', 'SEO', 'CHECKOUT', 'BUSINESS'];
+const HIDDEN_CONFIG_GROUPS = new Set(['CHECKOUT', 'BUSINESS']);
+const GROUP_ORDER = ['THEME', 'GENERAL', 'HOME_SECTION', 'HOME_PROMO', 'HOME_PARTNER', 'FOOTER', 'SOCIAL', 'SEO'];
 
 const emptyPage: PageResponse<WebsiteConfigurationDTO> = {
     content: [], pageNumber: 1, pageSize: CONFIG_PAGE_SIZE, totalElements: 0, totalPages: 0,
@@ -52,6 +56,9 @@ const toDraftValues = (configs: WebsiteConfigurationDTO[]) =>
         return accumulator;
     }, {});
 
+const isVisibleConfigGroup = (groupName?: string) =>
+    !HIDDEN_CONFIG_GROUPS.has((groupName || '').trim().toUpperCase());
+
 const sortGroupNames = (groupNames: string[]) =>
     [...groupNames].sort((left, right) => {
         const leftIndex = GROUP_ORDER.indexOf(left);
@@ -69,18 +76,227 @@ const getGroupTitle = (groupName: string) => {
             return 'Giao diện';
         case 'GENERAL':
             return 'Thông tin chung';
+        case 'HOME_SECTION':
+            return 'Trang chủ';
+        case 'HOME_PROMO':
+            return 'Home promo';
+        case 'HOME_PARTNER':
+            return 'Đối tác';
+        case 'FOOTER':
+            return 'Footer';
         case 'SOCIAL':
             return 'Mạng xã hội';
         case 'SEO':
             return 'SEO';
-        case 'CHECKOUT':
-            return 'Thanh toán';
-        case 'BUSINESS':
-            return 'Vận hành';
         default:
             return groupName;
     }
 };
+
+function JsonField({
+                       value,
+                       onChange,
+                       disabled,
+                       onBlur,
+                       configKey
+                   }: {
+    value: string;
+    onChange: (v: string) => void;
+    disabled?: boolean;
+    onBlur: () => void;
+    configKey: string;
+}) {
+    const [mode, setMode] = useState<'visual' | 'raw'>('visual');
+
+    let parsed: any = null;
+    let isValid = true;
+    try {
+        parsed = value ? JSON.parse(value) : null;
+    } catch (e) {
+        isValid = false;
+    }
+
+    useEffect(() => {
+        if (!isValid && mode === 'visual') {
+            setMode('raw');
+        }
+    }, [isValid, mode]);
+
+    const updateData = (newData: any) => {
+        onChange(JSON.stringify(newData, null, 2));
+    };
+
+    const renderVisual = () => {
+        if (!isValid) return <div className="p-4 text-xs font-bold text-error">JSON bị lỗi cú pháp, vui lòng dùng chế độ Code để sửa.</div>;
+        if (parsed === null) return <div className="p-4 text-xs font-semibold text-outline italic">Dữ liệu rỗng.</div>;
+
+        if (Array.isArray(parsed)) {
+            const isObjectArray = parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null;
+            const isStringArray = parsed.length > 0 && typeof parsed[0] === 'string';
+
+            if (parsed.length === 0) {
+                return <div className="p-4 text-xs font-semibold text-outline italic">Danh sách đang trống. Hãy chuyển sang Tab Code để nhập dữ liệu mẫu đầu tiên.</div>;
+            }
+
+            if (isStringArray) {
+                return (
+                    <div className="space-y-2 p-2">
+                        {parsed.map((str: string, index: number) => (
+                            <div key={index} className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={str}
+                                    disabled={disabled}
+                                    onChange={(e) => {
+                                        const arr = [...parsed];
+                                        arr[index] = e.target.value;
+                                        updateData(arr);
+                                    }}
+                                    className="h-10 flex-1 rounded-xl border border-outline-variant/40 bg-white px-3 text-xs font-semibold text-on-surface outline-none focus:border-primary/50"
+                                />
+                                <button
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() => updateData(parsed.filter((_: any, i: number) => i !== index))}
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-error/20 bg-error/10 text-error transition-colors hover:bg-error/20 disabled:opacity-50"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ))}
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => updateData([...parsed, ""])}
+                            className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+                        >
+                            <Plus className="h-4 w-4" /> Thêm dòng mới
+                        </button>
+                    </div>
+                );
+            }
+
+            if (isObjectArray) {
+                return (
+                    <div className="space-y-4 p-2">
+                        {parsed.map((item: any, index: number) => {
+                            const keys = Object.keys(item);
+                            return (
+                                <div key={index} className="relative rounded-xl border border-outline-variant/40 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                                    <div className="absolute right-3 top-3">
+                                        <button
+                                            type="button"
+                                            disabled={disabled}
+                                            onClick={() => updateData(parsed.filter((_: any, i: number) => i !== index))}
+                                            className="rounded-lg p-1.5 text-outline transition-colors hover:bg-error/10 hover:text-error"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                    <span className="mb-3 block text-[10px] font-black uppercase text-outline">Mục {index + 1}</span>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        {keys.map(k => (
+                                            <div key={k}>
+                                                <label className="mb-1 block text-[10px] font-bold text-outline-variant">{k}</label>
+                                                <input
+                                                    type="text"
+                                                    value={item[k] || ''}
+                                                    disabled={disabled}
+                                                    onChange={(e) => {
+                                                        const arr = [...parsed];
+                                                        arr[index] = { ...arr[index], [k]: e.target.value };
+                                                        updateData(arr);
+                                                    }}
+                                                    className="h-10 w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 text-xs font-semibold text-on-surface outline-none focus:border-primary/50"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => {
+                                const template = { ...parsed[0] };
+                                Object.keys(template).forEach(k => template[k] = "");
+                                updateData([...parsed, template]);
+                            }}
+                            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+                        >
+                            <Plus className="h-4 w-4" /> Thêm mục mới
+                        </button>
+                    </div>
+                );
+            }
+        }
+
+        if (typeof parsed === 'object') {
+            const keys = Object.keys(parsed);
+            return (
+                <div className="space-y-3 p-2">
+                    {keys.map(k => (
+                        <div key={k} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg bg-white p-2 border border-outline-variant/20">
+                            <label className="w-1/3 text-xs font-bold text-on-surface break-all pl-2">{k}</label>
+                            <input
+                                type="text"
+                                value={parsed[k] || ''}
+                                disabled={disabled}
+                                onChange={(e) => updateData({ ...parsed, [k]: e.target.value })}
+                                className="h-10 flex-1 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 text-xs font-semibold text-on-surface outline-none focus:border-primary/50"
+                            />
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        return <div className="p-4 text-xs font-semibold text-outline">Cấu trúc JSON phức tạp, vui lòng dùng chế độ Code.</div>;
+    };
+
+    return (
+        <div className="flex flex-col gap-2 rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm overflow-hidden">
+            <div className="flex justify-end gap-1 bg-surface-container/30 px-3 py-2 border-b border-outline-variant/20">
+                <button
+                    type="button"
+                    onClick={() => setMode('visual')}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase transition-colors ${
+                        mode === 'visual' ? 'bg-primary text-on-primary shadow-sm' : 'text-outline hover:bg-surface-container-high hover:text-on-surface'
+                    }`}
+                >
+                    <Layout className="h-3.5 w-3.5" /> Trực quan
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMode('raw')}
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase transition-colors ${
+                        mode === 'raw' ? 'bg-primary text-on-primary shadow-sm' : 'text-outline hover:bg-surface-container-high hover:text-on-surface'
+                    }`}
+                >
+                    <Code className="h-3.5 w-3.5" /> Code (Raw)
+                </button>
+            </div>
+
+            <div className="p-2">
+                {mode === 'visual' ? (
+                    renderVisual()
+                ) : (
+                    <textarea
+                        aria-label={`Giá trị ${configKey}`}
+                        value={value}
+                        disabled={disabled}
+                        onChange={(event) => onChange(event.target.value)}
+                        onBlur={onBlur}
+                        rows={7}
+                        spellCheck={false}
+                        className="min-h-[160px] w-full resize-y rounded-xl border border-outline-variant/40 bg-white px-4 py-3 font-mono text-xs font-semibold leading-relaxed text-on-surface outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                    />
+                )}
+            </div>
+        </div>
+    );
+}
 
 function ConfigField({
     config,
@@ -126,15 +342,12 @@ function ConfigField({
 
     if (config.type === 'json') {
         return (
-            <textarea
-                aria-label={`Giá trị ${config.key}`}
+            <JsonField
                 value={value}
+                onChange={onChange}
                 disabled={disabled}
-                onChange={(event) => onChange(event.target.value)}
                 onBlur={onJsonBlur}
-                rows={7}
-                spellCheck={false}
-                className="min-h-[160px] w-full resize-y rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 font-mono text-xs font-semibold leading-relaxed text-on-surface outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                configKey={config.key}
             />
         );
     }
@@ -252,7 +465,7 @@ export default function AdminConfigs() {
     }, [load]);
 
     const groupedConfigs = useMemo(
-        () => groupConfigsByGroupName(pageData.content || []),
+        () => groupConfigsByGroupName((pageData.content || []).filter((config) => isVisibleConfigGroup(config.groupName))),
         [pageData.content]
     );
     const groupNames = useMemo(
@@ -268,6 +481,10 @@ export default function AdminConfigs() {
         }
         if (activeGroup && groupNames.length && !groupNames.includes(activeGroup)) {
             setActiveGroup(groupNames[0]);
+            return;
+        }
+        if (activeGroup && !groupNames.length) {
+            setActiveGroup('');
         }
     }, [activeGroup, groupNames]);
 
