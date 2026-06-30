@@ -27,6 +27,7 @@ import AdminNhanhCallback from "./pages/admin/NhanhCallback";
 import OrderTracking from "./pages/OrderTracking";
 import PaymentResult from "./pages/PaymentResult";
 import StaticPage from "./pages/StaticPage";
+import UserProfile from "./pages/UserProfile";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Toast from "./components/common/Toast";
 import SiteLayout from './components/layout/SiteLayout';
@@ -76,6 +77,7 @@ export default function App() {
                         {/* USER LOGGED IN PRIVATE ROUTES */}
                         <Route element={<ProtectedRoute allowedRoles={['USER', 'ADMIN']} />}>
                             <Route path="/cart" element={<Cart/>}/>
+                            <Route path="/profile" element={<UserProfile/>}/>
                             <Route path="/requests" element={<MyRequests/>}/>
                             <Route path="/requests/new" element={<CreateRequest/>}/>
                             <Route path="/requests/:id" element={<RequestDetail/>}/>

@@ -499,6 +499,14 @@ export default function Header() {
                                                     </Link>
                                                 )}
                                                 <Link
+                                                    to="/profile"
+                                                    onClick={() => setIsUserMenuOpen(false)}
+                                                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                                >
+                                                    <User className="w-4 h-4 text-primary"/>
+                                                    <span>Hồ sơ cá nhân</span>
+                                                </Link>
+                                                <Link
                                                     to="/requests"
                                                     onClick={() => setIsUserMenuOpen(false)}
                                                     className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
