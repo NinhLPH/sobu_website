@@ -1,116 +1,190 @@
-import {HatGlasses, Mail} from 'lucide-react';
+import {Clock, ExternalLink, Mail, MapPin, Phone} from 'lucide-react';
 import {Link} from 'react-router-dom';
-import {getPublicConfigValue, usePublicUiStore} from '../../store/usePublicUiStore';
+import {usePublicUiStore} from '../../store/usePublicUiStore';
+import {parseJsonConfig} from '../../utils/website-config';
 
-export default function Footer() {
-    const configs = usePublicUiStore((state) => state.configs);
-    const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
-    const supportHotline = getPublicConfigValue(configs, 'support_hotline', '1234567890');
+interface FooterLink {
+    label: string;
+    href: string;
+}
+
+type SocialLinks = Record<string, string>;
+
+const isExternalUrl = (href: string) => /^https?:\/\//i.test(href);
+
+function FooterNavLink({link}: {link: FooterLink}) {
+    if (!link.href || !link.label) return null;
+
+    if (isExternalUrl(link.href)) {
+        return (
+            <a
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 transition-colors hover:text-primary"
+            >
+                {link.label}
+                <ExternalLink className="h-3 w-3"/>
+            </a>
+        );
+    }
 
     return (
-        <footer
-            className="bg-surface-container-high w-full pt-16 pb-6 mt-auto text-on-surface border-t border-surface-container-high/60">
+        <Link to={link.href} className="transition-colors hover:text-primary">
+            {link.label}
+        </Link>
+    );
+}
+
+export default function Footer() {
+    const configMap = usePublicUiStore((state) => state.configMap);
+    const siteName = configMap?.site_name || 'SOBU';
+    const greetingText = configMap?.footer_greeting_text;
+    const supportHotline = configMap?.support_hotline;
+    const supportEmail = configMap?.support_email;
+    const companyAddress = configMap?.company_address;
+    const workingHours = configMap?.working_hours;
+    const copyrightText = configMap?.copyright_text;
+    const newsletterEnabled = configMap?.newsletter_enabled === 'true';
+    const newsletterDescription = configMap?.newsletter_description;
+    const newsletterSubmitLabel = configMap?.newsletter_submit_label;
+    const companyLinks = parseJsonConfig<FooterLink[]>(configMap, 'footer_company_links', []);
+    const helpLinks = parseJsonConfig<FooterLink[]>(configMap, 'footer_help_links', []);
+    const legalLinks = parseJsonConfig<FooterLink[]>(configMap, 'legal_links', []);
+    const socialLinks = parseJsonConfig<SocialLinks>(configMap, 'social_links', {});
+    const visibleSocialLinks = Object.entries(socialLinks).filter(([, href]) => Boolean(href));
+
+    return (
+        <footer className="mt-auto w-full border-t border-surface-container-high/60 bg-surface-container-high pb-6 pt-16 text-on-surface">
             <div className="mx-auto max-w-[1504px] px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-12 mb-12">
-                    <div className="col-span-1 md:col-span-4 pr-0 md:pr-12 flex flex-col justify-start">
+                <div className="mb-12 grid grid-cols-1 gap-10 md:grid-cols-12">
+                    <div className="col-span-1 flex flex-col justify-start pr-0 md:col-span-4 md:pr-10">
                         <Link
                             to="/"
-                            className="inline-block text-3xl lg:text-4xl font-black tracking-widest text-on-surface hover:text-primary transition-colors mb-4 w-fit select-none"
+                            className="mb-4 inline-block w-fit select-none text-3xl font-black tracking-widest text-on-surface transition-colors hover:text-primary lg:text-4xl"
                         >
                             {siteName}
                         </Link>
 
-                        <p className="text-xs font-semibold text-on-surface-variant mb-6 leading-relaxed max-w-sm">
-                            All good things come by email (including premium model toys). Sign up now to join our
-                            collector community.
-                        </p>
+                        {greetingText && (
+                            <p className="mb-6 max-w-sm text-xs font-semibold leading-relaxed text-on-surface-variant">
+                                {greetingText}
+                            </p>
+                        )}
 
-                        <div className="flex flex-col gap-2.5 max-w-sm">
-                            <div className="relative w-full">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-outline w-4 h-4"/>
-                                <input
-                                    type="email"
-                                    placeholder="Enter your email"
-                                    className="w-full pl-11 pr-4 py-2.5 bg-surface-container-lowest border border-surface-container rounded-xl outline-none text-xs text-on-surface focus:ring-2 focus:ring-primary/20 font-medium transition-all"
-                                />
+                        {newsletterEnabled && newsletterDescription && newsletterSubmitLabel && (
+                            <div className="flex max-w-sm flex-col gap-2.5">
+                                <p className="text-xs font-semibold leading-relaxed text-on-surface-variant">
+                                    {newsletterDescription}
+                                </p>
+                                <div className="relative w-full">
+                                    <Mail className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
+                                    <input
+                                        type="email"
+                                        placeholder="Email"
+                                        className="w-full rounded-xl border border-surface-container bg-surface-container-lowest py-2.5 pl-11 pr-4 text-xs font-medium text-on-surface outline-none transition-all focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
+                                <button
+                                    className="w-full cursor-pointer rounded-xl bg-primary py-2.5 text-xs font-black uppercase tracking-widest text-on-primary shadow-md shadow-primary/10 transition-colors hover:bg-primary-container"
+                                >
+                                    {newsletterSubmitLabel}
+                                </button>
                             </div>
-                            <button
-                                className="w-full py-2.5 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.01] transition-transform shadow-md shadow-primary/10">
-                                Subscribe
-                            </button>
-                        </div>
+                        )}
                     </div>
 
-                    <div className="col-span-1 md:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-8 pt-2">
-                        {/* Company Links */}
+                    <div className="col-span-1 grid grid-cols-1 gap-8 pt-2 sm:grid-cols-3 md:col-span-8">
+                        {companyLinks.length > 0 && (
+                            <div>
+                                <h4 className="mb-5 text-[11px] font-black uppercase tracking-widest text-outline">Company</h4>
+                                <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant">
+                                    {companyLinks.map((link) => (
+                                        <li key={`${link.label}-${link.href}`}>
+                                            <FooterNavLink link={link}/>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {helpLinks.length > 0 && (
+                            <div>
+                                <h4 className="mb-5 text-[11px] font-black uppercase tracking-widest text-outline">Help Center</h4>
+                                <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant">
+                                    {helpLinks.map((link) => (
+                                        <li key={`${link.label}-${link.href}`}>
+                                            <FooterNavLink link={link}/>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
                         <div>
-                            <h4 className="font-black uppercase tracking-widest text-[11px] text-outline mb-5">Company</h4>
-                            <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant">
-                                <li><Link to="#" className="hover:text-primary transition-colors">About SOBU</Link></li>
-                                <li><Link to="#" className="hover:text-primary transition-colors">Contact us</Link></li>
-                                <li><Link to="#" className="hover:text-primary transition-colors">Blog & News</Link>
-                                </li>
-                                <li><Link to="#" className="hover:text-primary transition-colors">Customer
-                                    Reviews</Link></li>
+                            <h4 className="mb-5 text-[11px] font-black uppercase tracking-widest text-outline">Contact Info</h4>
+                            <ul className="mb-5 space-y-3.5 text-xs font-bold text-on-surface-variant">
+                                {supportHotline && (
+                                    <li className="flex items-start gap-2.5">
+                                        <Phone className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
+                                        <a href={`tel:${supportHotline.replace(/\s+/g, '')}`} className="hover:text-primary">
+                                            {supportHotline}
+                                        </a>
+                                    </li>
+                                )}
+                                {supportEmail && (
+                                    <li className="flex items-start gap-2.5">
+                                        <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
+                                        <a href={`mailto:${supportEmail}`} className="break-all hover:text-primary">
+                                            {supportEmail}
+                                        </a>
+                                    </li>
+                                )}
+                                {companyAddress && (
+                                    <li className="flex items-start gap-2.5">
+                                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
+                                        <span>{companyAddress}</span>
+                                    </li>
+                                )}
+                                {workingHours && (
+                                    <li className="flex items-start gap-2.5">
+                                        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
+                                        <span>{workingHours}</span>
+                                    </li>
+                                )}
                             </ul>
+
+                            {visibleSocialLinks.length > 0 && (
+                                <div className="flex flex-wrap gap-2.5">
+                                    {visibleSocialLinks.map(([name, href]) => (
+                                        <a
+                                            key={name}
+                                            href={href}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="rounded-lg bg-surface-container-highest px-3 py-2 text-[10px] font-black uppercase text-on-surface transition-colors hover:text-primary"
+                                        >
+                                            {name}
+                                        </a>
+                                    ))}
+                                </div>
+                            )}
                         </div>
+                    </div>
+                </div>
 
-                        {/* Help Center Links */}
-                        <div>
-                            <h4 className="font-black uppercase tracking-widest text-[11px] text-outline mb-5">Help
-                                Center</h4>
-                            <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant">
-                                <li><Link to="#" className="hover:text-primary transition-colors">Getting started</Link>
-                                </li>
-                                <li><Link to="#" className="hover:text-primary transition-colors">Pre-order
-                                    Policy</Link></li>
-                                <li><Link to="#" className="hover:text-primary transition-colors">Custom / Trade-in
-                                    Service</Link></li>
-                                <li><Link to="#" className="hover:text-primary transition-colors">Report a bug</Link>
-                                </li>
-                                <li><Link to="#" className="hover:text-primary transition-colors">Zalo Chat
-                                    support</Link></li>
-                            </ul>
-                        </div>
-
-                        {/* Contact Info */}
-                        <div>
-                            <h4 className="font-black uppercase tracking-widest text-[11px] text-outline mb-5">Contact
-                                Info</h4>
-                            <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant mb-5">
-                                <li className="flex flex-col"><span
-                                    className="text-[10px] uppercase font-black text-outline/60">Hotline:</span> {supportHotline}
-                                </li>
-                                <li className="flex flex-col"><span
-                                    className="text-[10px] uppercase font-black text-outline/60">Email:</span> sobu.studio@email.com
-                                </li>
-                                <li className="flex flex-col"><span
-                                    className="text-[10px] uppercase font-black text-outline/60">Workshop Location:</span> Ha
-                                    Nam - Viet Nam
-                                </li>
-                            </ul>
-
-                            {/* Mạng xã hội */}
-                            <div className="flex gap-2.5">
-                                {[1, 2, 3, 4].map((_, i) => (
-                                    <Link key={i} to="#"
-                                          className="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center text-on-surface hover:text-primary hover:scale-105 transition-all">
-                                        <HatGlasses className="w-4 h-4"/>
-                                    </Link>
+                {(copyrightText || legalLinks.length > 0) && (
+                    <div className="flex flex-col items-center justify-center gap-2 border-t border-surface-container-high pt-6 text-center text-[11px] font-bold text-outline">
+                        {copyrightText && <p>{copyrightText}</p>}
+                        {legalLinks.length > 0 && (
+                            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+                                {legalLinks.map((link) => (
+                                    <FooterNavLink key={`${link.label}-${link.href}`} link={link}/>
                                 ))}
                             </div>
-                        </div>
+                        )}
                     </div>
-                </div>
-
-                <div
-                    className="pt-6 border-t border-surface-container-high flex flex-col items-center justify-center text-[11px] font-bold text-outline text-center gap-1.5">
-                    <p>
-                        Copyright © 2026 SOBU Studio | All Rights Reserved | {' '}
-                        <Link to="#" className="underline hover:text-primary">Terms and Conditions</Link> | {' '}
-                        <Link to="#" className="underline hover:text-primary">Privacy Policy</Link>
-                    </p>
-                </div>
+                )}
             </div>
         </footer>
     );

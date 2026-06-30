@@ -23,7 +23,7 @@ public class PublicUiController {
     @GetMapping("/banners")
     public ResponseEntity<ApiResponseDTO<List<BannerDTO>>> getActiveBanners(
             @RequestParam(required = false) Banner.DeviceType deviceType,
-            @RequestParam(required = false) Banner.BannerPosition position) {
+            @RequestParam(required = false) String position) {
         List<BannerDTO> banners = bannerService.getActiveBanners(deviceType, position);
         return ResponseEntity.ok(ApiResponseDTO.success(banners, "Active banners retrieved successfully"));
     }

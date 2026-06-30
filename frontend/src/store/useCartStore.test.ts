@@ -27,11 +27,43 @@ const shippingLocation = {
     customerWardId: 1116
 };
 
+const emptyCartResponse = {
+    success: true,
+    statusCode: 200,
+    message: 'Cart retrieved',
+    data: { items: [] }
+};
+
+const cartWithItem = (item: typeof product, quantity: number) => ({
+    success: true,
+    statusCode: 200,
+    message: 'Item added to cart',
+    data: {
+        items: [{
+            productId: item.id,
+            nhanhProductId: item.nhanhProductId,
+            name: item.name,
+            price: item.price,
+            imageUrl: item.imageUrl,
+            quantity
+        }]
+    }
+});
+
+it('does not fetch the server cart when the store module is imported', () => {
+    expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
+});
+
 describe('useCartStore order submission', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        window.sessionStorage.clear();
+        window.localStorage.clear();
+        mockedCustomerService.getCart.mockResolvedValue(emptyCartResponse);
+        mockedCustomerService.clearCart.mockResolvedValue({ success: true, statusCode: 200, message: 'Cart cleared', data: null as any });
         useCartStore.setState({
             items: [],
+            isLoading: false,
             isSubmitting: false,
             checkoutError: null,
             lastCreatedOrder: null,
@@ -40,7 +72,44 @@ describe('useCartStore order submission', () => {
         });
     });
 
+    it('does not call the cart API for guest sessions', async () => {
+        useCartStore.setState({
+            items: [{ product, quantity: 1 }],
+            isLoading: true
+        });
+
+        await useCartStore.getState().fetchCart();
+
+        expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
+        expect(useCartStore.getState().items).toEqual([]);
+        expect(useCartStore.getState().isLoading).toBe(false);
+    });
+
+    it('loads the server cart when an access token exists', async () => {
+        window.sessionStorage.setItem('accessToken', 'access-token');
+        mockedCustomerService.getCart.mockResolvedValue(cartWithItem(product, 3));
+
+        await useCartStore.getState().fetchCart();
+
+        expect(mockedCustomerService.getCart).toHaveBeenCalledTimes(1);
+        expect(useCartStore.getState().items).toEqual([{
+            product: {
+                id: product.id,
+                nhanhProductId: product.nhanhProductId,
+                name: product.name,
+                price: product.price,
+                imageUrl: product.imageUrl,
+                brand: '',
+                description: '',
+                stock: 999
+            },
+            quantity: 3
+        }]);
+        expect(useCartStore.getState().isLoading).toBe(false);
+    });
+
     it('creates the API payload from cart items and clears the cart on success', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 2));
         mockedCustomerService.createOrder.mockResolvedValue({
             success: true,
             statusCode: 201,
@@ -54,7 +123,8 @@ describe('useCartStore order submission', () => {
                 items: []
             }
         });
-        useCartStore.getState().addToCart(product, 2);
+
+        await useCartStore.getState().addToCart(product, 2);
 
         const order = await useCartStore.getState().submitOrder({
             customerName: 'Nguyen Van A',
@@ -77,19 +147,22 @@ describe('useCartStore order submission', () => {
             }),
             expect.any(String)
         );
+        expect(mockedCustomerService.clearCart).toHaveBeenCalled();
         expect(order.id).toBe(1);
         expect(useCartStore.getState().items).toEqual([]);
         expect(useCartStore.getState().checkoutError).toBeNull();
     });
 
     it('keeps cart items and exposes the backend message when creation fails', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
         mockedCustomerService.createOrder.mockRejectedValue({
             response: {
                 status: 409,
                 data: { message: 'Idempotency conflict' }
             }
         });
-        useCartStore.getState().addToCart(product);
+
+        await useCartStore.getState().addToCart(product);
 
         await expect(useCartStore.getState().submitOrder({
             customerName: 'Nguyen Van A',

@@ -17,20 +17,20 @@ export default function ProductSlider({ products }: { products: ProductModel[] }
         <div className="relative group">
             <button
                 onClick={() => scroll('left')}
-                className="absolute -left-5 top-1/2 -translate-y-1/2 z-10 w-11 h-11 bg-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(14,48,78,0.1)] text-on-surface hover:text-primary transition-colors opacity-0 group-hover:opacity-100 hidden md:flex border border-surface-container"
+                className="absolute -left-5 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-surface-container bg-surface-container-lowest text-on-surface opacity-0 shadow-[0_10px_30px_rgba(14,48,78,0.1)] transition-colors hover:text-primary group-hover:opacity-100 md:flex"
             >
                 <ChevronLeft className="w-5 h-5" />
             </button>
 
             <div
                 ref={sliderRef}
-                className="flex gap-5 overflow-x-auto snap-x snap-mandatory py-4 px-1 scrollbar-hide"
+                className="scrollbar-hide flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-2 sm:gap-5 sm:py-4"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {products.map(product => (
                     <div
                         key={product.id}
-                        className="w-[75vw] sm:w-[calc(33.333%-14px)] lg:w-[calc(20%-16px)] flex-shrink-0 snap-start"
+                        className="w-[42vw] max-w-[180px] flex-shrink-0 snap-start min-[420px]:w-[31vw] sm:w-[calc(33.333%-14px)] sm:max-w-none lg:w-[calc(20%-16px)]"
                     >
                         <ProductCard product={product} />
                     </div>
@@ -38,7 +38,7 @@ export default function ProductSlider({ products }: { products: ProductModel[] }
             </div>
             <button
                 onClick={() => scroll('right')}
-                className="absolute -right-5 top-1/2 -translate-y-1/2 z-10 w-11 h-11 bg-white rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(14,48,78,0.1)] text-on-surface hover:text-primary transition-colors opacity-0 group-hover:opacity-100 hidden md:flex border border-surface-container"
+                className="absolute -right-5 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-surface-container bg-surface-container-lowest text-on-surface opacity-0 shadow-[0_10px_30px_rgba(14,48,78,0.1)] transition-colors hover:text-primary group-hover:opacity-100 md:flex"
             >
                 <ChevronRight className="w-5 h-5" />
             </button>

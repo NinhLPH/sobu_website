@@ -2,10 +2,10 @@ package com.vn.sodu.ui.service;
 
 import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.global.dto.SearchRequest;
+import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.ui.Banner;
 import com.vn.sodu.ui.BannerRepo;
 import com.vn.sodu.ui.dto.BannerDTO;
-import com.vn.sodu.ui.dto.CreateBannerRequest;
 import com.vn.sodu.ui.dto.UpdateBannerRequest;
 import com.vn.sodu.ui.mapper.BannerMapper;
 import com.vn.sodu.storage.StorageService;
@@ -32,24 +32,18 @@ public class BannerServiceImpl implements BannerService {
 
     @Override
     @Transactional
-    public BannerDTO createBanner(CreateBannerRequest request, MultipartFile image) {
-        if (image != null && !image.isEmpty()) {
-            String imageUrl = storageService.store(image, "banners");
-            request.setImageUrl(imageUrl);
-        }
-        Banner banner = bannerMapper.toEntity(request);
-        Banner savedBanner = bannerRepo.save(banner);
-        return bannerMapper.toDTO(savedBanner);
-    }
-
-    @Override
-    @Transactional
     public BannerDTO updateBanner(Long id, UpdateBannerRequest request, MultipartFile image) {
+        if (request == null) {
+            throw new BadRequestException("Banner payload is required");
+        }
         Banner banner = bannerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Banner not found with id: " + id));
         if (image != null && !image.isEmpty()) {
             String imageUrl = storageService.store(image, "banners");
             request.setImageUrl(imageUrl);
+        }
+        if (request.getImageUrl() == null || request.getImageUrl().isBlank()) {
+            throw new BadRequestException("Banner image URL is required");
         }
         bannerMapper.updateEntity(banner, request);
         Banner updatedBanner = bannerRepo.save(banner);
@@ -61,19 +55,6 @@ public class BannerServiceImpl implements BannerService {
         Banner banner = bannerRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Banner not found with id: " + id));
         return bannerMapper.toDTO(banner);
-    }
-
-    @Override
-    @Transactional
-    public void deleteBanner(Long id) {
-        Banner banner = bannerRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Banner not found with id: " + id));
-        if (banner.getIsActive() != null && banner.getIsActive()) {
-            banner.setIsActive(false);
-            bannerRepo.save(banner);
-        } else {
-            bannerRepo.delete(banner);
-        }
     }
 
     @Override
@@ -114,7 +95,7 @@ public class BannerServiceImpl implements BannerService {
     }
 
     @Override
-    public List<BannerDTO> getActiveBanners(Banner.DeviceType deviceType, Banner.BannerPosition position) {
+    public List<BannerDTO> getActiveBanners(Banner.DeviceType deviceType, String position) {
         Specification<Banner> spec = (root, query, cb) -> {
             var predicate = cb.isTrue(root.get("isActive"));
             if (deviceType != null) {

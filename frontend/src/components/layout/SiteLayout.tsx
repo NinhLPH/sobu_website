@@ -6,6 +6,7 @@ import {usePublicUiStore} from '../../store/usePublicUiStore';
 
 export default function SiteLayout() {
     const fetchBanners = usePublicUiStore((state) => state.fetchBanners);
+    const sidebarStickyClassName = 'top-28';
 
     useEffect(() => {
         void fetchBanners();
@@ -13,11 +14,11 @@ export default function SiteLayout() {
 
     return (
         <div className="mx-auto grid w-full max-w-[1504px] flex-1 grid-cols-1 gap-4 px-4 min-[1440px]:grid-cols-[160px_minmax(0,1120px)_160px]">
-            <LeftBannerSidebar/>
+            <LeftBannerSidebar stickyClassName={sidebarStickyClassName}/>
             <div className="min-w-0 w-full">
                 <Outlet/>
             </div>
-            <RightBannerSidebar/>
+            <RightBannerSidebar stickyClassName={sidebarStickyClassName}/>
         </div>
     );
 }

@@ -4,6 +4,7 @@ import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.idempotency.IdempotencyConflictException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -76,6 +77,13 @@ public class GlobalExceptionHandler {
         log.error("External Service Error: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ApiResponseDTO.error("External service communication failed", "BAD_GATEWAY", HttpStatus.BAD_GATEWAY.value()));
+    }
+
+    @ExceptionHandler(RedisConnectionFailureException.class)
+    public ResponseEntity<ApiResponseDTO<Void>> handleRedisConnectionFailureException(RedisConnectionFailureException ex) {
+        log.error("Redis Connection Failure: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponseDTO.error("Cart storage is unavailable", "CART_STORAGE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE.value()));
     }
 
     @ExceptionHandler(Exception.class)

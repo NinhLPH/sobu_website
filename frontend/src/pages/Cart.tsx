@@ -89,7 +89,7 @@ function QuantityController({
                 type="button"
                 onClick={onDecrease}
                 disabled={disabled || quantity <= 1}
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-on-surface shadow-sm transition-colors hover:text-primary disabled:opacity-50"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-lowest text-on-surface shadow-sm transition-colors hover:text-primary disabled:opacity-50"
             >
                 <Minus className="h-3 w-3" />
             </button>
@@ -106,7 +106,7 @@ function QuantityController({
                 type="button"
                 onClick={onIncrease}
                 disabled={disabled}
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-on-surface shadow-sm transition-colors hover:text-primary disabled:opacity-50"
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-container-lowest text-on-surface shadow-sm transition-colors hover:text-primary disabled:opacity-50"
             >
                 <Plus className="h-3 w-3" />
             </button>
@@ -117,13 +117,15 @@ function QuantityController({
 export default function Cart() {
     const {
         items,
+        isLoading,
         removeFromCart,
         updateQuantity,
         getTotals,
         submitOrder,
         isSubmitting,
         checkoutError,
-        clearCheckoutError
+        clearCheckoutError,
+        fetchCart
     } = useCartStore();
     const {
         createPayment,
@@ -146,8 +148,11 @@ export default function Cart() {
 
     useEffect(() => {
         void fetchLocations(true);
+        if (isAuthenticated) {
+            void fetchCart();
+        }
         return cancelScheduledRetry;
-    }, [fetchLocations, cancelScheduledRetry]);
+    }, [fetchLocations, cancelScheduledRetry, fetchCart, isAuthenticated]);
 
     useEffect(() => {
         if (!user) {
@@ -297,6 +302,15 @@ export default function Cart() {
         }
     };
 
+    if (isLoading) {
+        return (
+            <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
+                <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
+                <p className="text-xs font-bold text-outline">Đang tải giỏ hàng...</p>
+            </main>
+        );
+    }
+
     if (items.length === 0 && !isSubmitting && !isCreatingPayment) {
         return (
             <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
@@ -309,7 +323,7 @@ export default function Cart() {
                 </p>
                 <Link
                     to="/products"
-                    className="rounded-xl bg-primary px-8 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-transform hover:scale-[1.02]"
+                    className="rounded-xl bg-primary px-8 py-3 text-xs font-bold uppercase tracking-wider text-on-primary shadow-md transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
                     Khám phá cửa hàng
                 </Link>
@@ -331,7 +345,7 @@ export default function Cart() {
     }
 
     return (
-        <main className="w-full min-w-0 bg-surface px-4 pb-16 pt-24 sm:px-6">
+        <main className="w-full min-w-0 bg-surface px-3 pb-14 pt-24 sm:px-6 sm:pb-16">
             <header className="mb-8 flex items-center gap-3">
                 <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface md:text-3xl">
                     Giỏ hàng
@@ -340,7 +354,7 @@ export default function Cart() {
                 <span className="text-sm font-black text-primary">{itemCount} sản phẩm</span>
             </header>
 
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-10 lg:grid-cols-12">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="space-y-8 lg:col-span-7">
                     {(validationError || checkoutError || locationError) && (
                         <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">
@@ -488,7 +502,7 @@ export default function Cart() {
                         <div className="mb-5 max-h-[320px] space-y-4 overflow-y-auto pr-1">
                             {items.map(({ product, quantity }) => (
                                 <div key={product.id} className="flex items-center gap-3.5">
-                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-surface-container-low p-1.5">
+                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface-container-low p-1.5 sm:h-14 sm:w-14">
                                         <img
                                             src={product.imageUrl}
                                             alt={product.name}
@@ -537,7 +551,7 @@ export default function Cart() {
                             </div>
                             <div className="mt-2 flex items-end justify-between border-t border-dashed border-surface-container-high pt-3">
                                 <span className="text-sm font-black uppercase">Tổng thanh toán</span>
-                                <span className="text-2xl font-black tracking-tight text-primary">
+                                <span className="text-xl font-black leading-none tracking-tight text-primary sm:text-2xl">
                                     {formatCurrency(subtotal)}
                                 </span>
                             </div>
@@ -554,7 +568,7 @@ export default function Cart() {
                                     clearCheckoutError();
                                 }}
                                 disabled={isSubmitting || isCreatingPayment}
-                                className="mt-2 w-full rounded-xl border border-surface-container bg-white px-4 py-3 text-xs font-bold normal-case text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                className="mt-2 w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-3 text-xs font-bold normal-case text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                                 required
                             >
                                 <option value="ONLINE">ONLINE - Thanh toán qua PayOS</option>
@@ -570,7 +584,7 @@ export default function Cart() {
                                 !locationsLoaded ||
                                 items.length === 0
                             }
-                            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-white shadow-md shadow-primary/10 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+                            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-on-primary shadow-md shadow-primary/10 transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {(isSubmitting || isCreatingPayment) && <Loader2 className="h-4 w-4 animate-spin" />}
                             {isSubmitting

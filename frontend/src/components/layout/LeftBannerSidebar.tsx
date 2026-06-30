@@ -2,13 +2,17 @@ import BannerPlaceholder from './BannerPlaceholder';
 import BannerMedia from '../common/BannerMedia';
 import {getBannersForPlacement, usePublicUiStore} from '../../store/usePublicUiStore';
 
-export default function LeftBannerSidebar() {
+interface LeftBannerSidebarProps {
+    stickyClassName?: string;
+}
+
+export default function LeftBannerSidebar({stickyClassName = 'top-28'}: LeftBannerSidebarProps) {
     const banners = usePublicUiStore((state) => state.banners);
-    const banner = getBannersForPlacement(banners, 'PRODUCT_SIDEBAR', 'WEB')[0];
+    const banner = getBannersForPlacement(banners, 'site_left_sidebar_banner', 'WEB')[0];
 
     return (
         <aside className="hidden min-[1440px]:block" aria-label="Quảng cáo bên trái">
-            <div className="sticky top-28">
+            <div className={`sticky ${stickyClassName}`}>
                 {banner ? (
                     <BannerMedia
                         banner={banner}

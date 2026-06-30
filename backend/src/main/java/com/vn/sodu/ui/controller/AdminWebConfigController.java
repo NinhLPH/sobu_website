@@ -3,12 +3,15 @@ package com.vn.sodu.ui.controller;
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.global.dto.SearchRequest;
+import com.vn.sodu.ui.dto.BulkWebsiteConfigurationRequest;
 import com.vn.sodu.ui.dto.WebsiteConfigurationDTO;
 import com.vn.sodu.ui.dto.WebsiteConfigurationRequest;
 import com.vn.sodu.ui.service.WebConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/configs")
@@ -27,6 +30,13 @@ public class AdminWebConfigController {
     public ResponseEntity<ApiResponseDTO<WebsiteConfigurationDTO>> updateConfig(@PathVariable Long id, @RequestBody WebsiteConfigurationRequest request) {
         WebsiteConfigurationDTO dto = webConfigService.updateConfig(id, request);
         return ResponseEntity.ok(ApiResponseDTO.success(dto, "Configuration updated successfully"));
+    }
+
+    @PutMapping("/bulk")
+    public ResponseEntity<ApiResponseDTO<List<WebsiteConfigurationDTO>>> bulkUpdateConfigs(
+            @RequestBody List<BulkWebsiteConfigurationRequest> requests) {
+        List<WebsiteConfigurationDTO> configs = webConfigService.bulkUpdateConfigs(requests);
+        return ResponseEntity.ok(ApiResponseDTO.success(configs, "Configurations updated successfully"));
     }
 
     @GetMapping("/{id}")

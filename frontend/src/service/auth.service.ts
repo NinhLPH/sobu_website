@@ -1,6 +1,5 @@
 import apiClient from '../api/api-client';
 import {
-    ActivateAccountResponse,
     ApiResponseDTO,
     ApiResponseWithoutDataDTO,
     LoginResponse,
@@ -8,11 +7,11 @@ import {
     RegisterResponse
 } from '../interface/api-response';
 import {
+    GoogleLoginRequest,
     LoginRequest,
     LogoutRequest,
     RefreshTokenRequest,
-    RegisterRequest,
-    ResendActivationRequest
+    RegisterRequest
 } from '../interface/auth.model';
 import { authStorage } from '../utils/auth-storage';
 
@@ -29,16 +28,10 @@ export const AuthService = {
         return apiClient.post('/api/auth/register', data);
     },
 
-    resendActivation: (
-        data: ResendActivationRequest
-    ): Promise<ApiResponseWithoutDataDTO> => {
-        return apiClient.post('/api/auth/resend-activation', data);
-    },
-
-    activateAccount: (
-        token: string
-    ): Promise<ApiResponseDTO<ActivateAccountResponse>> => {
-        return apiClient.get('/api/auth/activate', { params: { token } });
+    googleLogin: (
+        data: GoogleLoginRequest
+    ): Promise<ApiResponseDTO<LoginResponse>> => {
+        return apiClient.post('/api/auth/oauth/google', data);
     },
 
     refreshToken: (

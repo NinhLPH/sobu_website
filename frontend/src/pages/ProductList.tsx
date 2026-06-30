@@ -146,21 +146,21 @@ export default function ProductList() {
     };
 
     return (
-        <main className="flex min-h-screen w-full min-w-0 flex-col bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
+        <main className="flex min-h-screen w-full min-w-0 flex-col bg-surface px-3 pb-20 pt-24 sm:px-6 sm:pb-24 sm:pt-32">
             {/* Header / Breadcrumb */}
-            <nav className="flex items-center gap-2 text-sm font-bold text-on-surface-variant mb-8">
+            <nav className="mb-6 flex items-center gap-2 text-xs font-bold text-on-surface-variant sm:mb-8 sm:text-sm">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
                 <ChevronRight className="w-4 h-4"/>
                 <span className="text-primary">Cửa hàng</span>
             </nav>
-            <header className="mb-12">
-                <h1 className="mb-4 text-3xl font-black uppercase tracking-tighter text-on-surface sm:text-4xl lg:text-5xl">Tất cả sản phẩm</h1>
+            <header className="mb-7 sm:mb-12">
+                <h1 className="mb-4 text-2xl font-black uppercase tracking-tight text-on-surface sm:text-4xl lg:text-5xl">Tất cả sản phẩm</h1>
             </header>
 
             <button
                 type="button"
                 onClick={() => setIsFilterOpen((open) => !open)}
-                className="mb-5 flex w-full items-center justify-between rounded-2xl bg-surface-container-lowest px-5 py-4 text-sm font-black uppercase text-on-surface shadow-sm lg:hidden"
+                className="mb-4 flex w-full items-center justify-between rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-4 py-3 text-xs font-black uppercase text-on-surface shadow-sm lg:hidden"
                 aria-expanded={isFilterOpen}
                 aria-controls="product-filters"
             >
@@ -168,12 +168,12 @@ export default function ProductList() {
                 <ChevronDown className={`h-5 w-5 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`}/>
             </button>
 
-            <div className="flex flex-col lg:flex-row gap-10 items-start">
+            <div className="flex flex-col items-start gap-6 lg:flex-row lg:gap-10">
                 {/* ---------------- SIDEBAR BỘ LỌC ---------------- */}
                 <aside id="product-filters" className={`${isFilterOpen ? 'block' : 'hidden'} w-full flex-shrink-0 lg:sticky lg:top-28 lg:block lg:w-72`}>
                     <div
-                        className="bg-surface-container-lowest rounded-[2rem] p-8 shadow-[0_20px_40px_-15px_rgba(14,48,78,0.05)]">
-                        <div className="flex items-center justify-between mb-8 pb-4 relative">
+                        className="rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-5 shadow-[0_20px_40px_-15px_rgba(14,48,78,0.1)] sm:rounded-[2rem] sm:p-8">
+                        <div className="relative mb-6 flex items-center justify-between pb-4 sm:mb-8">
                             <div className="flex items-center gap-3">
                                 <SlidersHorizontal className="w-5 h-5 text-primary"/>
                                 <h2 className="text-lg font-black uppercase tracking-widest text-on-surface">Bộ lọc</h2>
@@ -181,7 +181,7 @@ export default function ProductList() {
                             <div className="absolute bottom-0 left-0 w-full h-[2px] bg-surface-container"></div>
                         </div>
 
-                        <div className="mb-8">
+                        <div className="mb-6 sm:mb-8">
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Danh mục</h3>
                             <div className="space-y-3">
                                 {categoryTree.map(parent => {
@@ -201,7 +201,7 @@ export default function ProductList() {
                                                         className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${isParentSelected ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}
                                                     >
                                                         {isParentSelected &&
-                                                            <div className="w-2 h-2 bg-white rounded-sm"></div>}
+                                                            <div className="w-2 h-2 rounded-sm bg-on-primary"></div>}
                                                     </div>
                                                     <span
                                                         className={`text-sm font-medium transition-colors ${isParentSelected ? 'text-primary font-bold' : 'text-on-surface group-hover:text-primary'}`}
@@ -243,7 +243,7 @@ export default function ProductList() {
                                                                     className={`w-4 h-4 rounded-md flex items-center justify-center transition-colors ${isChildSelected ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}
                                                                 >
                                                                     {isChildSelected &&
-                                                                        <div className="w-1.5 h-1.5 bg-white rounded-sm"></div>}
+                                                                        <div className="h-1.5 w-1.5 rounded-sm bg-on-primary"></div>}
                                                                 </div>
                                                                 <span
                                                                     className={`text-xs font-medium transition-colors ${isChildSelected ? 'text-primary font-bold' : 'text-on-surface group-hover/child:text-primary'}`}
@@ -261,7 +261,7 @@ export default function ProductList() {
                             </div>
                         </div>
 
-                        <div className="mb-8">
+                        <div className="mb-6 sm:mb-8">
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Thương
                                 hiệu</h3>
                             <div className="max-h-[160px] overflow-y-auto custom-scrollbar pr-2 space-y-3">
@@ -270,7 +270,7 @@ export default function ProductList() {
                                         <div
                                             className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${selectedBrands.includes(brand) ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}>
                                             {selectedBrands.includes(brand) &&
-                                                <div className="w-2 h-2 bg-white rounded-sm"></div>}
+                                                <div className="w-2 h-2 rounded-sm bg-on-primary"></div>}
                                         </div>
                                         <span
                                             className={`text-sm font-medium transition-colors ${selectedBrands.includes(brand) ? 'text-primary font-bold' : 'text-on-surface group-hover:text-primary'}`}>{brand}</span>
@@ -279,7 +279,7 @@ export default function ProductList() {
                             </div>
                         </div>
 
-                        <div className="mb-8">
+                        <div className="mb-6 sm:mb-8">
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Tỉ lệ mô
                                 hình</h3>
                             <div className="flex flex-wrap gap-2">
@@ -287,21 +287,21 @@ export default function ProductList() {
                                     <button
                                         key={scale}
                                         onClick={() => toggleFilter(scale, selectedScales, setSelectedScales)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${selectedScales.includes(scale) ? 'bg-primary text-white shadow-md' : 'bg-surface-container text-on-surface hover:bg-surface-container-high'}`}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${selectedScales.includes(scale) ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container text-on-surface hover:bg-surface-container-high'}`}
                                     >
                                         {scale}
                                     </button>
                                 ))}
                             </div>
                         </div>
-                        <div className="mb-8">
+                        <div className="mb-6 sm:mb-8">
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Tình
                                 trạng</h3>
                             <label className="flex items-center gap-3 cursor-pointer group">
                                 <div
                                     className={`w-10 h-6 rounded-full p-1 transition-colors ${inStockOnly ? 'bg-primary' : 'bg-surface-container'}`}>
                                     <div
-                                        className={`w-4 h-4 bg-white rounded-full transition-transform ${inStockOnly ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                        className={`h-4 w-4 rounded-full bg-on-primary transition-transform ${inStockOnly ? 'translate-x-4' : 'translate-x-0'}`}></div>
                                 </div>
                                 <span className="text-sm font-medium text-on-surface">Chỉ hiện hàng có sẵn</span>
                             </label>
@@ -322,25 +322,25 @@ export default function ProductList() {
                 {/* ---------------- PRODUCT GRID ---------------- */}
                 <div className="flex-1 w-full min-h-[600px] flex flex-col">
                     <div
-                        className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 bg-surface-container-lowest px-6 py-4 rounded-2xl shadow-[0_10px_30px_-15px_rgba(14,48,78,0.05)]">
-                        <div className="flex items-center gap-2">
+                        className="mb-5 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-4 py-3 shadow-[0_10px_30px_-15px_rgba(14,48,78,0.12)] sm:mb-8 sm:flex-row sm:items-center sm:gap-4 sm:rounded-2xl sm:px-6 sm:py-4">
+                        <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm text-on-surface-variant font-bold">
-                                Hiển thị <span className="text-primary text-lg">{filteredProducts.length}</span> kết quả
+                                Hiển thị <span className="text-base font-black leading-none text-primary sm:text-lg">{filteredProducts.length}</span> kết quả
                                 {searchQuery && (
                                     <> cho từ khóa <span className="text-primary">"{searchQuery}"</span></>
                                 )}
                             </p>
                             {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedScales.length > 0 || searchQuery) && (
                                 <button onClick={clearFilters}
-                                        className="ml-4 flex items-center gap-1 text-xs font-bold text-error bg-error/10 px-3 py-1 rounded-full hover:bg-error/20 cursor-pointer">
+                                        className="flex cursor-pointer items-center gap-1 rounded-full bg-error/10 px-3 py-1 text-xs font-bold text-error hover:bg-error/20 sm:ml-4">
                                     <X className="w-3 h-3"/> Xóa lọc
                                 </button>
                             )}
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-between gap-3 sm:justify-start sm:gap-4">
                             <span className="text-xs font-bold uppercase tracking-widest text-outline">Sắp xếp:</span>
                             <select
-                                className="bg-surface-container rounded-full px-5 py-2 text-sm font-bold text-on-surface outline-none cursor-pointer">
+                                className="cursor-pointer rounded-full bg-surface-container px-4 py-2 text-xs font-bold text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 sm:px-5 sm:text-sm">
                                 <option>Hàng Mới Nhất</option>
                                 <option>Giá tăng dần</option>
                                 <option>Giá giảm dần</option>
@@ -348,19 +348,19 @@ export default function ProductList() {
                         </div>
                     </div>
                     {filteredProducts.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 min-[1536px]:grid-cols-3">
+                        <div className="grid grid-cols-2 gap-3 sm:gap-6 min-[1536px]:grid-cols-3">
                             {filteredProducts.map(product => (
                                 <ProductCard key={product.id} product={product}/>
                             ))}
                         </div>
                     ) : (
                         <div
-                            className="bg-surface-container-lowest rounded-[2rem] p-16 text-center border-2 border-dashed border-outline-variant/30 w-full flex-1 flex flex-col items-center justify-center my-auto">
-                            <h3 className="text-2xl font-black mb-4 text-on-surface">Không tìm thấy sản phẩm</h3>
+                            className="my-auto flex w-full flex-1 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-outline-variant/30 bg-surface-container-lowest p-8 text-center sm:rounded-[2rem] sm:p-16">
+                            <h3 className="mb-4 text-xl font-black text-on-surface sm:text-2xl">Không tìm thấy sản phẩm</h3>
                             <p className="text-on-surface-variant font-medium">Không có mô hình nào khớp với bộ lọc của
                                 bạn.</p>
                             <button onClick={clearFilters}
-                                    className="mt-8 px-8 py-3 bg-primary text-white rounded-full font-bold shadow-md hover:scale-105 transition-transform cursor-pointer">Xóa
+                                    className="mt-8 cursor-pointer rounded-full bg-primary px-7 py-2.5 text-sm font-bold text-on-primary shadow-md transition-transform hover:scale-105 sm:px-8 sm:py-3">Xóa
                                 tất cả bộ lọc
                             </button>
                         </div>

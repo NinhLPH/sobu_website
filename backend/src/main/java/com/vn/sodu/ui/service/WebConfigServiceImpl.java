@@ -4,6 +4,7 @@ import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.global.dto.SearchRequest;
 import com.vn.sodu.ui.WebConfigRepo;
 import com.vn.sodu.ui.WebsiteConfiguration;
+import com.vn.sodu.ui.dto.BulkWebsiteConfigurationRequest;
 import com.vn.sodu.ui.dto.WebsiteConfigurationDTO;
 import com.vn.sodu.ui.dto.WebsiteConfigurationRequest;
 import com.vn.sodu.ui.mapper.WebsiteConfigurationMapper;
@@ -16,7 +17,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,6 +47,46 @@ public class WebConfigServiceImpl implements WebConfigService {
         mapper.updateEntity(entity, request);
         WebsiteConfiguration updated = webConfigRepo.save(entity);
         return mapper.toDTO(updated);
+    }
+
+    @Override
+    @Transactional
+    public List<WebsiteConfigurationDTO> bulkUpdateConfigs(List<BulkWebsiteConfigurationRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> keys = new ArrayList<>();
+        Set<String> uniqueKeys = new HashSet<>();
+        for (BulkWebsiteConfigurationRequest request : requests) {
+            if (request == null || request.getKey() == null || request.getKey().isBlank()) {
+                throw new RuntimeException("Configuration key is required");
+            }
+            if (request.getValue() == null) {
+                throw new RuntimeException("Configuration value is required for key: " + request.getKey());
+            }
+            if (!uniqueKeys.add(request.getKey())) {
+                throw new RuntimeException("Duplicate configuration key in bulk update: " + request.getKey());
+            }
+            keys.add(request.getKey());
+        }
+
+        Map<String, WebsiteConfiguration> configsByKey = webConfigRepo.findByKeyIn(keys).stream()
+                .collect(Collectors.toMap(WebsiteConfiguration::getKey, config -> config));
+
+        List<WebsiteConfiguration> updatedConfigs = new ArrayList<>();
+        for (BulkWebsiteConfigurationRequest request : requests) {
+            WebsiteConfiguration entity = configsByKey.get(request.getKey());
+            if (entity == null) {
+                throw new RuntimeException("Web configuration not found with key: " + request.getKey());
+            }
+            entity.setValue(request.getValue());
+            updatedConfigs.add(entity);
+        }
+
+        return webConfigRepo.saveAll(updatedConfigs).stream()
+                .map(mapper::toDTO)
+                .collect(Collectors.toList());
     }
 
     @Override

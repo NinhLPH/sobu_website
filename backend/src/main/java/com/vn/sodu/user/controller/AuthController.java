@@ -2,8 +2,8 @@ package com.vn.sodu.user.controller;
 
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.global.dto.ApiResponseDTO;
-import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.service.AuthService;
+import com.vn.sodu.user.service.OAuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final OAuthService oAuthService;
 
     @PostMapping("/login")
     @Operation(
@@ -49,6 +50,25 @@ public class AuthController {
         LoginResponse response = authService.login(loginRequest);
         return ResponseEntity.ok(
                 ApiResponseDTO.success(response, "Login successful", HttpStatus.OK.value())
+        );
+    }
+
+    @PostMapping("/oauth/google")
+    @Operation(
+        summary = "Google OAuth login",
+        description = "Authenticates a user via Google ID token, creates or links an account if necessary, and returns JWT tokens"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Google login successful",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Invalid Google ID token",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class)))
+    })
+    public ResponseEntity<?> googleLogin(@org.springframework.web.bind.annotation.RequestBody GoogleLoginRequest request) {
+        log.info("Google OAuth login request");
+        LoginResponse response = oAuthService.loginWithGoogle(request);
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(response, "Google login successful", HttpStatus.OK.value())
         );
     }
 
@@ -79,7 +99,7 @@ public class AuthController {
     @PostMapping("/register")
     @Operation(
         summary = "User registration",
-        description = "Registers a new user account. User will receive an activation email."
+        description = "Registers a new user account."
     )
     @ApiResponses(value = {
         @ApiResponse(responseCode = "201", description = "Registration successful",
@@ -97,38 +117,6 @@ public class AuthController {
         RegisterResponse response = authService.register(registerRequest);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponseDTO.success(response, "Registration successful", HttpStatus.CREATED.value()));
-    }
-
-    @PostMapping("/resend-activation")
-    @Operation(
-        summary = "Resend activation email",
-        description = "Resends the activation email for an inactive account. Requests are limited to once every 60 seconds."
-    )
-    public ResponseEntity<?> resendActivationEmail(@org.springframework.web.bind.annotation.RequestBody ResendActivationEmailRequest request) {
-        log.info("Resend activation email request for email: {}", request.getEmail());
-        authService.resendActivationEmail(request);
-        return ResponseEntity.ok(
-                ApiResponseDTO.success(null, "Activation email sent", HttpStatus.OK.value())
-        );
-    }
-
-    @GetMapping("/activate")
-    @Operation(
-        summary = "Activate user account",
-        description = "Activates a user account using the activation token sent via email"
-    )
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Account activated successfully",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class))),
-        @ApiResponse(responseCode = "400", description = "Activation failed - invalid or expired token",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class)))
-    })
-    public ResponseEntity<?> activate(
-        @Parameter(description = "Activation token from email", required = true, example = "550e8400-e29b-41d4-a716-446655440000")
-        @RequestParam("token") String token) {
-        log.info("Activation request for token: {}", token);
-        RegisterResponse response = authService.activateAccount(token);
-        return ResponseEntity.ok(ApiResponseDTO.success(response, "Account activated", HttpStatus.OK.value()));
     }
 
     @PostMapping("/logout")

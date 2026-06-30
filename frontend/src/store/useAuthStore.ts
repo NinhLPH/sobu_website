@@ -3,8 +3,7 @@ import { AuthService } from '../service/auth.service';
 import { AccountDTO } from '../interface/account.model';
 import {
     LoginResponse,
-    RefreshTokenResponse,
-    RegisterResponse
+    RefreshTokenResponse
 } from '../interface/api-response';
 import { RegisterRequest } from '../interface/auth.model';
 import { authStorage } from '../utils/auth-storage';
@@ -25,6 +24,21 @@ const assertSuccess = <T>(
     return response.data;
 };
 
+const getSessionState = (session: LoginResponse) => {
+    authStorage.setSession(
+        session.accessToken,
+        session.refreshToken,
+        session.account
+    );
+
+    return {
+        user: session.account,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null
+    };
+};
+
 interface AuthState {
     user: AccountDTO | null;
     isAuthenticated: boolean;
@@ -32,9 +46,8 @@ interface AuthState {
     error: string | null;
 
     loginAction: (email: string, password: string) => Promise<LoginResponse>;
-    registerAction: (data: RegisterRequest) => Promise<RegisterResponse>;
-    resendActivationAction: (email: string) => Promise<string>;
-    activateAccountAction: (token: string) => Promise<string>;
+    registerAction: (data: RegisterRequest) => Promise<LoginResponse>;
+    googleLoginAction: (idToken: string) => Promise<LoginResponse>;
     refreshTokenAction: () => Promise<RefreshTokenResponse>;
     logoutAction: () => Promise<void>;
     clearError: () => void;
@@ -55,17 +68,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const response = await AuthService.login({ email, password });
             const session = assertSuccess(response, 'Đăng nhập thất bại.');
 
-            authStorage.setSession(
-                session.accessToken,
-                session.refreshToken,
-                session.account
-            );
-            set({
-                user: session.account,
-                isAuthenticated: true,
-                isLoading: false,
-                error: null
-            });
+            set(getSessionState(session));
             return session;
         } catch (error) {
             const message = getErrorMessage(
@@ -86,52 +89,53 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     registerAction: async (data) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await AuthService.register(data);
-            const account = assertSuccess(response, 'Đăng ký thất bại.');
-            set({ isLoading: false, error: null });
-            return account;
+            const registerResponse = await AuthService.register(data);
+            assertSuccess(registerResponse, 'Đăng ký thất bại.');
+
+            const loginResponse = await AuthService.login({
+                email: data.email,
+                password: data.password
+            });
+            const session = assertSuccess(loginResponse, 'Đăng nhập sau đăng ký thất bại.');
+
+            set(getSessionState(session));
+            return session;
         } catch (error) {
             const message = getErrorMessage(
                 error,
                 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.'
             );
-            set({ error: message, isLoading: false });
+            authStorage.clear();
+            set({
+                error: message,
+                isLoading: false,
+                isAuthenticated: false,
+                user: null
+            });
             throw error;
         }
     },
 
-    resendActivationAction: async (email) => {
+    googleLoginAction: async (idToken) => {
         set({ isLoading: true, error: null });
         try {
-            const response = await AuthService.resendActivation({ email });
-            if (!response.success) {
-                throw new Error(response.message || 'Không thể gửi lại email kích hoạt.');
-            }
-            set({ isLoading: false, error: null });
-            return response.message || 'Email kích hoạt mới đã được gửi.';
-        } catch (error) {
-            const message = getErrorMessage(
-                error,
-                'Không thể gửi lại email kích hoạt lúc này.'
-            );
-            set({ error: message, isLoading: false });
-            throw error;
-        }
-    },
+            const response = await AuthService.googleLogin({ idToken });
+            const session = assertSuccess(response, 'Đăng nhập Google thất bại.');
 
-    activateAccountAction: async (token) => {
-        set({ isLoading: true, error: null });
-        try {
-            const response = await AuthService.activateAccount(token);
-            const account = assertSuccess(response, 'Kích hoạt tài khoản thất bại.');
-            set({ isLoading: false, error: null });
-            return account.message || response.message || 'Kích hoạt tài khoản thành công.';
+            set(getSessionState(session));
+            return session;
         } catch (error) {
             const message = getErrorMessage(
                 error,
-                'Mã kích hoạt không hợp lệ hoặc đã hết hạn.'
+                'Không thể đăng nhập bằng Google lúc này.'
             );
-            set({ error: message, isLoading: false });
+            authStorage.clear();
+            set({
+                error: message,
+                isLoading: false,
+                isAuthenticated: false,
+                user: null
+            });
             throw error;
         }
     },

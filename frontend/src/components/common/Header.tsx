@@ -1,14 +1,43 @@
-import {useState, useEffect, useRef, useMemo} from 'react';
-import {Link, useNavigate} from 'react-router-dom';
+import {useState, useEffect, useRef, useMemo, type FormEvent} from 'react';
+import {Link, useLocation, useNavigate} from 'react-router-dom';
 import {
     ShoppingCart, User, Search, Shield, ChevronDown, ChevronRight,
-    Car, Box, Wrench, Diamond, Layers, Trash2, LogOut, FileText, Menu, X
+    Car, Box, Wrench, Diamond, Layers, Trash2, LogOut, FileText, Sun, Moon, Home, Package, Newspaper
 } from 'lucide-react';
 import {useCartStore} from "../../store/useCartStore";
 import {useProductStore} from "../../store/useProductStore";
 import {useAuthStore} from "../../store/useAuthStore";
 import {formatCurrency} from "../../utils/format";
-// import {getPublicConfigValue, usePublicUiStore} from '../../store/usePublicUiStore';
+import {usePublicUiStore} from '../../store/usePublicUiStore';
+import {getPublicImageUrl} from '../../utils/file-url';
+
+type ThemeMode = 'light' | 'dark';
+
+const THEME_STORAGE_KEY = 'sobu-theme';
+
+const getInitialTheme = (): ThemeMode => {
+    if (typeof window === 'undefined') {
+        return 'light';
+    }
+
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedTheme === 'light' || storedTheme === 'dark') {
+        return storedTheme;
+    }
+
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
+
+const applyTheme = (theme: ThemeMode) => {
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
+    root.classList.toggle('light', theme === 'light');
+    root.dataset.theme = theme;
+};
 
 
 const getCategoryIcon = (catCode: string) => {
@@ -35,13 +64,15 @@ const getCategoryIcon = (catCode: string) => {
 
 export default function Header() {
     const navigate = useNavigate();
-    // const configs = usePublicUiStore((state) => state.configs);
-    // const siteName = getPublicConfigValue(configs, 'site_name', 'SOBU');
+    const location = useLocation();
+    const configMap = usePublicUiStore((state) => state.configMap);
+    const siteName = configMap?.site_name || 'SOBU';
+    const logoUrl = configMap?.website_logo;
 
     const {items, removeFromCart, getTotals} = useCartStore();
     const {subtotal} = getTotals();
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-    
+
     // Fetch categories and brands from useProductStore to avoid mockData
     const {
         categories,
@@ -51,11 +82,11 @@ export default function Header() {
         fetchCategories,
         fetchBrands
     } = useProductStore();
-    
+
     const [activeParentId, setActiveParentId] = useState<number | null>(null);
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
     const cartRef = useRef<HTMLDivElement>(null);
 
     // Auth States & Refs
@@ -95,7 +126,7 @@ export default function Header() {
 
     const activeChildren = useMemo(() => {
         if (activeParentId === null) return [];
-        
+
         // Find matching subcategories by parent ID (check both parentId and parentID)
         const subCats = categories.filter(cat => {
             const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
@@ -121,22 +152,73 @@ export default function Header() {
         }
     }, [mainCategories, activeParentId]);
 
+    useEffect(() => {
+        applyTheme(theme);
+        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }, [theme]);
+
+    const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (searchQuery.trim()) {
+            navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+        } else {
+            navigate('/products');
+        }
+    };
+
+    const toggleTheme = () => {
+        setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark');
+    };
+
+    const mobileNavItems = [
+        {label: 'Trang chủ', path: '/', icon: Home},
+        {label: 'Sản phẩm', path: '/products', icon: Package},
+        {label: 'Dịch vụ', path: '/services', icon: Wrench},
+        {label: 'Thành viên', path: '/membership', icon: Diamond},
+        {label: 'Tin tức', path: '/blog', icon: Newspaper},
+    ];
+    const isMobileNavActive = (path: string) => {
+        if (path === '/') {
+            return location.pathname === '/';
+        }
+
+        if (path === '/products') {
+            return location.pathname.startsWith('/products') || location.pathname.startsWith('/product/');
+        }
+
+        return location.pathname.startsWith(path);
+    };
+
     return (
+        <>
         <header className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
-            <div className="mx-auto flex max-w-[1504px] items-center justify-between px-4 py-4 sm:px-6">
-                {/* Logo */}
-                <div className="flex min-w-0 items-center gap-10">
-                    <Link to="/"
-                          className="bg-primary-container text-white px-6 py-2 rounded-xl font-black text-xl tracking-widest hover:scale-105 transition-transform shadow-md">
-                        SOBU
+            {/* HÀNG 1: CHUNG CHO CẢ MOBILE & DESKTOP */}
+            <div className="mx-auto flex max-w-[1504px] items-center justify-between px-4 pb-3 pt-3 sm:px-6 lg:py-4">
+
+                {/* TRÁI: Logo & Desktop Nav */}
+                <div className="flex min-w-0 flex-1 items-center gap-4 xl:gap-6">
+                    <Link
+                        to="/"
+                        className={`flex lg:h-22 h-16 items-center text-xl font-black tracking-widest transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                            logoUrl
+                                ? 'bg-transparent px-3 text-on-surface'
+                                : 'bg-primary px-6 text-on-primary'
+                        }`}
+                    >
+                        {logoUrl ? (
+                            <img
+                                src={getPublicImageUrl(logoUrl)}
+                                alt={siteName}
+                                className="max-h-12 max-w-[200px] lg:max-h-14 lg:max-w-[240px] object-contain"
+                            />
+                        ) : siteName}
                     </Link>
 
-                    {/* Navigation */}
-                    <nav className="hidden lg:flex items-center gap-8 font-bold text-sm text-on-surface-variant">
-                        <Link to="/" className="text-on-surface hover:text-primary transition-colors">Trang chủ</Link>
+                    {/* Navigation (Chỉ hiện trên Desktop) */}
+                    <nav aria-label="Điều hướng chính" className="hidden min-w-0 flex-1 items-center gap-4 text-sm font-bold text-on-surface-variant lg:flex xl:gap-5">
                         <div className="relative group py-2">
                             <Link to="/products"
-                                  className="flex items-center gap-1 hover:text-primary transition-colors text-on-surface">
+                                  className="flex items-center gap-1 whitespace-nowrap text-on-surface transition-colors hover:text-primary">
                                 Danh mục <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180"/>
                             </Link>
                             <div
@@ -159,7 +241,7 @@ export default function Header() {
                                                     key={parent.id}
                                                     onMouseEnter={() => setActiveParentId(parent.id)}
                                                     className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 cursor-pointer ${
-                                                        isActive ? 'bg-primary text-white shadow-md shadow-primary/20 scale-[1.02]' : 'hover:bg-surface-container text-on-surface'
+                                                        isActive ? 'bg-primary text-on-primary shadow-md shadow-primary/20 scale-[1.02]' : 'hover:bg-surface-container text-on-surface'
                                                     }`}
                                                 >
                                                     <div className="flex items-center gap-3">
@@ -168,7 +250,7 @@ export default function Header() {
                                                     </div>
                                                     {hasChildren && (
                                                         <ChevronRight
-                                                            className={`w-4 h-4 ${isActive ? 'text-white' : 'text-outline/60'}`}/>
+                                                            className={`w-4 h-4 ${isActive ? 'text-on-primary' : 'text-outline/60'}`}/>
                                                     )}
                                                 </div>
                                             );
@@ -186,7 +268,7 @@ export default function Header() {
                                                         <span
                                                             className="text-sm font-bold text-on-surface group-hover/child:text-primary transition-colors">{child.name}</span>
                                                         <span
-                                                            className="text-[10px] bg-surface-container text-outline group-hover/child:bg-primary group-hover/child:text-white px-2 py-0.5 rounded-md font-medium transition-colors">Xem</span>
+                                                            className="rounded-md bg-surface-container px-2 py-0.5 text-[10px] font-medium text-outline transition-colors group-hover/child:bg-primary group-hover/child:text-on-primary">Xem</span>
                                                     </Link>
                                                 ))}
                                             </div>
@@ -214,30 +296,23 @@ export default function Header() {
                             </div>
                         </div>
 
-                        <Link to="/services" className="hover:text-primary transition-colors">Dịch vụ</Link>
-                        <Link to="/membership" className="hover:text-primary transition-colors">Thẻ thành viên</Link>
-                        <Link to="/blog" className="hover:text-primary transition-colors">Tin tức</Link>
+                        <form onSubmit={handleSearchSubmit} className="relative min-w-[260px] flex-1 lg:max-w-[360px] xl:max-w-[480px] 2xl:max-w-[560px]">
+                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
+                            <input
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full rounded-full border border-outline-variant/20 bg-surface-container py-3 pl-10 pr-4 text-sm font-semibold text-on-surface outline-none transition-all placeholder:text-outline/70 focus:border-primary/30 focus:ring-2 focus:ring-primary/30"
+                                placeholder="Tìm kiếm mô hình..." type="search"/>
+                        </form>
+
+                        <Link to="/services" className="whitespace-nowrap transition-colors hover:text-primary">Dịch vụ</Link>
+                        <Link to="/membership" className="whitespace-nowrap transition-colors hover:text-primary">Thẻ thành viên</Link>
+                        <Link to="/blog" className="whitespace-nowrap transition-colors hover:text-primary">Tin tức</Link>
                     </nav>
                 </div>
 
                 {/* Right Actions */}
-                <div className="flex items-center gap-1 sm:gap-3 lg:gap-6">
-                    <form onSubmit={(e) => {
-                        e.preventDefault();
-                        if (searchQuery.trim()) {
-                            navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
-                        } else {
-                            navigate('/products');
-                        }
-                    }} className="relative hidden md:block w-64">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline w-4 h-4"/>
-                        <input
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-surface-container rounded-full pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/40 transition-all outline-none border-none placeholder:text-outline/70 font-medium"
-                            placeholder="Tìm kiếm mô hình..." type="text"/>
-                    </form>
-
+                <div className="flex shrink-0 items-center gap-1 sm:gap-3 lg:gap-3 xl:gap-4">
                     <div className="flex items-center gap-3">
 
                         <div className="relative" ref={cartRef}>
@@ -249,7 +324,7 @@ export default function Header() {
                                 <ShoppingCart className="w-5 h-5 transition-transform group-hover:scale-105"/>
                                 {itemCount > 0 && (
                                     <span
-                                        className="absolute top-0 right-0 w-4 h-4 bg-error text-red-600 text-[9px] flex items-center justify-center rounded-full font-black shadow-sm">
+                                        className="absolute right-0 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-error text-[9px] font-black leading-none text-on-error shadow-sm">
                                         {itemCount}
                                     </span>
                                 )}
@@ -258,7 +333,7 @@ export default function Header() {
                             {/* MINI CART DROPDOWN*/}
                             {isMiniCartOpen && (
                                 <div
-                                    className="fixed left-3 right-3 top-[76px] z-50 rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-4 shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] animate-in fade-in slide-in-from-top-3 duration-200 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[340px]">
+                                    className="fixed left-3 right-3 top-[112px] z-50 rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-4 shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] animate-in fade-in slide-in-from-top-3 duration-200 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[340px]">
                                     <div
                                         className="flex items-center justify-between pb-3 border-b border-surface-container-high/60 mb-3">
                                         <span className="text-xs font-black uppercase tracking-wider text-on-surface">Giỏ hàng sản phẩm ({itemCount})</span>
@@ -325,7 +400,7 @@ export default function Header() {
                                                             navigate('/cart');
                                                         }
                                                     }}
-                                                    className="w-full py-2.5 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl text-xs font-black uppercase tracking-widest text-center shadow-md shadow-primary/10 hover:scale-[1.01] transition-transform cursor-pointer"
+                                                    className="w-full cursor-pointer rounded-xl bg-gradient-to-br from-primary to-primary-container py-2.5 text-center text-xs font-black uppercase tracking-widest text-on-primary shadow-md shadow-primary/10 transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-primary/40"
                                                 >
                                                     Đi đến thanh toán
                                                 </button>
@@ -339,20 +414,14 @@ export default function Header() {
                         {/* USER PROFILE / AUTH BUTTON */}
                         <div className="relative" ref={userMenuRef}>
                             <button
-                                onClick={() => {
-                                    if (isAuthenticated) {
-                                        setIsUserMenuOpen(!isUserMenuOpen);
-                                    } else {
-                                        navigate('/login');
-                                    }
-                                }}
-                                className="flex items-center gap-2 pl-2 cursor-pointer transition-transform hover:scale-105 active:scale-95 outline-none"
+                                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                                className="flex items-center gap-2 pl-1 cursor-pointer transition-transform hover:scale-105 active:scale-95 outline-none lg:pl-2"
                                 title={isAuthenticated ? "Tài khoản của bạn" : "Đăng nhập / Đăng ký"}
                             >
                                 <div
                                     className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
                                         isAuthenticated
-                                            ? 'bg-primary text-white shadow-md shadow-primary/20 font-black text-sm uppercase'
+                                            ? 'bg-primary text-on-primary shadow-md shadow-primary/20 font-black text-sm uppercase'
                                             : 'bg-surface-container-high text-primary hover:bg-surface-container-highest hover:scale-105'
                                     }`}
                                 >
@@ -367,121 +436,161 @@ export default function Header() {
                             </button>
 
                             {/* USER PROFILE DROPDOWN */}
-                            {isAuthenticated && isUserMenuOpen && (
+                            {isUserMenuOpen && (
                                 <div
-                                    className="absolute top-full right-0 mt-2 w-[260px] bg-surface-container-lowest rounded-2xl shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] border border-surface-container/60 p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200"
+                                    className="fixed left-3 right-3 top-[112px] z-50 rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-4 shadow-[0_15px_45px_-10px_rgba(14,48,78,0.12)] animate-in fade-in slide-in-from-top-3 duration-200 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[260px]"
                                 >
-                                    <div className="pb-3 border-b border-surface-container-high/60 mb-3">
-                                        <p className="text-xs font-black text-on-surface truncate">
-                                            {user?.fullName}
-                                        </p>
-                                        <p className="text-[10px] text-outline truncate mt-0.5">
-                                            {user?.email}
-                                        </p>
-                                        {user?.role && (
-                                            <span
-                                                className="inline-block mt-2 text-[9px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
-                                                {user.role.name === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
-                                            </span>
-                                        )}
-                                    </div>
+                                    {isAuthenticated ? (
+                                        <div className="pb-3 border-b border-surface-container-high/60 mb-3 flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-black text-on-surface truncate">
+                                                    {user?.fullName}
+                                                </p>
+                                                <p className="text-[10px] text-outline truncate mt-0.5">
+                                                    {user?.email}
+                                                </p>
+                                                {user?.role && (
+                                                    <span
+                                                        className="inline-block mt-2 text-[9px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                                                        {user.role.name === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {/* Nút Darkmode icon-only (Chỉ hiện trên mobile) */}
+                                            <button
+                                                type="button"
+                                                onClick={toggleTheme}
+                                                title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+                                                className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full bg-surface-container-low hover:bg-surface-container-high text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary/40"
+                                            >
+                                                {theme === 'dark' ? <Moon className="h-4 w-4"/> : <Sun className="h-4 w-4"/>}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="pb-3 border-b border-surface-container-high/60 mb-3 flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-black text-on-surface">Tài khoản</p>
+                                                <p className="mt-0.5 text-[10px] font-medium text-outline">Đăng nhập để theo dõi đơn hàng và yêu cầu của bạn</p>
+                                            </div>
+                                            {/* Nút Darkmode icon-only (Chỉ hiện trên mobile) */}
+                                            <button
+                                                type="button"
+                                                onClick={toggleTheme}
+                                                title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+                                                className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full bg-surface-container-low hover:bg-surface-container-high text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary/40"
+                                            >
+                                                {theme === 'dark' ? <Moon className="h-4 w-4"/> : <Sun className="h-4 w-4"/>}
+                                            </button>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-1">
-                                        {user?.role?.name === 'ADMIN' && (
-                                            <Link
-                                                to="/admin"
-                                                onClick={() => setIsUserMenuOpen(false)}
-                                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                        {/* Đã tháo renderThemeMenuButton() ở đây */}
+                                        {isAuthenticated ? (
+                                            <>
+                                                {user?.role?.name === 'ADMIN' && (
+                                                    <Link
+                                                        to="/admin"
+                                                        onClick={() => setIsUserMenuOpen(false)}
+                                                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                                    >
+                                                        <Shield className="w-4 h-4 text-primary"/>
+                                                        <span>Trang quản trị (Admin)</span>
+                                                    </Link>
+                                                )}
+                                                <Link
+                                                    to="/profile"
+                                                    onClick={() => setIsUserMenuOpen(false)}
+                                                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                                >
+                                                    <User className="w-4 h-4 text-primary"/>
+                                                    <span>Hồ sơ cá nhân</span>
+                                                </Link>
+                                                <Link
+                                                    to="/requests"
+                                                    onClick={() => setIsUserMenuOpen(false)}
+                                                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                                >
+                                                    <FileText className="w-4 h-4 text-primary"/>
+                                                    <span>Yêu cầu của tôi</span>
+                                                </Link>
+                                                <Link
+                                                    to="/tracking"
+                                                    onClick={() => setIsUserMenuOpen(false)}
+                                                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
+                                                >
+                                                    <Search className="w-4 h-4 text-primary"/>
+                                                    <span>Tra cứu đơn hàng</span>
+                                                </Link>
+                                                <button
+                                                    onClick={async () => {
+                                                        setIsUserMenuOpen(false);
+                                                        await logoutAction();
+                                                    }}
+                                                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-error hover:bg-error/10 transition-colors text-left cursor-pointer outline-none"
+                                                >
+                                                    <LogOut className="w-4 h-4"/>
+                                                    <span>Đăng xuất</span>
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsUserMenuOpen(false);
+                                                    navigate('/login');
+                                                }}
+                                                className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl bg-primary px-3 py-2.5 text-left text-xs font-black text-on-primary transition-colors hover:bg-primary-container focus-visible:ring-2 focus-visible:ring-primary/40"
                                             >
-                                                <Shield className="w-4 h-4 text-primary"/>
-                                                <span>Trang quản trị (Admin)</span>
-                                            </Link>
+                                                <User className="h-4 w-4"/>
+                                                <span>Đăng nhập / Đăng ký</span>
+                                            </button>
                                         )}
-                                        <Link
-                                            to="/requests"
-                                            onClick={() => setIsUserMenuOpen(false)}
-                                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
-                                        >
-                                            <FileText className="w-4 h-4 text-primary"/>
-                                            <span>Yêu cầu của tôi</span>
-                                        </Link>
-                                        <Link
-                                            to="/tracking"
-                                            onClick={() => setIsUserMenuOpen(false)}
-                                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
-                                        >
-                                            <Search className="w-4 h-4 text-primary"/>
-                                            <span>Tra cứu đơn hàng</span>
-                                        </Link>
-                                        <button
-                                            onClick={async () => {
-                                                setIsUserMenuOpen(false);
-                                                await logoutAction();
-                                            }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-error hover:bg-error/10 transition-colors text-left cursor-pointer outline-none"
-                                        >
-                                            <LogOut className="w-4 h-4"/>
-                                            <span>Đăng xuất</span>
-                                        </button>
                                     </div>
                                 </div>
                             )}
                         </div>
-
-                        <button
-                            type="button"
-                            onClick={() => setIsMobileMenuOpen((open) => !open)}
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface transition-colors hover:bg-surface-container lg:hidden"
-                            aria-expanded={isMobileMenuOpen}
-                            aria-controls="mobile-navigation"
-                            aria-label={isMobileMenuOpen ? 'Đóng menu' : 'Mở menu'}
-                        >
-                            {isMobileMenuOpen ? <X className="h-5 w-5"/> : <Menu className="h-5 w-5"/>}
-                        </button>
                     </div>
                 </div>
             </div>
 
-            {isMobileMenuOpen && (
-                <div id="mobile-navigation" className="border-t border-outline-variant/20 bg-surface-container-lowest px-4 pb-5 pt-4 shadow-lg lg:hidden">
-                    <form
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            setIsMobileMenuOpen(false);
-                            navigate(searchQuery.trim() ? `/products?search=${encodeURIComponent(searchQuery.trim())}` : '/products');
-                        }}
-                        className="relative mx-auto mb-4 max-w-[1120px]"
-                    >
-                        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
-                        <input
-                            value={searchQuery}
-                            onChange={(event) => setSearchQuery(event.target.value)}
-                            className="w-full rounded-full bg-surface-container py-3 pl-10 pr-4 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/30"
-                            placeholder="Tìm kiếm mô hình..."
-                            type="search"
-                        />
-                    </form>
-                    <nav className="mx-auto grid max-w-[1120px] grid-cols-2 gap-2 text-sm font-bold text-on-surface sm:grid-cols-3">
-                        {[
-                            ['Trang chủ', '/'],
-                            ['Sản phẩm', '/products'],
-                            ['Dịch vụ', '/services'],
-                            ['Thẻ thành viên', '/membership'],
-                            ['Tin tức', '/blog'],
-                            ['Tra cứu đơn', '/tracking'],
-                        ].map(([label, path]) => (
-                            <Link
-                                key={path}
-                                to={path}
-                                onClick={() => setIsMobileMenuOpen(false)}
-                                className="rounded-xl bg-surface-container-low px-4 py-3 transition-colors hover:bg-surface-container"
-                            >
-                                {label}
-                            </Link>
-                        ))}
-                    </nav>
-                </div>
-            )}
+            <div className="mx-auto w-full max-w-[1504px] px-4 pb-3 sm:px-6 lg:hidden">
+                <form onSubmit={handleSearchSubmit} className="relative">
+                    <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
+                    <input
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        className="h-11 w-full rounded-full border border-outline-variant/20 bg-surface-container py-2.5 pl-10 pr-4 text-sm font-semibold text-on-surface outline-none transition-all placeholder:text-outline/70 focus:border-primary/30 focus:ring-2 focus:ring-primary/30"
+                        placeholder="Tìm kiếm mô hình..."
+                        type="search"
+                    />
+                </form>
+            </div>
+
         </header>
+        <nav
+            aria-label="Thanh điều hướng mobile"
+            className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 border-t border-outline-variant/20 bg-surface-container-lowest/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.35rem)] pt-1.5 shadow-[0_-10px_30px_rgba(14,48,78,0.08)] backdrop-blur-xl lg:hidden"
+        >
+            {mobileNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = isMobileNavActive(item.path);
+
+                return (
+                    <Link
+                        key={item.path}
+                        to={item.path}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-black leading-tight transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                            isActive ? 'bg-primary/10 text-primary' : 'text-outline hover:bg-surface-container hover:text-on-surface'
+                        }`}
+                    >
+                        <Icon className="h-5 w-5"/>
+                        <span className="truncate">{item.label}</span>
+                    </Link>
+                );
+            })}
+        </nav>
+        </>
     );
 }
