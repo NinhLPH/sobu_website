@@ -1,5 +1,6 @@
 package com.vn.sodu.order;
 
+import com.vn.sodu.global.exception.ForbiddenOperationException;
 import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
@@ -11,17 +12,22 @@ import com.vn.sodu.payment.service.PaymentCheckoutCreationException;
 import com.vn.sodu.payment.service.PaymentService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
+import com.vn.sodu.user.Account;
+import com.vn.sodu.user.AccountRepo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -45,6 +51,9 @@ class OrderServiceTest {
     @Mock
     private PaymentService paymentService;
 
+    @Mock
+    private AccountRepo accountRepo;
+
     private OrderService orderService;
 
     @BeforeEach
@@ -54,7 +63,8 @@ class OrderServiceTest {
                 orderConversionPolicy,
                 orderCustomerResolver,
                 requestToOrderMapper,
-                paymentService
+                paymentService,
+                accountRepo
         );
     }
 
@@ -100,6 +110,12 @@ class OrderServiceTest {
                 .customerMobile("0900000001")
                 .customerAddress("1 Nguyen Trai")
                 .customerCityName("Ho Chi Minh")
+                .customerCityId(1L)
+                .customerDistrictId(2L)
+                .customerWardId(3L)
+                .carrierId(10L)
+                .carrierServiceId(20L)
+                .shippingFee(BigDecimal.ZERO)
                 .items(List.of(CreateNormalOrderItemDto.builder()
                         .nhanhProductId("12345")
                         .name("Product A")
@@ -205,5 +221,50 @@ class OrderServiceTest {
 
         assertThat(result).isSameAs(savedOrder);
         verify(paymentService).createPayment(savedOrder, PaymentType.DEPOSIT, PaymentMethod.ONLINE);
+    }
+
+    @Test
+    void cancelMyOrderCancelsOrderBeforeShipping() {
+        Authentication auth = customerAuth();
+        Account account = new Account();
+        account.setEmail("customer@example.com");
+        Order order = Order.builder()
+                .id(200L)
+                .customerEmail("customer@example.com")
+                .status(OrderStatus.PROCESSING)
+                .build();
+
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(orderRepository.findByIdForUpdate(200L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(order)).thenReturn(order);
+
+        Order result = orderService.cancelMyOrder(200L, auth);
+
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void cancelMyOrderRejectsShippedOrder() {
+        Authentication auth = customerAuth();
+        Account account = new Account();
+        account.setEmail("customer@example.com");
+        Order order = Order.builder()
+                .id(201L)
+                .customerEmail("customer@example.com")
+                .status(OrderStatus.SHIPPED)
+                .build();
+
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(orderRepository.findByIdForUpdate(201L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> orderService.cancelMyOrder(201L, auth))
+                .isInstanceOf(ForbiddenOperationException.class);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPED);
+        verify(orderRepository, never()).save(order);
+    }
+
+    private Authentication customerAuth() {
+        return new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
     }
 }
