@@ -2,8 +2,8 @@ import axios from 'axios';
 import {authStorage} from '../utils/auth-storage';
 
 export const BASE_URL =
+    process.env.REACT_APP_API_BASE_URL ||
     process.env.REACT_APP_API_URL ||
-    process.env.VITE_API_URL ||
     'https://suffocate-ground-keenness.ngrok-free.dev';
 
 const PUBLIC_ROUTES = [
@@ -25,6 +25,7 @@ const WRAPPED_RESPONSE_ROUTES = [
     '/api/auth',
     '/api/requests',
     '/api/orders',
+    '/api/cart',
     '/api/admin/requests',
     '/api/admin/orders',
     '/api/public/locations',
@@ -103,9 +104,14 @@ apiClient.interceptors.response.use(
                 return Promise.reject(error);
             }
 
+            const refreshToken = authStorage.getRefreshToken();
+            if (!refreshToken) {
+                authStorage.clear();
+                return Promise.reject(error);
+            }
+
             originalRequest._retry = true;
             try {
-                const refreshToken = authStorage.getRefreshToken();
                 // Gọi API refresh token
                 const res = await axios.post(`${BASE_URL}/api/auth/refresh-token`, {refreshToken}, {
                     headers: {

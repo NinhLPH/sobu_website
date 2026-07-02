@@ -33,7 +33,14 @@ class WebsiteConfigurationSeederTest {
         assertThat(captor.getValue())
                 .extracting(WebsiteConfiguration::getKey)
                 .doesNotContain("primary_color")
-                .contains("seo_default_title", "business_low_stock_threshold");
+                .contains(
+                        "seo_default_title",
+                        "footer_company_links",
+                        "home_section_01_title",
+                        "home_promo_grid_top_left_title",
+                        "home_partners_title",
+                        "business_low_stock_threshold"
+                );
     }
 
     @Test

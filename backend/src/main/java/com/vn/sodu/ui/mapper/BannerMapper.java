@@ -62,15 +62,11 @@ public class BannerMapper {
         if (request.getDisplayOrder() != null) {
             entity.setDisplayOrder(request.getDisplayOrder());
         }
-        if (request.getPosition() != null) {
-            entity.setPosition(request.getPosition());
+        if (request.getIsActive() != null) {
+            entity.setIsActive(request.getIsActive());
         }
-        if (request.getStartDate() != null) {
-            entity.setStartDate(request.getStartDate());
-        }
-        if (request.getEndDate() != null) {
-            entity.setEndDate(request.getEndDate());
-        }
+        entity.setStartDate(request.getStartDate());
+        entity.setEndDate(request.getEndDate());
         if (request.getDeviceType() != null) {
             entity.setDeviceType(request.getDeviceType());
         }

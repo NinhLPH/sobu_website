@@ -105,4 +105,19 @@ public class OrderController {
         OrderResponseDto response = orderQueryService.getMyOrderDetailByNhanhOrderId(nhanhOrderId, authentication);
         return ResponseEntity.ok(ApiResponseDTO.success(response, "Order retrieved", HttpStatus.OK.value()));
     }
+
+    @PostMapping("/me/{orderId}/cancel")
+    @Operation(
+            summary = "Cancel my order",
+            description = "Cancels the authenticated customer's own order before it reaches shipping status."
+    )
+    public ResponseEntity<ApiResponseDTO<OrderResponseDto>> cancelMyOrder(
+            @Parameter(description = "Internal order identifier", required = true, example = "1")
+            @PathVariable Long orderId,
+            Authentication authentication
+    ) {
+        Order order = orderService.cancelMyOrder(orderId, authentication);
+        OrderResponseDto response = orderResponseMapper.toDto(order);
+        return ResponseEntity.ok(ApiResponseDTO.success(response, "Order cancelled", HttpStatus.OK.value()));
+    }
 }

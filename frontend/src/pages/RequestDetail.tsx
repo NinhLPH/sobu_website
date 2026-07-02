@@ -13,7 +13,7 @@ import CatalogProductCombobox, {
 } from '../components/common/CatalogProductCombobox';
 import RequestWorkflow, { RequestStatusBadge } from '../components/request/RequestWorkflow';
 import { canCustomerEditRequest, REQUEST_STATUS_VIEWS } from '../utils/request-workflow';
-import { getPublicConfigValue, usePublicUiStore } from '../store/usePublicUiStore';
+import { usePublicUiStore } from '../store/usePublicUiStore';
 
 export default function RequestDetail() {
     const { id } = useParams();
@@ -33,7 +33,7 @@ export default function RequestDetail() {
         fetchAllProducts,
         isAllProductsLoading
     } = useProductStore();
-    const publicConfigs = usePublicUiStore((state) => state.configs);
+    const publicConfigs = usePublicUiStore((state) => state.configMap);
 
     // Local form states (synced from currentRequestDetail)
     const [phone, setPhone] = useState('');
@@ -117,7 +117,7 @@ export default function RequestDetail() {
 
     const isEditable = canCustomerEditRequest(currentRequestDetail.status);
     const statusView = REQUEST_STATUS_VIEWS[currentRequestDetail.status];
-    const supportHotline = getPublicConfigValue(publicConfigs, 'support_hotline', '1234567890');
+    const supportHotline = publicConfigs?.support_hotline || '1234567890';
 
     const getTypeLabel = (type: string) => {
         switch (type) {

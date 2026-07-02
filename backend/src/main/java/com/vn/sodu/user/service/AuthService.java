@@ -6,6 +6,7 @@ import com.vn.sodu.customer.service.CustomerService;
 import com.vn.sodu.user.Account;
 import com.vn.sodu.user.AccountRepo;
 import com.vn.sodu.user.Role;
+import com.vn.sodu.user.RoleRepo;
 import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.global.exception.UnauthorizedException;
 import com.vn.sodu.global.exception.ForbiddenOperationException;
@@ -40,6 +41,7 @@ public class AuthService {
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final CustomerService customerService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final RoleRepo roleRepo;
 
     /**
      * Authenticate user and generate JWT tokens
@@ -184,9 +186,7 @@ public class AuthService {
             account.setPasswordHash(passwordEncoder.encode(request.getPassword()));
 
             // Set default role to 2 (Customer)
-            Role customerRole = new Role();
-            customerRole.setId(2);
-            account.setRole(customerRole);
+            account.setRole(getDefaultUserRole());
 
             Account savedAccount = accountRepo.save(account);
 
@@ -221,6 +221,11 @@ public class AuthService {
             log.warn("Auth attempt for banned account: {}", email);
             throw new UnauthorizedException("Account is banned.");
         }
+    }
+
+    private Role getDefaultUserRole() {
+        return roleRepo.findByName("USER")
+                .orElseThrow(() -> new IllegalStateException("Default USER role is not configured"));
     }
 
     private void blacklistToken(String token, String expectedType) {

@@ -2,6 +2,7 @@ import {create} from 'zustand';
 import {BannerPosition, DeviceType} from '../enum/union-types';
 import {BannerDTO, WebsiteConfigurationDTO} from '../interface/public-ui-config.model';
 import {PublicUiService} from '../service/public-ui.service';
+import {mapPublicConfigs, PublicConfigMap} from '../utils/website-config';
 
 let bannersRequest: Promise<void> | null = null;
 let configsRequest: Promise<void> | null = null;
@@ -12,6 +13,7 @@ const errorMessage = (error: any, fallback: string) =>
 interface PublicUiState {
     banners: BannerDTO[];
     configs: WebsiteConfigurationDTO[];
+    configMap: PublicConfigMap;
     bannersLoaded: boolean;
     configsLoaded: boolean;
     isBannersLoading: boolean;
@@ -27,6 +29,7 @@ interface PublicUiState {
 export const usePublicUiStore = create<PublicUiState>((set, get) => ({
     banners: [],
     configs: [],
+    configMap: {},
     bannersLoaded: false,
     configsLoaded: false,
     isBannersLoading: false,
@@ -64,7 +67,13 @@ export const usePublicUiStore = create<PublicUiState>((set, get) => ({
             set({isConfigsLoading: true, configsError: null});
             try {
                 const configs = await PublicUiService.getConfigs();
-                set({configs: configs || [], configsLoaded: true, isConfigsLoading: false});
+                const publicConfigs = configs || [];
+                set({
+                    configs: publicConfigs,
+                    configMap: mapPublicConfigs(publicConfigs),
+                    configsLoaded: true,
+                    isConfigsLoading: false,
+                });
             } catch (error) {
                 set({
                     configsError: errorMessage(error, 'Không thể tải cấu hình website.'),

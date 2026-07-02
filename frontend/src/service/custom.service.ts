@@ -12,6 +12,7 @@ import {
     OrderResponseDto
 } from '../interface/order.model';
 import { createIdempotencyKey } from '../utils/idempotency';
+import { CartDto } from '../interface/cart.dto';
 
 export const CustomerService = {
     getMyRequests: (
@@ -69,6 +70,12 @@ export const CustomerService = {
         return apiClient.get(`/api/orders/me/by-nhanh/${encodeURIComponent(nhanhOrderId)}`);
     },
 
+    cancelOrder: (
+        orderId: string | number
+    ): Promise<ApiResponseDTO<OrderResponseDto>> => {
+        return apiClient.post(`/api/orders/me/${orderId}/cancel`);
+    },
+
     getOrderPayments: (
         orderId: string | number
     ): Promise<ApiResponseDTO<OrderPaymentResponseDto[]>> => {
@@ -85,5 +92,35 @@ export const CustomerService = {
                 'Idempotency-Key': idempotencyKey || createIdempotencyKey()
             }
         });
+    },
+
+    getCart: (): Promise<ApiResponseDTO<CartDto>> => {
+        return apiClient.get('/api/cart');
+    },
+
+    addCartItem: (data: {
+        productId: string;
+        nhanhProductId?: string;
+        name: string;
+        price: number;
+        imageUrl?: string;
+        quantity: number;
+    }): Promise<ApiResponseDTO<CartDto>> => {
+        return apiClient.post('/api/cart/items', data);
+    },
+
+    updateCartItem: (
+        productId: string,
+        quantity: number
+    ): Promise<ApiResponseDTO<CartDto>> => {
+        return apiClient.put(`/api/cart/items/${encodeURIComponent(productId)}`, { quantity });
+    },
+
+    removeCartItem: (productId: string): Promise<ApiResponseDTO<void>> => {
+        return apiClient.delete(`/api/cart/items/${encodeURIComponent(productId)}`);
+    },
+
+    clearCart: (): Promise<ApiResponseDTO<void>> => {
+        return apiClient.delete('/api/cart');
     }
 };

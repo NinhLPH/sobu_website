@@ -8,6 +8,8 @@ import {
 import { CustomerService } from '../service/custom.service';
 import {ToastService} from "../service/toast.service";
 import { createIdempotencyKey } from '../utils/idempotency';
+import { CartItemDto } from '../interface/cart.dto';
+import { authStorage } from '../utils/auth-storage';
 
 type CheckoutDetails =
     Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
@@ -19,17 +21,41 @@ const getErrorMessage = (error: any, fallback: string) =>
     error?.message ||
     fallback;
 
+const mapCartItemDto = (dto: CartItemDto): CartItem => ({
+    product: {
+        id: dto.productId,
+        nhanhProductId: dto.nhanhProductId,
+        name: dto.name,
+        price: dto.price,
+        imageUrl: dto.imageUrl || '',
+        brand: '',
+        description: '',
+        stock: 999,
+    },
+    quantity: dto.quantity,
+});
+
+const handleAuthError = (error: any) => {
+    if (error?.response?.status === 401 || error?.response?.status === 403) {
+        ToastService.error('Vui lòng đăng nhập để sử dụng giỏ hàng');
+        return true;
+    }
+    return false;
+};
+
 interface CartState {
     items: CartItem[];
+    isLoading: boolean;
     isSubmitting: boolean;
     checkoutError: string | null;
     lastCreatedOrder: OrderResponseDto | null;
     pendingOrderKey: string | null;
     pendingOrderFingerprint: string | null;
-    addToCart: (product: ProductModel, quantity?: number) => void;
-    removeFromCart: (productId: string) => void;
-    updateQuantity: (productId: string, quantity: number) => void;
-    clearCart: () => void;
+    fetchCart: () => Promise<void>;
+    addToCart: (product: ProductModel, quantity?: number) => Promise<void>;
+    removeFromCart: (productId: string) => Promise<void>;
+    updateQuantity: (productId: string, quantity: number) => Promise<void>;
+    clearCart: () => Promise<void>;
     clearCheckoutError: () => void;
     submitOrder: (details: CheckoutDetails) => Promise<OrderResponseDto>;
     getTotals: () => { subtotal: number; tax: number; total: number; itemCount: number };
@@ -37,58 +63,103 @@ interface CartState {
 
 export const useCartStore = create<CartState>((set, get) => ({
     items: [],
+    isLoading: false,
     isSubmitting: false,
     checkoutError: null,
     lastCreatedOrder: null,
     pendingOrderKey: null,
     pendingOrderFingerprint: null,
 
-    addToCart: (product, quantity = 1) => {
-        set((state) => {
-            const existingItem = state.items.find(item => item.product.id === product.id);
-            const items = existingItem
-                ? state.items.map(item =>
-                    item.product.id === product.id
-                        ? { ...item, quantity: item.quantity + quantity }
-                        : item
-                )
-                : [...state.items, { product, quantity }];
+    fetchCart: async () => {
+        if (!authStorage.getAccessToken()) {
+            set({ items: [], isLoading: false });
+            return;
+        }
 
-            return {
-                items,
-                pendingOrderKey: null,
-                pendingOrderFingerprint: null
-            };
-        });
-        ToastService.success('Đã thêm sản phẩm vào giỏ hàng');
+        set({ isLoading: true });
+        try {
+            const response = await CustomerService.getCart();
+            if (response.success) {
+                const items = (response.data?.items || []).map(mapCartItemDto);
+                set({ items, isLoading: false });
+                return;
+            }
+            set({ isLoading: false });
+        } catch {
+            set({ isLoading: false });
+        }
     },
 
-    removeFromCart: (productId) => {
-        set((state) => ({
-            items: state.items.filter(item => item.product.id !== productId),
-            pendingOrderKey: null,
-            pendingOrderFingerprint: null
-        }));
-        ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
+    addToCart: async (product, quantity = 1) => {
+        try {
+            const response = await CustomerService.addCartItem({
+                productId: product.id,
+                nhanhProductId: product.nhanhProductId,
+                name: product.name,
+                price: product.price,
+                imageUrl: product.imageUrl,
+                quantity
+            });
+            if (response.success) {
+                const items = (response.data?.items || []).map(mapCartItemDto);
+                set({ items });
+            }
+            ToastService.success('Đã thêm sản phẩm vào giỏ hàng');
+        } catch (error: any) {
+            if (!handleAuthError(error)) {
+                ToastService.error(getErrorMessage(error, 'Không thể thêm sản phẩm vào giỏ hàng'));
+            }
+        }
     },
 
-    updateQuantity: (productId, quantity) => {
-        set((state) => ({
-            items: state.items.map(item =>
+    removeFromCart: async (productId) => {
+        const previousItems = get().items;
+        set({ items: previousItems.filter(item => item.product.id !== productId) });
+        try {
+            const response = await CustomerService.removeCartItem(productId);
+            if (response.success) {
+                ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
+            }
+        } catch (error: any) {
+            set({ items: previousItems });
+            if (!handleAuthError(error)) {
+                ToastService.error(getErrorMessage(error, 'Không thể xóa sản phẩm'));
+            }
+        }
+    },
+
+    updateQuantity: async (productId, quantity) => {
+        const safeQuantity = Math.max(1, quantity);
+        const previousItems = get().items;
+        set({
+            items: previousItems.map(item =>
                 item.product.id === productId
-                    ? { ...item, quantity: Math.max(1, quantity) }
+                    ? { ...item, quantity: safeQuantity }
                     : item
-            ),
-            pendingOrderKey: null,
-            pendingOrderFingerprint: null
-        }));
+            )
+        });
+        try {
+            await CustomerService.updateCartItem(productId, safeQuantity);
+        } catch (error: any) {
+            set({ items: previousItems });
+            if (!handleAuthError(error)) {
+                ToastService.error(getErrorMessage(error, 'Không thể cập nhật số lượng'));
+            }
+        }
     },
 
-    clearCart: () => set({
-        items: [],
-        pendingOrderKey: null,
-        pendingOrderFingerprint: null
-    }),
+    clearCart: async () => {
+        const previousItems = get().items;
+        set({ items: [] });
+        try {
+            await CustomerService.clearCart();
+        } catch (error: any) {
+            set({ items: previousItems });
+            if (!handleAuthError(error)) {
+                ToastService.error(getErrorMessage(error, 'Không thể xóa giỏ hàng'));
+            }
+        }
+    },
 
     clearCheckoutError: () => set({ checkoutError: null }),
 
@@ -145,6 +216,8 @@ export const useCartStore = create<CartState>((set, get) => ({
             if (!response.success) {
                 throw new Error(response.message || 'Không thể tạo đơn hàng.');
             }
+
+            await CustomerService.clearCart();
 
             set({
                 items: [],

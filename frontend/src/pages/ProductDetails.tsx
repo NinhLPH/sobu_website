@@ -73,7 +73,7 @@ export default function ProductDetail() {
     }
 
     return (
-        <main className="w-full min-w-0 bg-surface px-4 pb-16 pt-24 sm:px-6">
+        <main className="w-full min-w-0 bg-surface px-3 pb-14 pt-24 sm:px-6 sm:pb-16">
             <nav className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant mb-6">
                 <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
                 <ChevronRight className="w-3.5 h-3.5"/>
@@ -82,16 +82,16 @@ export default function ProductDetail() {
                 <span className="text-primary">{product.category}</span>
             </nav>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            <div className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="lg:col-span-7 space-y-4">
                     {/* KHUNG ẢNH CHÍNH */}
                     <div
-                        className="relative rounded-2xl overflow-hidden bg-surface-container-lowest shadow-[0_20px_50px_-15px_rgba(14,48,78,0.06)] aspect-[4/3] flex items-center justify-center p-8">
+                        className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface-container-lowest p-4 shadow-[0_20px_50px_-15px_rgba(14,48,78,0.12)] sm:aspect-[4/3] sm:p-8">
                         <img className="w-full h-full object-contain" src={mainImage} alt={product.name}/>
                         <div className="absolute top-6 left-6 flex flex-col gap-2">
                             {product.isNew && (
                                 <span
-                                    className="bg-primary text-white px-3.5 py-1.5 rounded-full text-[10px] font-black tracking-widest uppercase shadow-md">
+                                    className="rounded-full bg-primary px-3 py-1 text-[9px] font-black uppercase tracking-widest text-on-primary shadow-md sm:px-3.5 sm:py-1.5 sm:text-[10px]">
                                     Mới
                                 </span>
                             )}
@@ -114,7 +114,7 @@ export default function ProductDetail() {
                 <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-28">
                     <div>
                         <p className="text-[10px] font-black text-outline mb-2 tracking-widest uppercase">{product.brand}</p>
-                        <h1 className="text-2xl md:text-3xl font-black text-on-surface tracking-tight leading-tight mb-4">
+                        <h1 className="mb-4 text-xl font-black leading-tight tracking-tight text-on-surface sm:text-2xl md:text-3xl">
                             {product.name}
                         </h1>
                         <div className="flex items-center gap-4 text-xs font-bold">
@@ -129,7 +129,7 @@ export default function ProductDetail() {
                         </div>
                     </div>
                     <div className="flex items-baseline gap-3">
-                        <span className="text-3xl font-black text-primary tracking-tight">
+                        <span className="text-2xl font-black leading-none tracking-tight text-primary sm:text-3xl">
                             {formatCurrency(product.price)}
                         </span>
                         {product.originalPrice && (
@@ -141,11 +141,11 @@ export default function ProductDetail() {
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-surface-container-low p-3.5 rounded-xl">
-                            <p className="text-[9px] text-outline uppercase font-black tracking-widest mb-0.5">Tỷ lệ</p>
+                            <p className="mb-0.5 text-[9px] font-black uppercase tracking-widest text-outline">Tỷ lệ</p>
                             <p className="font-bold text-on-surface text-sm">{product.scale || 'N/A'}</p>
                         </div>
                         <div className="bg-surface-container-low p-3.5 rounded-xl">
-                            <p className="text-[9px] text-outline uppercase font-black tracking-widest mb-0.5">Tình
+                            <p className="mb-0.5 text-[9px] font-black uppercase tracking-widest text-outline">Tình
                                 trạng</p>
                             <p className="font-bold text-on-surface text-sm">{product.stock > 0 ? 'Còn hàng' : 'Hết hàng'}</p>
                         </div>
@@ -156,17 +156,17 @@ export default function ProductDetail() {
                     <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:gap-4">
                         <div className="flex items-center bg-surface-container rounded-full px-1.5 py-1.5">
                             <button onClick={decreaseQuantity}
-                                    className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm hover:text-primary transition-colors disabled:opacity-50">
+                                    className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-lowest text-on-surface shadow-sm transition-colors hover:text-primary disabled:opacity-50 sm:h-9 sm:w-9">
                                 <Minus className="w-4 h-4"/>
                             </button>
-                            <span className="w-12 text-center font-black text-base">{quantity}</span>
+                            <span className="w-10 text-center text-sm font-black leading-none text-on-surface sm:w-12 sm:text-base">{quantity}</span>
                             <button onClick={increaseQuantity}
-                                    className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm hover:text-primary transition-colors">
+                                    className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-lowest text-on-surface shadow-sm transition-colors hover:text-primary sm:h-9 sm:w-9">
                                 <Plus className="w-4 h-4"/>
                             </button>
                         </div>
                         <button onClick={handleAddToCart}
-                                className="flex h-12 w-full flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-container text-sm font-black text-white shadow-[0_10px_20px_-5px_rgba(75,186,254,0.3)] transition-transform hover:scale-[1.01]">
+                                className="flex h-11 w-full flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-br from-primary to-primary-container text-sm font-black text-on-primary shadow-[0_10px_20px_-5px_rgba(75,186,254,0.3)] transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-primary/40 sm:h-12">
                             <ShoppingBag className="w-4.5 h-4.5"/> Thêm vào giỏ
                         </button>
                     </div>

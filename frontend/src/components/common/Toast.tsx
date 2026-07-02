@@ -1,4 +1,5 @@
 import { ToastContainer, Slide } from 'react-toastify';
+// @ts-ignore
 import 'react-toastify/dist/ReactToastify.css';
 
 export default function Toast() {

@@ -40,6 +40,7 @@ public class OAuthService {
     private final AccountMapper accountMapper;
     private final PasswordEncoder passwordEncoder;
     private final CustomerService customerService;
+    private final RoleRepo roleRepo;
 
     private GoogleIdTokenVerifier verifier;
 
@@ -125,14 +126,11 @@ public class OAuthService {
     }
 
     private Account createNewAccount(String googleId, String email, String name, String picture) {
-        Role defaultRole = new Role();
-        defaultRole.setId(2);
-
         Account account = Account.builder()
                 .email(email)
                 .fullName(name != null ? name : email)
                 .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
-                .role(defaultRole)
+                .role(getDefaultUserRole())
                 .status(Account.AccountStatus.ACTIVE)
                 .build();
 
@@ -152,5 +150,10 @@ public class OAuthService {
 
         log.info("Created new account for Google user {} with email {}", googleId, email);
         return savedAccount;
+    }
+
+    private Role getDefaultUserRole() {
+        return roleRepo.findByName("USER")
+                .orElseThrow(() -> new IllegalStateException("Default USER role is not configured"));
     }
 }

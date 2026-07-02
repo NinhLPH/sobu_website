@@ -57,6 +57,8 @@ Some modules expose multiple base paths:
 - Auth: `/api/auth/...` and `/auth/...`
 - Public catalog: `/api/public/...` and `/api/v1/public/...`
 - Public Nhanh locations: `/api/public/locations` only
+- Public shipping quotes: `/api/public/shipping/quotes`
+- Public static pages: `/api/public/pages/...` only
 - Requests: `/api/requests/...`, `/api/request/...`, `/api/v1/requests/...`, `/api/v1/request/...`
 - Orders: `/api/orders/...` and `/api/v1/orders/...`
 - Admin requests: `/api/admin/requests/...` and `/api/v1/admin/requests/...`
@@ -217,6 +219,105 @@ Uses the common error responses. Typical statuses: `400`, `401`, `500`.
 ### Notes
 
 * Token refresh should use `/api/auth/refresh-token`.
+
+## Endpoint
+
+**Google OAuth Login**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/auth/oauth/google`
+
+### Description
+
+Authenticate a user with a Google ID token, create or link an account if necessary, and return access token, refresh token, and account profile.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "idToken": "google-id-token"
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| idToken | String | Yes | Google ID token returned by Google Sign-In |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Google login successful",
+  "data": {
+    "accessToken": "eyJ...",
+    "refreshToken": "eyJ...",
+    "tokenType": "Bearer",
+    "expiresIn": 3600,
+    "account": {
+      "id": 1,
+      "email": "user@example.com",
+      "fullName": "Nguyen Van A",
+      "phone": "0901234567",
+      "status": "ACTIVE",
+      "role": {
+        "id": 2,
+        "name": "CUSTOMER"
+      }
+    }
+  },
+  "timestamp": "2026-06-27T10:00:00"
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `500`.
+
+### Business Rules
+
+* The ID token must be issued by Google and pass server-side validation.
+* The response payload shape matches normal login.
+
+### Notes
+
+* Alias available at `/auth/oauth/google`.
 
 ## Endpoint
 
@@ -399,179 +500,7 @@ Uses the common error responses. Typical statuses: `400`, `409`, `500`.
 
 ### Notes
 
-* Account activation may be required before login.
-
-## Endpoint
-
-**Resend Activation Email**
-
-### Method
-
-`POST`
-
-### URI
-
-`/api/auth/resend-activation`
-
-### Description
-
-Resend the activation email for an inactive account.
-
-### Authorization
-
-| Type | Required |
-| ---- | -------- |
-| None | No |
-
-### Headers
-
-| Header | Type | Required | Description |
-| ------ | ---- | -------- | ----------- |
-| Content-Type | String | Yes | `application/json` |
-
-### Path Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Request Body
-
-```json
-{
-  "email": "user@example.com"
-}
-```
-
-#### Body Fields
-
-| Field | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| email | String | Yes | Valid account email |
-
-### Success Response
-
-#### HTTP Status
-
-`200 OK`
-
-```json
-{
-  "success": true,
-  "statusCode": 200,
-  "message": "Activation email sent",
-  "timestamp": "2026-06-11T10:00:00"
-}
-```
-
-### Error Responses
-
-Uses the common error responses. Typical statuses: `400`, `404`, `500`.
-
-### Business Rules
-
-* Requests are limited to once every 60 seconds.
-* The account must exist and still require activation.
-
-### Notes
-
-* This endpoint is public.
-
-## Endpoint
-
-**Activate Account**
-
-### Method
-
-`GET`
-
-### URI
-
-`/api/auth/activate`
-
-### Description
-
-Activate an account using an activation token.
-
-### Authorization
-
-| Type | Required |
-| ---- | -------- |
-| None | No |
-
-### Headers
-
-| Header | Type | Required | Description |
-| ------ | ---- | -------- | ----------- |
-| Content-Type | String | No | Optional for GET requests |
-
-### Path Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| token | String | Yes | Activation token |
-
-Example:
-
-```http
-GET /api/auth/activate?token=abc123
-```
-
-### Request Body
-
-No request body.
-
-### Success Response
-
-#### HTTP Status
-
-`200 OK`
-
-```json
-{
-  "success": true,
-  "statusCode": 200,
-  "message": "Account activated",
-  "data": {
-    "id": 1,
-    "email": "user@example.com",
-    "fullName": "Nguyen Van A",
-    "phone": "0901234567",
-    "role": {
-      "id": 2,
-      "name": "CUSTOMER",
-      "description": "Customer account"
-    },
-    "status": "ACTIVE",
-    "message": "Account activated"
-  },
-  "timestamp": "2026-06-11T10:00:00"
-}
-```
-
-### Error Responses
-
-Uses the common error responses. Typical statuses: `400`, `404`, `500`.
-
-### Business Rules
-
-* Activation token must be valid and not expired.
-
-### Notes
-
-* Usually called from an email link.
+* Current code registers the account through `AuthService.register`; no activation or resend activation endpoint is exposed by `AuthController`.
 
 ## Endpoint
 
@@ -1469,6 +1398,115 @@ Uses the common error responses. Typical statuses: `502`, `500`.
 
 ## Endpoint
 
+**Get Public Shipping Quotes**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/public/shipping/quotes`
+
+### Description
+
+Get shipping fee quotes for a checkout address and cart subtotal using the Nhanh shipping quote integration.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "customerAddress": "12 Nguyen Trai",
+  "customerCityId": 254,
+  "customerDistrictId": 331,
+  "customerWardId": 1116,
+  "cartSubtotal": 500000,
+  "codAmount": 500000,
+  "shippingWeight": 1200,
+  "carrierId": 1,
+  "carrierServiceId": 2
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| customerAddress | String | No | Customer street address |
+| customerCityId | Long | Yes | Nhanh city ID |
+| customerDistrictId | Long | Yes | Nhanh district ID |
+| customerWardId | Long | Yes | Nhanh ward ID |
+| cartSubtotal | Number | Yes | Cart subtotal, must be greater than or equal to `0` |
+| codAmount | Number | No | COD amount, must be greater than or equal to `0` |
+| shippingWeight | Number | No | Shipping weight; when supplied it must be greater than `0` |
+| carrierId | Long | No | Optional preferred carrier ID |
+| carrierServiceId | Long | No | Optional preferred carrier service ID |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Shipping quotes retrieved successfully",
+  "data": [
+    {
+      "carrierId": 1,
+      "carrierName": "Nhanh Express",
+      "carrierServiceId": 2,
+      "carrierServiceName": "Standard",
+      "shipFee": 30000,
+      "customerShipFee": 30000,
+      "deliveryTime": "2-3 days",
+      "description": "Standard delivery"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `502`, `500`.
+
+### Business Rules
+
+* City, district, and ward IDs should come from `/api/public/locations`.
+* The endpoint returns shipping options from `NhanhShippingQuoteService`.
+
+### Notes
+
+* This endpoint returns `ApiResponseDTO<List<ShippingQuoteDto>>`.
+* No `/api/v1/public/shipping/quotes` alias is currently defined.
+
+## Endpoint
+
 **List Public Banners**
 
 ### Method
@@ -1506,12 +1544,12 @@ Get active public banners by device type and position.
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | deviceType | String | No | `WEB`, `MOBILE`, `ALL` |
-| position | String | No | `HOME_TOP`, `HOME_MIDDLE`, `PRODUCT_SIDEBAR` |
+| position | String | No | Seeded banner slot, for example `home_hero_carousel`, `site_left_sidebar_banner`, `home_section_01_banner` |
 
 Example:
 
 ```http
-GET /api/public/ui/banners?deviceType=WEB&position=HOME_TOP
+GET /api/public/ui/banners?deviceType=WEB&position=home_hero_carousel
 ```
 
 ### Request Body
@@ -1533,7 +1571,7 @@ No request body.
       "id": 1,
       "title": "Summer banner",
       "imageUrl": "/api/public/files/banners/banner-1.jpg",
-      "position": "HOME_TOP",
+      "position": "home_hero_carousel",
       "deviceType": "WEB",
       "isActive": true
     }
@@ -1547,7 +1585,8 @@ Uses the common error responses. Typical statuses: `500`.
 
 ### Business Rules
 
-* Device type and position should match the supported enum values.
+* Device type should be `WEB`, `MOBILE`, or `ALL`.
+* Position is a seeded banner slot string.
 
 ### Notes
 
@@ -1712,6 +1751,94 @@ Uses the common error responses. Typical statuses: `404`, `500`.
 ### Notes
 
 * Returns `ApiResponseDTO<WebsiteConfigurationDTO>`.
+
+## Endpoint
+
+**Get Public Static Page By Slug**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/public/pages/{slug}`
+
+### Description
+
+Get one published static page by slug. This endpoint is intended for lazy-loading long page content such as About, Privacy Policy, and Terms instead of including that content in the initial website configuration payload.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | No | Optional for GET requests |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| slug | String | Yes | Static page slug, for example `about`, `privacy-policy`, or `terms` |
+
+Example:
+
+```http
+GET /api/public/pages/privacy-policy
+```
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Static page retrieved successfully",
+  "data": {
+    "id": 2,
+    "slug": "privacy-policy",
+    "title": "Privacy Policy",
+    "htmlContent": "<h1>Privacy Policy</h1><p>...</p>",
+    "isPublished": true,
+    "createdAt": "2026-06-30T10:00:00",
+    "updatedAt": "2026-06-30T10:00:00"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `404`, `500`.
+
+### Business Rules
+
+* Only pages with `isPublished = true` are returned.
+* The slug is normalized server-side before lookup.
+* Unpublished or missing pages return `404`.
+
+### Notes
+
+* Returns `ApiResponseDTO<StaticPageDTO>`.
+* The backend stores sanitized HTML; Storefront may render `htmlContent` as trusted HTML from this endpoint.
+* There is no `/api/v1/public/pages/...` alias.
 
 ## Endpoint
 
@@ -3529,91 +3656,6 @@ Uses the common error responses. Typical statuses: `401`, `403`, `404`, `409`, `
 
 ## Endpoint
 
-**Create Banner**
-
-### Method
-
-`POST`
-
-### URI
-
-`/api/admin/banners`
-
-### Description
-
-Create a banner with optional image upload.
-
-### Authorization
-
-| Type | Required |
-| ---- | -------- |
-| Bearer Token | Yes |
-
-### Headers
-
-| Header | Type | Required | Description |
-| ------ | ---- | -------- | ----------- |
-| Content-Type | String | Yes | `multipart/form-data` |
-| Authorization | String | Yes | Bearer token |
-
-### Path Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Request Body
-
-```text
-multipart/form-data
-- banner: JSON object (required)
-- image: binary file (optional)
-```
-
-#### Body Fields
-
-| Field | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| banner | JSON | Yes | Banner metadata |
-| image | File | No | New banner image |
-
-### Success Response
-
-#### HTTP Status
-
-`200 OK`
-
-```json
-{
-  "success": true,
-  "message": "Created successfully",
-  "data": {
-    "id": 1,
-    "title": "Banner he"
-  }
-}
-```
-
-### Error Responses
-
-Uses the common error responses. Typical statuses: `400`, `401`, `403`, `500`.
-
-### Business Rules
-
-* Banner metadata should include valid position and device type.
-
-### Notes
-
-* `banner` JSON often contains `title`, `imageUrl`, `linkUrl`, `displayOrder`, `position`, `isActive`, `startDate`, `endDate`, `deviceType`.
-
-## Endpoint
-
 **Update Banner**
 
 ### Method
@@ -3626,7 +3668,7 @@ Uses the common error responses. Typical statuses: `400`, `401`, `403`, `500`.
 
 ### Description
 
-Update an existing banner with optional image replacement.
+Update an existing seeded banner with optional image replacement.
 
 ### Authorization
 
@@ -3668,6 +3710,8 @@ multipart/form-data
 | banner | JSON | Yes | Updated banner metadata |
 | image | File | No | Replacement image |
 
+`banner` JSON fields: `title`, `imageUrl`, `linkUrl`, `displayOrder`, `isActive`, `startDate`, `endDate`, `deviceType`. `position` may be sent by older clients but is ignored; seeded banner slots are fixed.
+
 ### Success Response
 
 #### HTTP Status
@@ -3692,10 +3736,12 @@ Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `
 ### Business Rules
 
 * Banner ID must exist.
+* Admin can edit seeded banner content and status, but cannot create, delete, or move banner slots.
+* `imageUrl` is required unless a replacement `image` file is uploaded.
 
 ### Notes
 
-* Same multipart contract as create.
+* Returns `ApiResponseDTO<BannerDTO>`.
 
 ## Endpoint
 
@@ -3769,76 +3815,6 @@ Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
 ### Notes
 
 * Returns `ApiResponseDTO<BannerDTO>`.
-
-## Endpoint
-
-**Delete Banner**
-
-### Method
-
-`DELETE`
-
-### URI
-
-`/api/admin/banners/{id}`
-
-### Description
-
-Delete a banner by ID.
-
-### Authorization
-
-| Type | Required |
-| ---- | -------- |
-| Bearer Token | Yes |
-
-### Headers
-
-| Header | Type | Required | Description |
-| ------ | ---- | -------- | ----------- |
-| Authorization | String | Yes | Bearer token |
-
-### Path Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| id | Long | Yes | Banner ID |
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Request Body
-
-No request body.
-
-### Success Response
-
-#### HTTP Status
-
-`200 OK`
-
-```json
-{
-  "success": true,
-  "message": "Deleted successfully",
-  "data": null
-}
-```
-
-### Error Responses
-
-Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
-
-### Business Rules
-
-* Banner ID must exist.
-
-### Notes
-
-* Clients should remove deleted banner from local cache.
 
 ## Endpoint
 
@@ -4121,6 +4097,108 @@ Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `
 
 ## Endpoint
 
+**Bulk Update Website Configs**
+
+### Method
+
+`PUT`
+
+### URI
+
+`/api/admin/configs/bulk`
+
+### Description
+
+Update multiple website configuration values by key.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+[
+  {
+    "key": "homepage.heroTitle",
+    "value": "New Hero"
+  },
+  {
+    "key": "homepage.heroSubtitle",
+    "value": "New Subtitle"
+  }
+]
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| key | String | Yes | Existing config key to update |
+| value | String | Yes | New config value |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Configurations updated successfully",
+  "data": [
+    {
+      "id": 1,
+      "key": "homepage.heroTitle",
+      "value": "New Hero",
+      "type": "text",
+      "groupName": "homepage",
+      "description": "Hero title",
+      "isPublic": true,
+      "createdAt": "2026-06-27T10:00:00",
+      "updatedAt": "2026-06-27T10:00:00"
+    }
+  ]
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* Each item identifies the target configuration by `key`.
+* The backend returns the updated configuration DTOs.
+
+### Notes
+
+* Returns `ApiResponseDTO<List<WebsiteConfigurationDTO>>`.
+
+## Endpoint
+
 **Get Website Config Detail**
 
 ### Method
@@ -4353,6 +4431,465 @@ Uses the common error responses. Typical statuses: `400`, `401`, `403`, `500`.
 ### Notes
 
 * Uses the shared `SearchRequest` contract.
+
+## Endpoint
+
+**Create Static Page**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/admin/static-pages`
+
+### Description
+
+Create a static page record for long-form HTML content.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token with `ROLE_ADMIN` or `ROLE_STAFF` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "slug": "privacy-policy",
+  "title": "Privacy Policy",
+  "htmlContent": "<h1>Privacy Policy</h1><p>Policy content...</p>",
+  "isPublished": true
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| slug | String | Yes | Unique page slug; normalized to lowercase kebab-case |
+| title | String | Yes | Page title, max 255 characters |
+| htmlContent | String | No | Long HTML content. Blank content is allowed |
+| isPublished | Boolean | No | Whether public API may serve the page. Defaults to `true` |
+
+### Success Response
+
+#### HTTP Status
+
+`201 Created`
+
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Static page created successfully",
+  "data": {
+    "id": 2,
+    "slug": "privacy-policy",
+    "title": "Privacy Policy",
+    "htmlContent": "<h1>Privacy Policy</h1><p>Policy content...</p>",
+    "isPublished": true,
+    "createdAt": "2026-06-30T10:00:00",
+    "updatedAt": "2026-06-30T10:00:00"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `403`, `500`.
+
+### Business Rules
+
+* `ROLE_ADMIN` or `ROLE_STAFF` is required.
+* `slug` must be non-blank, unique, normalized kebab-case, and at most 160 characters.
+* `title` must be non-blank and at most 255 characters.
+* HTML is sanitized before persistence; scripts, inline event handlers, and unsafe URLs are stripped.
+
+### Notes
+
+* Returns `ApiResponseDTO<StaticPageDTO>`.
+* Seeded default slugs are `about`, `privacy-policy`, and `terms`.
+
+## Endpoint
+
+**Update Static Page**
+
+### Method
+
+`PUT`
+
+### URI
+
+`/api/admin/static-pages/{id}`
+
+### Description
+
+Update a static page by ID.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token with `ROLE_ADMIN` or `ROLE_STAFF` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Static page ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "slug": "privacy-policy",
+  "title": "Privacy Policy",
+  "htmlContent": "<h1>Updated Privacy Policy</h1><p>Updated content...</p>",
+  "isPublished": true
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| slug | String | Yes | Unique page slug; normalized to lowercase kebab-case |
+| title | String | Yes | Page title, max 255 characters |
+| htmlContent | String | No | Long HTML content. Blank content is allowed |
+| isPublished | Boolean | No | Whether public API may serve the page. Defaults to `false` on update when omitted |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Static page updated successfully",
+  "data": {
+    "id": 2,
+    "slug": "privacy-policy",
+    "title": "Privacy Policy",
+    "htmlContent": "<h1>Updated Privacy Policy</h1><p>Updated content...</p>",
+    "isPublished": true,
+    "createdAt": "2026-06-30T10:00:00",
+    "updatedAt": "2026-06-30T10:10:00"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* `ROLE_ADMIN` or `ROLE_STAFF` is required.
+* Static page ID must exist.
+* Slug cannot duplicate another static page.
+* HTML is sanitized before persistence.
+
+### Notes
+
+* Returns `ApiResponseDTO<StaticPageDTO>`.
+
+## Endpoint
+
+**Get Static Page Detail**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/admin/static-pages/{id}`
+
+### Description
+
+Get static page detail by ID for Admin editing.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token with `ROLE_ADMIN` or `ROLE_STAFF` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Static page ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Static page retrieved successfully",
+  "data": {
+    "id": 2,
+    "slug": "privacy-policy",
+    "title": "Privacy Policy",
+    "htmlContent": "<h1>Privacy Policy</h1>",
+    "isPublished": true,
+    "createdAt": "2026-06-30T10:00:00",
+    "updatedAt": "2026-06-30T10:00:00"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* `ROLE_ADMIN` or `ROLE_STAFF` is required.
+* Static page ID must exist.
+
+### Notes
+
+* Returns `ApiResponseDTO<StaticPageDTO>`.
+
+## Endpoint
+
+**Delete Static Page**
+
+### Method
+
+`DELETE`
+
+### URI
+
+`/api/admin/static-pages/{id}`
+
+### Description
+
+Delete a static page by ID.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token with `ROLE_ADMIN` or `ROLE_STAFF` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Static page ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Static page deleted successfully",
+  "data": null
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* `ROLE_ADMIN` or `ROLE_STAFF` is required.
+* Static page ID must exist.
+
+### Notes
+
+* Delete is permanent in the current implementation. Use `isPublished = false` to hide a page without deleting it.
+
+## Endpoint
+
+**Search Static Pages**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/admin/static-pages/search`
+
+### Description
+
+Search static pages with pagination and sorting.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token with `ROLE_ADMIN` or `ROLE_STAFF` |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "searchTerm": "privacy",
+  "page": 1,
+  "pageSize": 10,
+  "sortBy": "updatedAt",
+  "sortDirection": "DESC"
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| searchTerm | String | No | Search keyword matched against slug and title |
+| page | Integer | No | One-based page number; values less than 1 are treated as page 1 |
+| pageSize | Integer | No | Page size. Defaults to 10 |
+| sortBy | String | No | Allowed: `id`, `slug`, `title`, `createdAt`, `updatedAt` |
+| sortDirection | String | No | `ASC` or `DESC`. Defaults to `DESC` |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Static pages retrieved successfully",
+  "data": {
+    "content": [
+      {
+        "id": 2,
+        "slug": "privacy-policy",
+        "title": "Privacy Policy",
+        "htmlContent": "",
+        "isPublished": true,
+        "createdAt": "2026-06-30T10:00:00",
+        "updatedAt": "2026-06-30T10:00:00"
+      }
+    ],
+    "pageNumber": 1,
+    "pageSize": 10,
+    "totalElements": 1,
+    "totalPages": 1,
+    "first": true,
+    "last": true,
+    "hasNext": false,
+    "hasPrevious": false
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `500`.
+
+### Business Rules
+
+* `ROLE_ADMIN` or `ROLE_STAFF` is required.
+* If request body is omitted, the service returns the first page sorted by `updatedAt DESC`.
+* Unsupported `sortBy` values fall back to `updatedAt`.
+
+### Notes
+
+* Returns `ApiResponseDTO<PageResponse<StaticPageDTO>>`.
 
 ## Endpoint
 

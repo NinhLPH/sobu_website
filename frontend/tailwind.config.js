@@ -1,3 +1,10 @@
+const colorToken = (name) => ({opacityValue}) => {
+  if (opacityValue === undefined) {
+    return `rgb(var(${name}))`;
+  }
+  return `rgb(var(${name}) / ${opacityValue})`;
+};
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -7,16 +14,38 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#00618e',
-        'primary-container': '#4bbafe',
-        surface: '#f3f6ff',
-        'surface-container': '#dae9ff',
-        'surface-container-low': '#f3f6ff', 
-        'surface-container-lowest': '#ffffff',
-        tertiary: '#5a4bb4',
-        'tertiary-container': '#b1a6ff',
-        outline: '#5b799b',
-        'on-surface': '#0e304e',
+        primary: colorToken('--color-primary'),
+        'on-primary': colorToken('--color-on-primary'),
+        'primary-container': colorToken('--color-primary-container'),
+        'on-primary-container': colorToken('--color-on-primary-container'),
+        secondary: colorToken('--color-secondary'),
+        'on-secondary': colorToken('--color-on-secondary'),
+        'secondary-container': colorToken('--color-secondary-container'),
+        'on-secondary-container': colorToken('--color-on-secondary-container'),
+        tertiary: colorToken('--color-tertiary'),
+        'on-tertiary': colorToken('--color-on-tertiary'),
+        'tertiary-container': colorToken('--color-tertiary-container'),
+        'on-tertiary-container': colorToken('--color-on-tertiary-container'),
+        error: colorToken('--color-error'),
+        'on-error': colorToken('--color-on-error'),
+        'error-container': colorToken('--color-error-container'),
+        'on-error-container': colorToken('--color-on-error-container'),
+        background: colorToken('--color-background'),
+        'on-background': colorToken('--color-on-background'),
+        surface: colorToken('--color-surface'),
+        'on-surface': colorToken('--color-on-surface'),
+        'surface-variant': colorToken('--color-surface-variant'),
+        'on-surface-variant': colorToken('--color-on-surface-variant'),
+        outline: colorToken('--color-outline'),
+        'outline-variant': colorToken('--color-outline-variant'),
+        'surface-container-lowest': colorToken('--color-surface-container-lowest'),
+        'surface-container-low': colorToken('--color-surface-container-low'),
+        'surface-container': colorToken('--color-surface-container'),
+        'surface-container-high': colorToken('--color-surface-container-high'),
+        'surface-container-highest': colorToken('--color-surface-container-highest'),
+        'inverse-surface': colorToken('--color-inverse-surface'),
+        'inverse-on-surface': colorToken('--color-inverse-on-surface'),
+        'inverse-primary': colorToken('--color-inverse-primary'),
       },
       fontFamily: {
         sans: ['"Be Vietnam Pro"', 'sans-serif'],

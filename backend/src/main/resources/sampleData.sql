@@ -365,24 +365,43 @@ updated_at = VALUES(updated_at);
 -- ========================
 -- UI / CONFIGURATION
 -- ========================
+INSERT INTO static_pages (
+id, slug, title, html_content, is_published, created_at, updated_at
+) VALUES
+(1, 'about', 'About', '<h1>About SOBU</h1><p>SOBU Studio serves collectors with model products, preorder support, sourcing, and custom services.</p>', true, NOW(), NOW()),
+(2, 'privacy-policy', 'Privacy Policy', '<h1>Privacy Policy</h1><p>SOBU collects only the information needed to process orders, support requests, and improve customer service.</p>', true, NOW(), NOW()),
+(3, 'terms', 'Terms', '<h1>Terms</h1><p>By using SOBU services, customers agree to provide accurate order information and follow the published payment and delivery policies.</p>', true, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+slug = slug;
+
 INSERT INTO banners (
 id, title, image_url, link_url, display_order, position, is_active,
 start_date, end_date, device_type, created_at, updated_at
 ) VALUES
-(1, 'Sodu Beauty - Chăm da mùa hè', '/images/banners/home-top-summer.jpg', '/products?categoryId=102', 1, 'HOME_TOP', true, '2026-05-01 00:00:00', '2026-08-31 23:59:59', 'ALL', '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
-(2, 'Ưu đãi son môi Melia', '/images/banners/lipstick-promo.jpg', '/products?categoryId=201', 2, 'HOME_MIDDLE', true, '2026-05-01 00:00:00', '2026-06-30 23:59:59', 'WEB', '2026-05-01 08:10:00', '2026-05-01 08:10:00'),
-(3, 'Gợi ý sản phẩm bán chạy', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'PRODUCT_SIDEBAR', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:20:00', '2026-05-01 08:20:00')
+(1, 'SOBU STUDIO', 'https://images.unsplash.com/photo-1614200187524-dc4b892acf16?q=80&w=2000&auto=format&fit=crop', '/products', 1, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
+(2, 'HOT WHEELS', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 2, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:10:00', '2026-05-01 08:10:00'),
+(3, 'MECHA & GUNDAM', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 3, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:20:00', '2026-05-01 08:20:00'),
+(4, 'Sidebar left promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_left_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:30:00', '2026-05-01 08:30:00'),
+(5, 'Sidebar right promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_right_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:40:00', '2026-05-01 08:40:00'),
+(6, 'Ban chay section banner', 'https://i0.wp.com/www.comicbookrevolution.com/wp-content/uploads/2023/12/transformers-4-previw-banner.jpg', '/products', 1, 'home_section_01_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:50:00', '2026-05-01 08:50:00'),
+(7, 'Custom service primary', 'https://images.unsplash.com/photo-1730110206448-10297c1902bd?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_primary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:00:00', '2026-05-01 09:00:00'),
+(8, 'Custom service secondary', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_secondary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:10:00', '2026-05-01 09:10:00'),
+(9, 'Custom service tertiary', 'https://images.unsplash.com/photo-1532581140115-3e355d1ed1de?q=80&w=600&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_tertiary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:20:00', '2026-05-01 09:20:00'),
+(10, 'Marvel category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/marvel', 1, 'home_category_card_01', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:30:00', '2026-05-01 09:30:00'),
+(11, 'DC category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/dc', 1, 'home_category_card_02', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:40:00', '2026-05-01 09:40:00'),
+(12, 'Hot Wheels category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/hot wheels', 1, 'home_category_card_03', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:50:00', '2026-05-01 09:50:00'),
+(13, 'Transformer category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/transformer', 1, 'home_category_card_04', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:00:00', '2026-05-01 10:00:00'),
+(14, 'Naruto category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/naruto', 1, 'home_category_card_05', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:10:00', '2026-05-01 10:10:00'),
+(15, 'Pacific Rim category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/pacific rim', 1, 'home_category_card_06', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:20:00', '2026-05-01 10:20:00'),
+(16, 'Dung Cu section banner', 'https://tooltechvietnam.com/wp-content/uploads/2023/03/handtools.jpg', '/products', 1, 'home_section_02_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:30:00', '2026-05-01 10:30:00'),
+(17, 'Promo grid top left', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_top_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:40:00', '2026-05-01 10:40:00'),
+(18, 'Promo grid bottom left', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_bottom_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:50:00', '2026-05-01 10:50:00'),
+(19, 'Promo grid top right', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_top_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:00:00', '2026-05-01 11:00:00'),
+(20, 'Promo grid bottom right', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_bottom_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:10:00', '2026-05-01 11:10:00'),
+(21, 'Hotwheels section banner', 'https://images.unsplash.com/photo-1551522435-a13afa10f103?q=80&w=1600&auto=format&fit=crop', '/products', 1, 'home_section_03_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:20:00', '2026-05-01 11:20:00'),
+(22, 'Sale section banner', 'https://img.magnific.com/free-vector/modern-black-friday-holiday-sale-offer-banner-get-30-percent-price-drop-vector_1017-47794.jpg?semt=ais_hybrid&w=740&q=80', '/products', 1, 'home_section_04_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:30:00', '2026-05-01 11:30:00')
 ON DUPLICATE KEY UPDATE
-title = VALUES(title),
-image_url = VALUES(image_url),
-link_url = VALUES(link_url),
-display_order = VALUES(display_order),
-position = VALUES(position),
-is_active = VALUES(is_active),
-start_date = VALUES(start_date),
-end_date = VALUES(end_date),
-device_type = VALUES(device_type),
-updated_at = VALUES(updated_at);
+id = id;
 
 INSERT INTO website_configurations (
 config_key, config_value, type, group_name, description, is_public, is_active, created_at, updated_at
@@ -411,7 +430,61 @@ config_key, config_value, type, group_name, description, is_public, is_active, c
 ('company_address', 'Hà Nam, Việt Nam', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('working_hours', '09:00 - 21:00, Thứ 2 - Chủ nhật', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('footer_greeting_text', 'SOBU đồng hành cùng cộng đồng collector trong từng đơn hàng và yêu cầu đặc biệt.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
-('maintenance_mode_enabled', 'false', 'boolean_type', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('copyright_text', '(c) 2026 SOBU Studio. All rights reserved.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('newsletter_enabled', 'false', 'boolean_type', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('newsletter_description', 'Nhan thong tin ve san pham moi, hang sap ve va uu dai rieng cho collector.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('newsletter_submit_label', 'Dang ky', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('footer_company_links', '[{"label":"Gioi thieu","href":"/about"},{"label":"Dich vu","href":"/services"},{"label":"Blog","href":"/blog"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
+('footer_help_links', '[{"label":"San pham","href":"/products"},{"label":"Yeu cau tim hang","href":"/request"},{"label":"Lien he","href":"/contact"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
+('legal_links', '[{"label":"Dieu khoan","href":"/terms"},{"label":"Bao mat","href":"/privacy"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
+('home_section_01_title', 'BAN CHAY', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_01_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_01_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_01_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_custom_service_title', 'DICH VU DO MO HINH SO 1 VIET NAM', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_custom_service_badges', '["Do Led cam ung","Son mo hinh chuan phim","Custom theo y thich"]', 'json', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_custom_service_cta_label', 'CUSTOM NGAY', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_custom_service_cta_url', '/services', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_02_title', 'MO HINH CUSTOM', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_02_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_02_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_02_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_category_title', 'The loai mo hinh', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_category_cards', '[{"label":"Marvel","href":"/category/marvel","bannerPosition":"home_category_card_01"},{"label":"DC","href":"/category/dc","bannerPosition":"home_category_card_02"},{"label":"Hot Wheels","href":"/category/hot wheels","bannerPosition":"home_category_card_03"},{"label":"Transformer","href":"/category/transformer","bannerPosition":"home_category_card_04"},{"label":"Naruto","href":"/category/naruto","bannerPosition":"home_category_card_05"},{"label":"Pacific Rim","href":"/category/pacific rim","bannerPosition":"home_category_card_06"}]', 'json', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_03_title', 'Dung Cu', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_03_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_03_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_03_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_04_title', 'Hotwheels', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_04_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_04_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_04_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_05_title', 'Giam gia cuc manh', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_05_subtitle', '', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_05_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_05_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_news_title', 'Tin Tuc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_news_more_label', 'MORE', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_news_more_url', '/blog', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_testimonials_title', 'Danh gia tu khach hang', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_left_title', 'HOT WHEELS', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_left_description', 'KHAM PHA NHUNG MAU XE MO HINH HOT NHAT DANH CHO NGUOI DAM ME TOC DO.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_left_cta_label', 'Xem them', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_left_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_left_title', 'Suu tam huyen thoai', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_left_description', 'SUU TAM NHUNG MAU XE HUYEN THOAI - TU SIEU XE HIEN DAI DEN CLASSIC CO DIEN.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_left_cta_label', '', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_left_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_right_title', 'Limited Edition Cars', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_right_description', 'DISCOVER LIMITED EDITION CARS AND EXCLUSIVE RELEASES FOR TRUE COLLECTORS.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_right_cta_label', '', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_right_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_right_title', 'GIFT FOR COLLECTORS', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_right_description', 'MON QUA HOAN HAO CHO NGUOI YEU XE VA DAM ME MO HINH.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_right_cta_label', 'Xem them', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_right_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_partners_title', 'Doi tac chien luoc & Thuong hieu dong hanh', 'text', 'HOME_PARTNER', NULL, true, true, NOW(), NOW()),
+('home_partner_brands', '[{"name":"BANDAI","logoUrl":"https://placehold.co/180x60/e60012/ffffff?text=BANDAI"},{"name":"HOT TOYS","logoUrl":"https://placehold.co/180x60/111111/f1b82d?text=HOT+TOYS"},{"name":"TAMIYA","logoUrl":"https://placehold.co/180x60/0054a6/ffffff?text=TAMIYA"},{"name":"LEGO","logoUrl":"https://placehold.co/180x60/ffd500/000000?text=LEGO"},{"name":"MATTEL","logoUrl":"https://placehold.co/180x60/e5142a/ffffff?text=MATTEL"},{"name":"HASBRO","logoUrl":"https://placehold.co/180x60/0072ce/ffffff?text=HASBRO"}]', 'json', 'HOME_PARTNER', NULL, true, true, NOW(), NOW()),('maintenance_mode_enabled', 'false', 'boolean_type', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('maintenance_message', 'Website đang được bảo trì. Vui lòng quay lại sau.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('social_links', '{"facebook":"","instagram":"","tiktok":"","youtube":"","zalo":""}', 'json', 'SOCIAL', NULL, true, true, NOW(), NOW()),
 ('social_share_enabled', 'true', 'boolean_type', 'SOCIAL', NULL, true, true, NOW(), NOW()),
@@ -435,4 +508,54 @@ config_key, config_value, type, group_name, description, is_public, is_active, c
 ON DUPLICATE KEY UPDATE
 config_key = VALUES(config_key);
 
+-- ========================
+-- REVIEW
+-- Requires order with status DELIVERED containing matching products
+-- ========================
+
+-- Add a DELIVERED order for customer Nguyen Hoang Linh (account_id=4)
+INSERT INTO orders (
+id, order_code, app_order_id, request_id, type, status, sync_status, nhanh_sync_stage, total_amount, deposit_amount, shipping_fee,
+paid_amount, remaining_amount, payment_status, description, customer_name, customer_mobile, customer_email, customer_address, customer_city_name,
+customer_district_name, customer_ward_name, customer_city_id, customer_district_id, customer_ward_id, carrier_id, carrier_service_id,
+location_version, version, created_at, updated_at
+) VALUES
+(3, 'SOBU-ORD-0003', 'SOBU-ORD-0003', NULL, 'NORMAL', 'DELIVERED', 'SYNCED', 'NORMAL_ORDER_CREATED', 518000, 0, 35000,
+518000, 0, 'PAID', 'Đơn hàng mẫu đã giao thành công — dùng để test review.',
+'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé',
+79, 760, 26734, 8, 1, 'v1',
+0, '2026-06-15 09:00:00', '2026-06-20 15:30:00')
+ON DUPLICATE KEY UPDATE
+app_order_id = VALUES(app_order_id),
+status = VALUES(status),
+customer_email = VALUES(customer_email),
+updated_at = VALUES(updated_at);
+
+INSERT INTO order_items (id, order_id, nhanh_product_id, name, note, price, discount, quantity) VALUES
+(4, 3, '9001001', 'Sữa rửa mặt Sodu Gentle 120ml', 'Đơn hàng giao thành công', 189000, 0, 1),
+(5, 3, '9001002', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', 'Đơn hàng giao thành công', 329000, 0, 1)
+ON DUPLICATE KEY UPDATE
+order_id = VALUES(order_id),
+name = VALUES(name),
+price = VALUES(price),
+quantity = VALUES(quantity);
+
+-- Reviews for product 1001 (externalId=9001001) in order 3
+INSERT INTO reviews (id, account_id, product_id, order_id, rating, content, image_urls, status, admin_reply, replied_by, replied_at, created_at, updated_at) VALUES
+(1, 4, 1001, 3, 5, 'Sản phẩm rất tuyệt! Da mịn màng, sạch sâu mà không bị khô. Mùi hương dễ chịu, tạo bọt tốt. Đã dùng được 2 tuần và thấy hiệu quả rõ rệt.', '["https://placehold.co/600x400/00618e/ffffff?text=Review+Sodu+Gentle+1","https://placehold.co/600x400/005f9c/ffffff?text=Review+Sodu+Gentle+2"]', 'PUBLISHED', 'Cảm ơn bạn đã tin dùng sản phẩm của Sodu! Chúng tôi rất vui vì bạn hài lòng với trải nghiệm.', 1, '2026-06-21 10:00:00', '2026-06-20 18:00:00', '2026-06-21 10:00:00'),
+(2, 5, 1001, 3, 4, 'Sản phẩm dùng tốt, sạch và thơm. Mình thuộc da dầu nên hơi lo nhưng dùng ổn. Giá cả hợp lý.', '[]', 'PUBLISHED', NULL, NULL, NULL, '2026-06-22 09:30:00', '2026-06-22 09:30:00'),
+(3, 4, 1002, 3, 5, 'Kem chống nắng rất mỏng nhẹ, không bết dính. Thấm nhanh và không để lại vệt trắng. Rất thích hợp cho da dầu mụn.', '["https://placehold.co/600x400/5a4bb4/ffffff?text=Aurora+Sunscreen+Review"]', 'PUBLISHED', NULL, NULL, NULL, '2026-06-23 14:00:00', '2026-06-23 14:00:00'),
+(4, 5, 1002, 3, 2, 'Không hợp với da mình, bị kích ứng nhẹ sau khi dùng. Có thể do da nhạy cảm. Sẽ dùng thử thêm vài lần nữa.', '[]', 'HIDDEN', NULL, NULL, NULL, '2026-06-24 11:00:00', '2026-06-24 11:00:00')
+ON DUPLICATE KEY UPDATE
+account_id = VALUES(account_id),
+product_id = VALUES(product_id),
+order_id = VALUES(order_id),
+rating = VALUES(rating),
+content = VALUES(content),
+image_urls = VALUES(image_urls),
+status = VALUES(status),
+admin_reply = VALUES(admin_reply),
+replied_by = VALUES(replied_by),
+replied_at = VALUES(replied_at),
+updated_at = VALUES(updated_at);
 
