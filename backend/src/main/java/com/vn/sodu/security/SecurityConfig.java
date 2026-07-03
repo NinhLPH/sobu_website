@@ -51,7 +51,8 @@ public class SecurityConfig {
             "/api/public/**",
             "/api/v1/public/**",
             "/api/nhanh/**",
-            "/api/payos/**"
+            "/api/payos/**",
+            "/ws/**"
     };
 
     @Bean
