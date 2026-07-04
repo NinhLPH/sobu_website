@@ -1,8 +1,9 @@
 package com.vn.sodu.security;
 
+import com.vn.sodu.security.JwtProperties;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -13,23 +14,17 @@ import java.util.Map;
 import java.util.function.Function;
 
 @Service
+@RequiredArgsConstructor
 public class JwtService {
 
     private static final String TOKEN_TYPE_CLAIM = "type";
     private static final String ACCESS_TOKEN_TYPE = "access";
     private static final String REFRESH_TOKEN_TYPE = "refresh";
 
-    @Value("${jwt.secret}")
-    private String secretKey;
-
-    @Value("${jwt.access-token-expiration}")
-    private long accessTokenExpiration;
-
-    @Value("${jwt.refresh-token-expiration}")
-    private long refreshTokenExpiration;
+    private final JwtProperties jwtProperties;
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(secretKey.getBytes());
+        return Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes());
     }
 
     // ─── Generate ────────────────────────────────────────────────
@@ -37,13 +32,13 @@ public class JwtService {
     public String generateAccessToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE);
-        return buildToken(claims, userDetails, accessTokenExpiration);
+        return buildToken(claims, userDetails, jwtProperties.getAccessTokenExpiration());
     }
 
     public String generateRefreshToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE);
-        return buildToken(claims, userDetails, refreshTokenExpiration);
+        return buildToken(claims, userDetails, jwtProperties.getRefreshTokenExpiration());
     }
 
     private String buildToken(Map<String, Object> extraClaims,
@@ -98,7 +93,7 @@ public class JwtService {
     }
 
     public long getAccessTokenExpiresInSeconds() {
-        return accessTokenExpiration / 1000L;
+        return jwtProperties.getAccessTokenExpiration() / 1000L;
     }
 
     public boolean isTokenExpired(String token) {

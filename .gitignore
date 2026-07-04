@@ -2,6 +2,7 @@
 **/node_modules/
 **/dist/
 .env
+backend/src/main/resources/.env
 /backend/.codex
 *.md
 /.agent
