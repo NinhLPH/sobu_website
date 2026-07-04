@@ -121,6 +121,7 @@ export default function SearchSuggestInput({
 
     return (
         <>
+            {/* eslint-disable-next-line jsx-a11y/role-supports-aria-props */}
             <input
                 id={id}
                 value={value}
