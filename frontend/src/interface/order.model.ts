@@ -43,6 +43,7 @@ export interface OrderItemResponseDto {
     id: number;
     name: string;
     nhanhProductId?: string;
+    productId?: number;
     note?: string;
     price: number;
     quantity: number;

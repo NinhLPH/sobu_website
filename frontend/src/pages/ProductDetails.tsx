@@ -8,6 +8,7 @@ import ProductSlider from "../components/common/ProductSlider";
 import {useProductStore} from '../store/useProductStore';
 import {PublicCatalogService} from '../service/public-catalog.service';
 import {mapListItemToProductModel, mapDetailToProductModel, ProductModel} from '../interface/product.model';
+import ProductReviewSection from '../components/reviews/ProductReviewSection';
 
 export default function ProductDetail() {
     const {id} = useParams();
@@ -196,10 +197,11 @@ export default function ProductDetail() {
                         className="text-sm font-black text-primary border-b-2 border-primary pb-3 uppercase tracking-wider">
                         Mô tả chi tiết
                     </button>
-                    <button
-                        className="text-sm font-bold text-outline hover:text-on-surface pb-3 uppercase tracking-wider transition-colors cursor-not-allowed">
+                    <a
+                        href="#product-reviews"
+                        className="text-sm font-bold text-outline hover:text-on-surface pb-3 uppercase tracking-wider transition-colors">
                         Đánh giá khách hàng
-                    </button>
+                    </a>
                 </div>
                 <div className="space-y-6">
                     <p className="text-sm font-bold text-on-surface uppercase tracking-wide">
@@ -243,6 +245,8 @@ export default function ProductDetail() {
                     </div>
                 </div>
             </div>
+
+            <ProductReviewSection product={product}/>
 
             <div className="mt-20 pt-12 border-t border-surface-container-high w-full">
                 <div className="flex items-center justify-between mb-6">
