@@ -4,6 +4,7 @@ import com.vn.sodu.user.dto.*;
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.user.service.AuthService;
 import com.vn.sodu.user.service.OAuthService;
+import com.vn.sodu.user.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -28,6 +30,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final OAuthService oAuthService;
+    private final PasswordResetService passwordResetService;
 
     @PostMapping("/login")
     @Operation(
@@ -148,6 +151,44 @@ public class AuthController {
         
         return ResponseEntity.ok(
                 ApiResponseDTO.success(null, "Logout successful", HttpStatus.OK.value())
+        );
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(
+        summary = "Request password reset",
+        description = "Sends a password reset link to the specified email if the account exists"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Reset email sent (or email not found — same response for security)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class))),
+        @ApiResponse(responseCode = "400", description = "Cooldown not expired or invalid email",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class)))
+    })
+    public ResponseEntity<?> forgotPassword(@org.springframework.web.bind.annotation.RequestBody @Valid ForgotPasswordRequest request) {
+        log.info("Forgot password request for email: {}", request.getEmail());
+        passwordResetService.forgotPassword(request);
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(null, "If the email exists, a reset link has been sent", HttpStatus.OK.value())
+        );
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(
+        summary = "Reset password with token",
+        description = "Resets the user's password using a valid reset token"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Password reset successful",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid, expired, or already used token",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class)))
+    })
+    public ResponseEntity<?> resetPassword(@org.springframework.web.bind.annotation.RequestBody @Valid ResetPasswordRequest request) {
+        log.info("Password reset request");
+        passwordResetService.resetPassword(request);
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(null, "Password reset successful", HttpStatus.OK.value())
         );
     }
 

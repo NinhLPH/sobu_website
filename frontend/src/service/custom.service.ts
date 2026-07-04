@@ -70,6 +70,12 @@ export const CustomerService = {
         return apiClient.get(`/api/orders/me/by-nhanh/${encodeURIComponent(nhanhOrderId)}`);
     },
 
+    cancelOrder: (
+        orderId: string | number
+    ): Promise<ApiResponseDTO<OrderResponseDto>> => {
+        return apiClient.post(`/api/orders/me/${orderId}/cancel`);
+    },
+
     getOrderPayments: (
         orderId: string | number
     ): Promise<ApiResponseDTO<OrderPaymentResponseDto[]>> => {

@@ -508,4 +508,54 @@ config_key, config_value, type, group_name, description, is_public, is_active, c
 ON DUPLICATE KEY UPDATE
 config_key = VALUES(config_key);
 
+-- ========================
+-- REVIEW
+-- Requires order with status DELIVERED containing matching products
+-- ========================
+
+-- Add a DELIVERED order for customer Nguyen Hoang Linh (account_id=4)
+INSERT INTO orders (
+id, order_code, app_order_id, request_id, type, status, sync_status, nhanh_sync_stage, total_amount, deposit_amount, shipping_fee,
+paid_amount, remaining_amount, payment_status, description, customer_name, customer_mobile, customer_email, customer_address, customer_city_name,
+customer_district_name, customer_ward_name, customer_city_id, customer_district_id, customer_ward_id, carrier_id, carrier_service_id,
+location_version, version, created_at, updated_at
+) VALUES
+(3, 'SOBU-ORD-0003', 'SOBU-ORD-0003', NULL, 'NORMAL', 'DELIVERED', 'SYNCED', 'NORMAL_ORDER_CREATED', 518000, 0, 35000,
+518000, 0, 'PAID', 'Đơn hàng mẫu đã giao thành công — dùng để test review.',
+'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé',
+79, 760, 26734, 8, 1, 'v1',
+0, '2026-06-15 09:00:00', '2026-06-20 15:30:00')
+ON DUPLICATE KEY UPDATE
+app_order_id = VALUES(app_order_id),
+status = VALUES(status),
+customer_email = VALUES(customer_email),
+updated_at = VALUES(updated_at);
+
+INSERT INTO order_items (id, order_id, nhanh_product_id, name, note, price, discount, quantity) VALUES
+(4, 3, '9001001', 'Sữa rửa mặt Sodu Gentle 120ml', 'Đơn hàng giao thành công', 189000, 0, 1),
+(5, 3, '9001002', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', 'Đơn hàng giao thành công', 329000, 0, 1)
+ON DUPLICATE KEY UPDATE
+order_id = VALUES(order_id),
+name = VALUES(name),
+price = VALUES(price),
+quantity = VALUES(quantity);
+
+-- Reviews for product 1001 (externalId=9001001) in order 3
+INSERT INTO reviews (id, account_id, product_id, order_id, rating, content, image_urls, status, admin_reply, replied_by, replied_at, created_at, updated_at) VALUES
+(1, 4, 1001, 3, 5, 'Sản phẩm rất tuyệt! Da mịn màng, sạch sâu mà không bị khô. Mùi hương dễ chịu, tạo bọt tốt. Đã dùng được 2 tuần và thấy hiệu quả rõ rệt.', '["https://placehold.co/600x400/00618e/ffffff?text=Review+Sodu+Gentle+1","https://placehold.co/600x400/005f9c/ffffff?text=Review+Sodu+Gentle+2"]', 'PUBLISHED', 'Cảm ơn bạn đã tin dùng sản phẩm của Sodu! Chúng tôi rất vui vì bạn hài lòng với trải nghiệm.', 1, '2026-06-21 10:00:00', '2026-06-20 18:00:00', '2026-06-21 10:00:00'),
+(2, 5, 1001, 3, 4, 'Sản phẩm dùng tốt, sạch và thơm. Mình thuộc da dầu nên hơi lo nhưng dùng ổn. Giá cả hợp lý.', '[]', 'PUBLISHED', NULL, NULL, NULL, '2026-06-22 09:30:00', '2026-06-22 09:30:00'),
+(3, 4, 1002, 3, 5, 'Kem chống nắng rất mỏng nhẹ, không bết dính. Thấm nhanh và không để lại vệt trắng. Rất thích hợp cho da dầu mụn.', '["https://placehold.co/600x400/5a4bb4/ffffff?text=Aurora+Sunscreen+Review"]', 'PUBLISHED', NULL, NULL, NULL, '2026-06-23 14:00:00', '2026-06-23 14:00:00'),
+(4, 5, 1002, 3, 2, 'Không hợp với da mình, bị kích ứng nhẹ sau khi dùng. Có thể do da nhạy cảm. Sẽ dùng thử thêm vài lần nữa.', '[]', 'HIDDEN', NULL, NULL, NULL, '2026-06-24 11:00:00', '2026-06-24 11:00:00')
+ON DUPLICATE KEY UPDATE
+account_id = VALUES(account_id),
+product_id = VALUES(product_id),
+order_id = VALUES(order_id),
+rating = VALUES(rating),
+content = VALUES(content),
+image_urls = VALUES(image_urls),
+status = VALUES(status),
+admin_reply = VALUES(admin_reply),
+replied_by = VALUES(replied_by),
+replied_at = VALUES(replied_at),
+updated_at = VALUES(updated_at);
 

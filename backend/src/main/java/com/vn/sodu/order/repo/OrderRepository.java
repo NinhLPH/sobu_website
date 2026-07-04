@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.domain.Pageable;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -36,4 +37,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     );
 
     java.util.List<Order> findBySyncStatusInOrderByUpdatedAtAsc(Collection<com.vn.sodu.order.OrderSyncStatus> statuses, Pageable pageable);
+
+    @Query("""
+            select distinct o from Order o
+            left join fetch o.items
+            left join fetch o.request
+            where o.status = com.vn.sodu.order.OrderStatus.DELIVERED
+              and lower(trim(o.customerEmail)) = lower(:customerEmail)
+            order by o.updatedAt desc
+            """)
+    List<Order> findDeliveredCustomerOrdersForReview(@Param("customerEmail") String customerEmail);
 }

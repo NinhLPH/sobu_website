@@ -1,8 +1,7 @@
 package com.vn.sodu.utilites;
 
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -13,12 +12,12 @@ import java.util.Arrays;
 import java.util.Base64;
 
 @Component
+@RequiredArgsConstructor
 public class PasswordEncrypt {
     private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
     private static final int IV_LENGTH = 16;
 
-    @Value("${encryption.secret-key}")
-    private String secretKey;
+    private final EncryptionProperties encryptionProperties;
 
     /**
      * Derive a 256-bit AES key từ String key bất kỳ (qua SHA-256)
@@ -35,9 +34,9 @@ public class PasswordEncrypt {
      */
     public String encrypt(String plainText) {
         try {
-            SecretKeySpec keySpec = deriveKey(secretKey);
+            SecretKeySpec keySpec = deriveKey(encryptionProperties.getSecretKey());
 
-            // Tạo IV ngẫu nhiên
+            // Generate random IV
             byte[] iv = new byte[IV_LENGTH];
             new SecureRandom().nextBytes(iv);
             IvParameterSpec ivSpec = new IvParameterSpec(iv);
@@ -71,7 +70,7 @@ public class PasswordEncrypt {
             byte[] iv = Arrays.copyOfRange(combined, 0, IV_LENGTH);
             byte[] cipherText = Arrays.copyOfRange(combined, IV_LENGTH, combined.length);
 
-            SecretKeySpec keySpec = deriveKey(secretKey);
+            SecretKeySpec keySpec = deriveKey(encryptionProperties.getSecretKey());
             IvParameterSpec ivSpec = new IvParameterSpec(iv);
 
             // Giải mã

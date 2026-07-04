@@ -16,7 +16,6 @@ import com.vn.sodu.user.mapper.AccountMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,8 +29,7 @@ import java.util.Collections;
 @Slf4j
 public class OAuthService {
 
-    @Value("${google.client-id}")
-    private String googleClientId;
+    private final GoogleProperties googleProperties;
 
     private final AccountRepo accountRepo;
     private final OAuthAccountRepo oAuthAccountRepo;
@@ -47,7 +45,7 @@ public class OAuthService {
     @PostConstruct
     public void init() {
         this.verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
-                .setAudience(Collections.singletonList(googleClientId))
+                .setAudience(Collections.singletonList(googleProperties.getClientId()))
                 .build();
     }
 

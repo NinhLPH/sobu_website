@@ -1,6 +1,7 @@
 package com.vn.sodu.order.services;
 
 import com.vn.sodu.order.*;
+import com.vn.sodu.global.exception.ForbiddenOperationException;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
 import com.vn.sodu.order.mapper.RequestToOrderMapper;
@@ -11,8 +12,12 @@ import com.vn.sodu.payment.service.PaymentCheckoutCreationException;
 import com.vn.sodu.payment.service.PaymentService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
+import com.vn.sodu.user.Account;
+import com.vn.sodu.user.AccountRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +43,7 @@ public class OrderService {
     private final OrderCustomerResolver orderCustomerResolver;
     private final RequestToOrderMapper requestToOrderMapper;
     private final PaymentService paymentService;
+    private final AccountRepo accountRepo;
 
     @Transactional
     public Order createFromApprovedRequest(Request request) {
@@ -119,6 +125,25 @@ public class OrderService {
 
         order.setTotalAmount(money(total));
         paymentService.initializeOrderPaymentState(order);
+        return orderRepository.save(order);
+    }
+
+    @Transactional
+    public Order cancelMyOrder(Long orderId, Authentication authentication) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("Order id is required");
+        }
+
+        String customerEmail = resolveCustomerEmail(authentication);
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(), customerEmail))
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        if (!isCustomerCancelable(order.getStatus())) {
+            throw new ForbiddenOperationException("Không thể hủy đơn khi đơn hàng đã chuyển sang trạng thái giao hàng");
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
         return orderRepository.save(order);
     }
 
@@ -206,5 +231,25 @@ public class OrderService {
         return order != null
                 && order.getType() == OrderType.PREORDER
                 && money(order.getDepositAmount()).compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private boolean isCustomerCancelable(OrderStatus status) {
+        return status != OrderStatus.SHIPPED
+                && status != OrderStatus.DELIVERED
+                && status != OrderStatus.CANCELLED;
+    }
+
+    private String resolveCustomerEmail(Authentication authentication) {
+        if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
+            throw new AccessDeniedException("Authentication is required");
+        }
+
+        Account account = accountRepo.findByEmail(authentication.getName())
+                .orElseThrow(() -> new AccessDeniedException("Authenticated account not found"));
+
+        if (account.getEmail() == null || account.getEmail().isBlank()) {
+            throw new AccessDeniedException("Authenticated account does not have an email address");
+        }
+        return account.getEmail().trim();
     }
 }

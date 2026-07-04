@@ -1,6 +1,6 @@
 package com.vn.sodu.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -12,35 +12,32 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import java.util.Arrays;
 
 @Configuration
+@RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
-    @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:5174,http://localhost:8081,http://localhost:3000,https://sobu-jet.vercel.app}")
-    private String[] allowedOrigins;
-
-    @Value("${cors.max-age:3600}")
-    private long maxAge;
+    private final CorsProperties corsProperties;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         // All API endpoints: strict origin + credentials
         registry.addMapping("/api/**")
-                .allowedOrigins(allowedOrigins)
+                .allowedOrigins(corsProperties.getAllowedOrigins())
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .exposedHeaders("Authorization")
                 .allowCredentials(true)
-                .maxAge(maxAge);
+                .maxAge(corsProperties.getMaxAge());
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins));
+        configuration.setAllowedOrigins(Arrays.asList(corsProperties.getAllowedOrigins()));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(maxAge);
+        configuration.setMaxAge(corsProperties.getMaxAge());
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", configuration);

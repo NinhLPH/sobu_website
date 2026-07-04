@@ -31,6 +31,9 @@ public class OrderItemResponseDto {
     @Schema(description = "Item quantity")
     private Integer quantity;
 
+    @Schema(description = "Resolved product identifier, null if not matchable")
+    private Long productId;
+
     public static OrderItemResponseDto from(OrderItem item) {
         if (item == null) {
             return null;

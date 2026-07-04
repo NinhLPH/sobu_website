@@ -45,6 +45,7 @@ These public catalog endpoints return raw objects or raw page responses instead 
 - `GET /api/public/products/search`
 - `POST /api/public/products/search`
 - `GET /api/public/products/{id}`
+- `GET /api/public/reviews`
 - `GET /api/public/categories`
 - `GET /api/public/brands`
 - `GET /api/public/files/**`
@@ -59,9 +60,15 @@ Some modules expose multiple base paths:
 - Public Nhanh locations: `/api/public/locations` only
 - Public shipping quotes: `/api/public/shipping/quotes`
 - Public static pages: `/api/public/pages/...` only
+- Public reviews: `/api/public/reviews` and `/api/public/products/{id}/reviews` only
 - Requests: `/api/requests/...`, `/api/request/...`, `/api/v1/requests/...`, `/api/v1/request/...`
+- Cart: `/api/cart/...` and `/api/v1/cart/...`
 - Orders: `/api/orders/...` and `/api/v1/orders/...`
 - Admin requests: `/api/admin/requests/...` and `/api/v1/admin/requests/...`
+- Reviews: `/api/reviews/...` only
+- Admin reviews: `/api/admin/reviews/...` only
+- Support: `/api/support/...` only
+- Admin support: `/api/admin/support/...` only
 
 This document uses the shortest canonical route in examples unless noted otherwise.
 
@@ -741,7 +748,9 @@ No request body.
       "avatarImage": "/api/public/files/products/a.jpg",
       "brandName": "Sobu",
       "categoryName": "Ao",
-      "stockAvailable": 12
+      "stockAvailable": 12,
+      "averageRating": 4.5,
+      "reviewsCount": 8
     }
   ],
   "pageNumber": 0,
@@ -829,7 +838,9 @@ No request body.
     "avatarImage": "/api/public/files/products/a.jpg",
     "brandName": "Sobu",
     "categoryName": "Ao",
-    "stockAvailable": 12
+    "stockAvailable": 12,
+    "averageRating": 4.5,
+    "reviewsCount": 8
   }
 ]
 ```
@@ -922,6 +933,8 @@ No request body.
   "categoryName": "Ao",
   "stockAvailable": 10,
   "stockRemain": 10,
+  "averageRating": 4.5,
+  "reviewsCount": 8,
   "units": [
     {
       "id": 1,
@@ -1996,6 +2009,410 @@ Typical statuses: `404`, `500`.
 
 ## Endpoint
 
+**Get Cart**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/cart`
+
+### Description
+
+Get the authenticated user's shopping cart from Redis.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Cart retrieved",
+  "data": {
+    "items": [
+      {
+        "productId": "10001",
+        "name": "Ao hoodie",
+        "imageUrl": "/api/public/files/products/a.jpg",
+        "price": 350000,
+        "quantity": 2,
+        "note": "Size L"
+      }
+    ],
+    "totalAmount": 700000,
+    "totalItems": 2
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `500`.
+
+### Business Rules
+
+* Cart is backed by Redis and associated with the authenticated account email.
+* Cart is not persisted across different devices unless the same account is used.
+
+### Notes
+
+* Alias available at `/api/v1/cart`.
+
+## Endpoint
+
+**Add Item To Cart**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/cart/items`
+
+### Description
+
+Add an item to the cart or update its quantity if it already exists.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "productId": "10001",
+  "name": "Ao hoodie",
+  "imageUrl": "/api/public/files/products/a.jpg",
+  "price": 350000,
+  "quantity": 1,
+  "note": "Size L"
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| productId | String | Yes | Nhanh product ID |
+| name | String | Yes | Product name |
+| imageUrl | String | No | Product image URL |
+| price | Number | Yes | Unit price |
+| quantity | Integer | Yes | Quantity, must be greater than `0` |
+| note | String | No | Optional note (e.g., size, color) |
+
+### Success Response
+
+#### HTTP Status
+
+`201 Created`
+
+```json
+{
+  "success": true,
+  "message": "Item added to cart",
+  "data": {
+    "items": [],
+    "totalAmount": 350000,
+    "totalItems": 1
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `500`.
+
+### Business Rules
+
+* If an item with the same `productId` already exists, its quantity is incremented.
+
+### Notes
+
+* Alias available at `/api/v1/cart/items`.
+
+## Endpoint
+
+**Update Cart Item Quantity**
+
+### Method
+
+`PUT`
+
+### URI
+
+`/api/cart/items/{productId}`
+
+### Description
+
+Update the quantity of an existing cart item.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| productId | String | Yes | Nhanh product ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "quantity": 3
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| quantity | Integer | Yes | New quantity, must be greater than `0` |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Cart item updated",
+  "data": {
+    "items": [],
+    "totalAmount": 1050000,
+    "totalItems": 1
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `404`, `500`.
+
+### Business Rules
+
+* Quantity must be a positive integer.
+
+### Notes
+
+* Alias available at `/api/v1/cart/items/{productId}`.
+
+## Endpoint
+
+**Remove Item From Cart**
+
+### Method
+
+`DELETE`
+
+### URI
+
+`/api/cart/items/{productId}`
+
+### Description
+
+Remove an item from the cart.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| productId | String | Yes | Nhanh product ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Item removed from cart",
+  "data": null
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `404`, `500`.
+
+### Business Rules
+
+* Removing a non-existent item succeeds silently.
+
+### Notes
+
+* Alias available at `/api/v1/cart/items/{productId}`.
+
+## Endpoint
+
+**Clear Cart**
+
+### Method
+
+`DELETE`
+
+### URI
+
+`/api/cart`
+
+### Description
+
+Remove all items from the cart.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Cart cleared",
+  "data": null
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `500`.
+
+### Business Rules
+
+* Clearing an empty cart succeeds.
+
+### Notes
+
+* Alias available at `/api/v1/cart`.
+
+## Endpoint
+
 **List Customer Requests**
 
 ### Method
@@ -2742,6 +3159,81 @@ Uses the common error responses. Typical statuses: `401`, `404`, `500`.
 ### Notes
 
 * Alias available at `/api/v1/orders/me/by-nhanh/{nhanhOrderId}`.
+
+## Endpoint
+
+**Cancel My Order**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/orders/me/{orderId}/cancel`
+
+### Description
+
+Cancel the authenticated customer's own order before it reaches shipping status.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| orderId | Long | Yes | Internal order ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Order cancelled",
+  "data": {
+    "id": 1,
+    "orderCode": "ORD-001",
+    "status": "CANCELLED"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `404`, `409`, `500`.
+
+### Business Rules
+
+* Only cancellable before the order reaches a shipping-related status.
+* Invalid state transitions return `409 CONFLICT`.
+
+### Notes
+
+* Alias available at `/api/v1/orders/me/{orderId}/cancel`.
 
 ## Endpoint
 
@@ -5463,3 +5955,1199 @@ Typical statuses: `400`, `500`.
 ### Notes
 
 * Intended for integration/admin tooling, not end-user shopping flow.
+
+## Endpoint
+
+**Create Review**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/reviews`
+
+### Description
+
+Create a product review as an authenticated customer.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "productId": 1,
+  "orderId": 100,
+  "rating": 5,
+  "content": "San pham rat tot, chat lieu dep",
+  "imageUrls": [
+    "/api/public/files/reviews/img-1.jpg"
+  ]
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| productId | Long | Yes | Product ID |
+| orderId | Long | Yes | Delivered order ID used to verify purchase |
+| rating | Integer | Yes | Rating from 1 to 5 |
+| content | String | Yes | Review content |
+| imageUrls | Array<String> | No | Attached image URLs |
+
+### Success Response
+
+#### HTTP Status
+
+`201 Created`
+
+```json
+{
+  "success": true,
+  "statusCode": 201,
+  "message": "Review created",
+  "data": {
+    "id": 1,
+    "productId": 1,
+    "orderId": 100,
+    "rating": 5,
+    "content": "San pham rat tot, chat lieu dep",
+    "imageUrls": [],
+    "status": "PUBLISHED",
+    "createdAt": "2026-07-03T10:00:00"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `500`.
+
+### Business Rules
+
+* Reviews require a delivered order for the product to verify purchase.
+* The frontend should call `GET /api/reviews/products/{productId}/eligibility` first and use the returned `orderId` when `canReview` is `true`.
+* New reviews are published immediately with `PUBLISHED` status.
+* Admin or staff users can temporarily hide a review by changing its status to `HIDDEN`.
+
+### Notes
+
+* Returns `ApiResponseDTO<ReviewResponseDto>`.
+
+## Endpoint
+
+**Get Review Eligibility**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/reviews/products/{productId}/eligibility`
+
+### Description
+
+Check whether the authenticated customer can review a product. This endpoint replaces the old UI flow where users manually entered an order code before reviewing.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+| Content-Type | String | No | Optional for GET requests |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| productId | Long | Yes | Product ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+Example:
+
+```http
+GET /api/reviews/products/1/eligibility
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Review eligibility retrieved",
+  "data": {
+    "canReview": true,
+    "reason": "Đơn hàng đã giao hợp lệ. Bạn có thể gửi đánh giá cho sản phẩm này.",
+    "orderId": 100,
+    "alreadyReviewed": false,
+    "deliveredOrderFound": true
+  },
+  "timestamp": "2026-07-04T10:00:00"
+}
+```
+
+### Response Data Fields
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| canReview | Boolean | `true` when the user can submit a review now |
+| reason | String | Human-readable reason for the current state |
+| orderId | Long | Delivered order ID to send to `POST /api/reviews`; present only when eligible |
+| alreadyReviewed | Boolean | `true` when this account already reviewed the product |
+| deliveredOrderFound | Boolean | `true` when a delivered matching order was found |
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* The current account must exist and be authenticated.
+* The product must exist and have `externalId`.
+* The current user must have a `DELIVERED` order whose item `nhanhProductId` matches the product external id.
+* A user can review a product only once.
+* If no delivered matching order is found, the frontend should keep the form locked with `Hãy mua hàng rồi mới đăng review`.
+
+### Notes
+
+* Returns `ApiResponseDTO<ReviewEligibilityResponse>`.
+* This endpoint decides whether the review form should open; `POST /api/reviews` still validates the same rules before saving.
+
+## Endpoint
+
+**Upload Review File**
+
+### Method
+
+`POST`
+
+### URI
+
+`/api/reviews/files/upload`
+
+### Description
+
+Upload a file to attach to a review.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `multipart/form-data` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```text
+multipart/form-data
+- file: binary (required)
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| file | File | Yes | File to upload |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "File uploaded",
+  "data": {
+    "url": "/api/public/files/reviews/abc.jpg"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `500`.
+
+### Business Rules
+
+* Files are stored under the `reviews` directory.
+
+### Notes
+
+* The returned URL can be used in the `imageUrls` field of `POST /api/reviews`.
+
+## Endpoint
+
+**Get Public Product Reviews**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/public/products/{id}/reviews`
+
+### Description
+
+Get paginated public reviews for a product. Only published reviews are returned.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | No | Optional for GET requests |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Product ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| page | Integer | No | Page number, default `0` |
+| size | Integer | No | Page size, default `20` |
+| sortBy | String | No | Sort field, default `createdAt` |
+| sortDirection | String | No | `ASC` or `DESC`, default `DESC` |
+
+Example:
+
+```http
+GET /api/public/products/1/reviews?page=0&size=10&sortBy=createdAt&sortDirection=DESC
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "productId": 1,
+      "rating": 5,
+      "content": "San pham rat tot",
+      "imageUrls": [],
+      "createdAt": "2026-07-03T10:00:00"
+    }
+  ],
+  "pageNumber": 0,
+  "pageSize": 10,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true,
+  "hasNext": false,
+  "hasPrevious": false
+}
+```
+
+### Error Responses
+
+Typical statuses: `404`, `500`.
+
+### Business Rules
+
+* Only reviews with `PUBLISHED` status are visible to the public.
+
+### Notes
+
+* This endpoint returns a raw page response, not `ApiResponseDTO`.
+
+## Endpoint
+
+**List Latest Public Reviews**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/public/reviews`
+
+### Description
+
+Get the latest published reviews for public surfaces such as HomePage customer reviews.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| page | Integer | No | Page number, default `0` |
+| size | Integer | No | Page size, default `6`, maximum `6` |
+| sortBy | String | No | Sort field, default `createdAt` |
+| sortDirection | String | No | `ASC` or `DESC`, default `DESC` |
+
+Example:
+
+```http
+GET /api/public/reviews?page=0&size=6&sortBy=createdAt&sortDirection=DESC
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "productId": 1,
+      "rating": 5,
+      "content": "San pham rat tot",
+      "imageUrls": [],
+      "customerName": "Nguyen Van A",
+      "createdAt": "2026-07-03T10:00:00"
+    }
+  ],
+  "pageNumber": 0,
+  "pageSize": 6,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true,
+  "hasNext": false,
+  "hasPrevious": false
+}
+```
+
+### Business Rules
+
+* Only reviews with `PUBLISHED` status are visible to the public.
+* The public page size is capped at `6` for HomePage display.
+* This endpoint returns a raw page response, not `ApiResponseDTO`.
+
+## Endpoint
+
+**List Admin Reviews**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/admin/reviews`
+
+### Description
+
+List all reviews for admin or staff users, optionally filtered by status.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| status | String | No | Filter by review status (`PUBLISHED`, `HIDDEN`) |
+| page | Integer | No | Page number, default `0` |
+| size | Integer | No | Page size, default `20` |
+| sortBy | String | No | Sort field, default `createdAt` |
+| sortDirection | String | No | Sort direction, default `DESC` |
+
+Example:
+
+```http
+GET /api/admin/reviews?status=PUBLISHED&page=0&size=20
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Retrieved successfully",
+  "data": {
+    "content": [],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 0,
+    "totalPages": 0
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+
+### Notes
+
+* Returns `ApiResponseDTO<PageResponse<ReviewResponseDto>>`.
+
+## Endpoint
+
+**Get Admin Review Detail**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/admin/reviews/{id}`
+
+### Description
+
+Get a single review by ID for admin or staff users.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Review ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Retrieved successfully",
+  "data": {
+    "id": 1,
+    "productId": 1,
+    "orderId": 100,
+    "rating": 5,
+    "content": "Excellent product",
+    "status": "PUBLISHED",
+    "imageUrls": [],
+    "createdAt": "2026-07-03T10:00:00"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+
+### Notes
+
+* Returns `ApiResponseDTO<ReviewResponseDto>`.
+
+## Endpoint
+
+**Update Review Status**
+
+### Method
+
+`PUT`
+
+### URI
+
+`/api/admin/reviews/{id}/status`
+
+### Description
+
+Show or temporarily hide a review as admin or staff.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Review ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "status": "HIDDEN"
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| status | String | Yes | `PUBLISHED` or `HIDDEN` |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Review status updated",
+  "data": {
+    "id": 1,
+    "status": "HIDDEN"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+
+### Notes
+
+* Returns `ApiResponseDTO<ReviewResponseDto>`.
+
+## Endpoint
+
+**Reply To Review**
+
+### Method
+
+`PUT`
+
+### URI
+
+`/api/admin/reviews/{id}/reply`
+
+### Description
+
+Reply to a review as admin or staff.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Review ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "adminReply": "Cam on ban da danh gia san pham!"
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| adminReply | String | Yes | Admin reply content |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Reply submitted",
+  "data": {
+    "id": 1,
+    "adminReply": "Cam on ban da danh gia san pham!"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+
+### Notes
+
+* Returns `ApiResponseDTO<ReviewResponseDto>`.
+
+## Endpoint
+
+**Delete Review**
+
+### Method
+
+`DELETE`
+
+### URI
+
+`/api/admin/reviews/{id}`
+
+### Description
+
+Delete a review as admin or staff.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| id | Long | Yes | Review ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Review deleted",
+  "data": null
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+* Deletion is permanent.
+
+### Notes
+
+* Returns `ApiResponseDTO<Void>`.
+
+## Endpoint
+
+**Get Support Conversation**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/support/conversation`
+
+### Description
+
+Get or create the authenticated customer's support conversation. Returns the conversation summary.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Conversation retrieved",
+  "data": {
+    "conversationId": 1,
+    "status": "OPEN",
+    "lastMessage": null,
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "createdAt": "2026-07-03T10:00:00"
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `500`.
+
+### Business Rules
+
+* Staff accounts do not have a personal support conversation.
+
+### Notes
+
+* Returns `ApiResponseDTO<ConversationSummaryDTO>`.
+
+## Endpoint
+
+**Get My Support Messages**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/support/conversation/messages`
+
+### Description
+
+Get the authenticated customer's support message history with pagination.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| page | Integer | No | Page number, default `0` |
+| size | Integer | No | Page size, default `20`, max `100` |
+
+Example:
+
+```http
+GET /api/support/conversation/messages?page=0&size=20
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Messages retrieved",
+  "data": {
+    "content": [
+      {
+        "id": 1,
+        "senderType": "CUSTOMER",
+        "content": "Toi can ho tro dat hang",
+        "createdAt": "2026-07-03T10:00:00"
+      }
+    ],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `500`.
+
+### Business Rules
+
+* Messages are sorted by `createdAt` descending.
+
+### Notes
+
+* Returns `ApiResponseDTO<PageResponse<MessageResponseDTO>>`.
+
+## Endpoint
+
+**List Admin Support Conversations**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/admin/support/conversations`
+
+### Description
+
+List all support conversations for staff or admin users.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| page | Integer | No | Page number, default `0` |
+| size | Integer | No | Page size, default `20`, max `100` |
+
+Example:
+
+```http
+GET /api/admin/support/conversations?page=0&size=20
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Conversations retrieved",
+  "data": {
+    "content": [],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 0,
+    "totalPages": 0
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+* Conversations are ordered by latest message.
+
+### Notes
+
+* Returns `ApiResponseDTO<PageResponse<ConversationSummaryDTO>>`.
+
+## Endpoint
+
+**Get Admin Conversation Messages**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/admin/support/conversations/{conversationId}/messages`
+
+### Description
+
+Get paginated message history for a specific support conversation (staff or admin only).
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| conversationId | Long | Yes | Conversation identifier |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| page | Integer | No | Page number, default `0` |
+| size | Integer | No | Page size, default `20`, max `100` |
+
+Example:
+
+```http
+GET /api/admin/support/conversations/1/messages?page=0&size=20
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Messages retrieved",
+  "data": {
+    "content": [],
+    "pageNumber": 0,
+    "pageSize": 20,
+    "totalElements": 0,
+    "totalPages": 0
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+* Messages are sorted by `createdAt` descending.
+
+### Notes
+
+* Returns `ApiResponseDTO<PageResponse<MessageResponseDTO>>`.

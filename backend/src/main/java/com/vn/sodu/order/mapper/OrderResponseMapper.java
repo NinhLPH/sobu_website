@@ -1,15 +1,22 @@
 package com.vn.sodu.order.mapper;
 
 import com.vn.sodu.order.Order;
+import com.vn.sodu.order.OrderItem;
 import com.vn.sodu.order.dtos.OrderItemResponseDto;
 import com.vn.sodu.order.dtos.OrderResponseDto;
+import com.vn.sodu.product.Product;
+import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.request.Request;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class OrderResponseMapper {
+
+    private final ProductRepo productRepo;
 
     public OrderResponseDto toDto(Order order) {
         if (order == null) {
@@ -19,7 +26,7 @@ public class OrderResponseMapper {
         List<OrderItemResponseDto> items = order.getItems() == null
                 ? List.of()
                 : order.getItems().stream()
-                    .map(OrderItemResponseDto::from)
+                    .map(this::toItemDto)
                     .toList();
 
         return OrderResponseDto.builder()
@@ -59,5 +66,38 @@ public class OrderResponseMapper {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .build();
+    }
+
+    public OrderItemResponseDto toItemDto(OrderItem item) {
+        if (item == null) {
+            return null;
+        }
+        Long productId = null;
+        String nhanhId = item.getNhanhProductId();
+        Long parsed = safeParseLong(nhanhId);
+        if (parsed != null) {
+            productId = productRepo.findByExternalId(parsed)
+                    .map(Product::getId)
+                    .orElse(null);
+        }
+        return OrderItemResponseDto.builder()
+                .id(item.getId())
+                .nhanhProductId(item.getNhanhProductId())
+                .name(item.getName())
+                .note(item.getNote())
+                .price(item.getPrice())
+                .discount(item.getDiscount())
+                .quantity(item.getQuantity())
+                .productId(productId)
+                .build();
+    }
+
+    private static Long safeParseLong(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

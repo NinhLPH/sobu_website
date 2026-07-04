@@ -84,6 +84,33 @@ class OrderControllerTest {
     }
 
     @Test
+    void cancelMyOrderReturnsCancelledOrder() {
+        Authentication auth = customerAuth();
+        Order order = Order.builder()
+                .id(3L)
+                .orderCode("SOBU-ORD-3")
+                .status(OrderStatus.CANCELLED)
+                .build();
+        OrderResponseDto dto = OrderResponseDto.builder()
+                .id(3L)
+                .orderCode("SOBU-ORD-3")
+                .status(OrderStatus.CANCELLED)
+                .build();
+
+        when(orderService.cancelMyOrder(3L, auth)).thenReturn(order);
+        when(orderResponseMapper.toDto(order)).thenReturn(dto);
+        OrderController controller = new OrderController(orderQueryService, orderService, orderResponseMapper, idempotencyService);
+
+        ResponseEntity<ApiResponseDTO<OrderResponseDto>> response = controller.cancelMyOrder(3L, auth);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData().getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderService).cancelMyOrder(3L, auth);
+        verify(orderResponseMapper).toDto(order);
+    }
+
+    @Test
     void createNormalOrderReturnsCreatedOrder() {
         CreateNormalOrderDto request = CreateNormalOrderDto.builder()
                 .customerName("Nguyen Van A")

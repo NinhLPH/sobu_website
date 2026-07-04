@@ -7,6 +7,7 @@ import {
     Loader2,
     MapPin,
     Package,
+    XCircle,
     RefreshCw,
     Search
 } from 'lucide-react';
@@ -116,6 +117,10 @@ export const getAvailablePaymentTypes = (order: OrderResponseDto): OrderPaymentT
     return order.type === 'NORMAL' ? ['FULL'] : [];
 };
 
+const canCancelOrder = (order: OrderResponseDto) => {
+    return !['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(order.status || '');
+};
+
 const paymentTypeLabels: Record<OrderPaymentType, string> = {
     FULL: 'Toàn bộ',
     DEPOSIT: 'Đặt cọc',
@@ -148,6 +153,8 @@ export default function OrderTracking() {
         }
         return null;
     });
+    const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+    const [cancelMessage, setCancelMessage] = useState<string | null>(null);
     const autoTrackedReference = useRef<string | null>(null);
     const {
         payments,
@@ -164,6 +171,7 @@ export default function OrderTracking() {
         setIsLoading(true);
         setTrackingError(null);
         setOrderDetail(null);
+        setCancelMessage(null);
         clearPayments();
 
         try {
@@ -249,6 +257,30 @@ export default function OrderTracking() {
             await trackOrder(String(orderDetail.id), 'internal');
         } catch {
             // The payment store exposes the backend error below.
+        }
+    };
+
+    const handleCancelOrder = async () => {
+        if (!orderDetail || !window.confirm('Bạn chắc chắn muốn hủy đơn hàng này?')) {
+            return;
+        }
+
+        setIsCancellingOrder(true);
+        setCancelMessage(null);
+        setTrackingError(null);
+        try {
+            const response = await CustomerService.cancelOrder(orderDetail.id);
+            setOrderDetail(response.data);
+            setCancelMessage('Đơn hàng đã được hủy.');
+            await fetchPayments(response.data.id);
+        } catch (error: any) {
+            setCancelMessage(
+                error?.response?.data?.message ||
+                error?.message ||
+                'Không thể hủy đơn hàng lúc này.'
+            );
+        } finally {
+            setIsCancellingOrder(false);
         }
     };
 
@@ -383,6 +415,33 @@ export default function OrderTracking() {
                                 {getStatusText(orderDetail.status)}
                             </span>
                         </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 rounded-2xl bg-surface-container p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-xs font-black uppercase tracking-wider text-on-surface">
+                                Hủy đơn hàng
+                            </p>
+                            <p className="mt-1 text-[11px] font-medium text-outline">
+                                Bạn có thể hủy đơn trước khi đơn chuyển sang trạng thái đang giao hàng.
+                            </p>
+                            {cancelMessage && (
+                                <p className={`mt-2 text-xs font-bold ${
+                                    orderDetail.status === 'CANCELLED' ? 'text-green-700' : 'text-error'
+                                }`}>
+                                    {cancelMessage}
+                                </p>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleCancelOrder}
+                            disabled={!canCancelOrder(orderDetail) || isCancellingOrder}
+                            className="flex items-center justify-center gap-2 rounded-xl border border-error/20 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-error transition-colors hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isCancellingOrder ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4"/>}
+                            {orderDetail.status === 'CANCELLED' ? 'Đã hủy đơn' : 'Hủy đơn'}
+                        </button>
                     </div>
 
                     {orderDetail.status !== 'CANCELLED' && currentStep > 0 && (

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@100;300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -145,7 +145,7 @@
   }
 
   html {
-    font-family: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
     text-rendering: geometricPrecision;
   }

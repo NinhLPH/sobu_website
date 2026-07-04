@@ -1,4 +1,4 @@
-import {FormEvent, useCallback, useEffect, useState} from 'react';
+import {FormEvent, useCallback, useEffect, useMemo, useState} from 'react';
 import {ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Loader2, Search, X} from 'lucide-react';
 import {AdminUiService, buildBannerFormData} from '../../service/admin-ui.service';
 import {BannerDTO, BannerMutationPayload} from '../../interface/public-ui-config.model';
@@ -7,6 +7,7 @@ import {getPublicImageUrl} from '../../utils/file-url';
 import {ToastService} from '../../service/toast.service';
 import {usePublicUiStore} from '../../store/usePublicUiStore';
 import {findBannerPositionOption} from '../../constants/banner-positions';
+import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
 
 const emptyPage: PageResponse<BannerDTO> = {
     content: [], pageNumber: 1, pageSize: 10, totalElements: 0, totalPages: 0,
@@ -51,6 +52,13 @@ export default function AdminBanners() {
     const [submitting, setSubmitting] = useState(false);
     const invalidateBanners = usePublicUiStore((state) => state.invalidateBanners);
     const fetchPublicBanners = usePublicUiStore((state) => state.fetchBanners);
+
+    const searchSuggestions = useMemo<SearchSuggestion[]>(() => pageData.content.map((banner) => ({
+        id: banner.id,
+        label: banner.title,
+        description: [positionLabel(banner.position), banner.linkUrl].filter(Boolean).join(' • '),
+        searchValue: banner.title,
+    })), [pageData.content]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -102,6 +110,12 @@ export default function AdminBanners() {
         await fetchPublicBanners(true);
     };
 
+    const submitSearch = (value: string) => {
+        setSearchInput(value);
+        setPage(1);
+        setSearchTerm(value.trim());
+    };
+
     const submit = async (event: FormEvent) => {
         event.preventDefault();
         if (!editing) return setError('Chi co the cap nhat banner da duoc seed san.');
@@ -140,16 +154,18 @@ export default function AdminBanners() {
 
             <form onSubmit={(event) => {
                 event.preventDefault();
-                setPage(1);
-                setSearchTerm(searchInput.trim());
+                submitSearch(searchInput);
             }} className="flex gap-3 rounded-2xl border border-outline-variant/30 bg-white p-4">
                 <div className="relative flex-1"><Search
-                    className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/><input
-                    value={searchInput} onChange={(event) => setSearchInput(event.target.value)}
+                    className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/><SearchSuggestInput
+                    value={searchInput} onChange={setSearchInput}
+                    onSubmit={submitSearch}
+                    suggestions={searchSuggestions}
                     placeholder="Tìm theo tiêu đề banner..."
+                    ariaLabel="Tìm banner"
                     className="w-full rounded-xl bg-surface-container py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"/>
                 </div>
-                <button className="rounded-xl bg-surface-container px-4 text-xs font-black">Tìm kiếm</button>
+                <button type="submit" className="rounded-xl bg-surface-container px-4 text-xs font-black">Tìm kiếm</button>
             </form>
 
             {error && !modalOpen && <div
