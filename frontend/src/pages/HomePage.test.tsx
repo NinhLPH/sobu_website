@@ -1,8 +1,9 @@
 import {beforeEach, describe, expect, it, jest} from '@jest/globals';
-import {render, screen} from '@testing-library/react';
+import {render, screen, waitFor} from '@testing-library/react';
 import HomePage from './HomePage';
 
 const mockFetchProducts = jest.fn();
+const mockGetLatestPublicReviews = jest.fn() as any;
 let mockPublicUiState: any;
 
 jest.mock('react-router-dom', () => ({
@@ -52,6 +53,12 @@ jest.mock('../components/common/BannerCarousel', () => ({
         : <>{fallback}</>,
 }));
 
+jest.mock('../service/review.service', () => ({
+    ReviewService: {
+        getLatestPublicReviews: (...args: any[]) => mockGetLatestPublicReviews(...args),
+    },
+}));
+
 const banner = (id: number, title: string, position: string, displayOrder = 1) => ({
     id,
     title,
@@ -69,6 +76,7 @@ describe('HomePage config and banner rendering', () => {
             banners: [],
             configMap: {},
         };
+        mockGetLatestPublicReviews.mockReturnValue(new Promise(() => {}));
     });
 
     it('renders HomePage text and repeated content from public config', () => {
@@ -93,6 +101,40 @@ describe('HomePage config and banner rendering', () => {
         expect(screen.getByText('Admin Partners')).toBeTruthy();
         expect(screen.getByRole('img', {name: 'ADMIN BRAND'})).toBeTruthy();
         expect(screen.getByText('Admin Testimonials')).toBeTruthy();
+    });
+
+    it('loads and renders up to six latest customer reviews', async () => {
+        mockGetLatestPublicReviews.mockResolvedValue({
+            content: Array.from({length: 7}).map((_, index) => ({
+                id: index + 1,
+                productId: 100 + index,
+                rating: 5,
+                content: `Review ${index + 1}`,
+                customerName: `Customer ${index + 1}`,
+                createdAt: '2026-07-01T10:00:00',
+            })),
+            pageNumber: 0,
+            pageSize: 6,
+            totalElements: 7,
+            totalPages: 2,
+            first: true,
+            last: false,
+            hasNext: true,
+            hasPrevious: false,
+        });
+
+        render(<HomePage/>);
+
+        await waitFor(() => expect(screen.getByText('Review 1')).toBeTruthy());
+
+        expect(mockGetLatestPublicReviews).toHaveBeenCalledWith({
+            page: 0,
+            size: 6,
+            sortBy: 'createdAt',
+            sortDirection: 'DESC',
+        });
+        expect(screen.getAllByText(/^Review /)).toHaveLength(6);
+        expect(screen.queryByText('Review 7')).toBeNull();
     });
 
     it('renders banners from canonical snake_case positions', () => {
@@ -129,10 +171,9 @@ describe('HomePage config and banner rendering', () => {
         const promoGrid = screen.getByTestId('home-promo-grid');
         const promoTiles = screen.getAllByTestId(/^promo-tile-/);
 
-        expect(promoGrid.className).toContain('grid-cols-2');
-        expect(promoGrid.className).toContain('grid-rows-2');
-        expect(promoGrid.className).toContain('gap-0');
-        expect(promoGrid.className).toContain('overflow-hidden');
+        expect(promoGrid.className).toContain('grid-cols-1');
+        expect(promoGrid.className).toContain('md:grid-cols-2');
+        expect(promoGrid.className).toContain('gap-3');
         expect(promoTiles).toHaveLength(4);
         expect(promoTiles.map((tile) => tile.getAttribute('data-testid'))).toEqual([
             'promo-tile-home_promo_grid_top_left',
@@ -141,7 +182,7 @@ describe('HomePage config and banner rendering', () => {
             'promo-tile-home_promo_grid_bottom_right',
         ]);
         promoTiles.forEach((tile) => {
-            expect(tile.className).not.toContain('rounded-xl');
+            expect(tile.className).toContain('rounded-2xl');
             expect(tile.className).toContain('overflow-hidden');
         });
     });

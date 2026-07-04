@@ -26,6 +26,14 @@ export interface CreateReviewDto {
     imageUrls: string[];
 }
 
+export interface ReviewEligibilityResponse {
+    canReview: boolean;
+    reason: string;
+    orderId?: number;
+    alreadyReviewed: boolean;
+    deliveredOrderFound: boolean;
+}
+
 export interface AdminReviewQueryParams {
     status?: ReviewStatus;
     page?: number;

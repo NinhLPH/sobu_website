@@ -30,6 +30,15 @@ describe('ReviewService', () => {
         );
     });
 
+    it('loads latest public reviews for the homepage', () => {
+        ReviewService.getLatestPublicReviews({ page: 0, size: 6 });
+
+        expect(mockApiGet).toHaveBeenCalledWith(
+            '/api/public/reviews',
+            { params: { page: 0, size: 6 } }
+        );
+    });
+
     it('uploads review files as multipart form data', () => {
         const file = new File(['image'], 'review.jpg', { type: 'image/jpeg' });
 
@@ -58,6 +67,12 @@ describe('ReviewService', () => {
             content: 'Sản phẩm tốt',
             imageUrls: ['/api/public/files/reviews/a.jpg']
         });
+    });
+
+    it('loads review eligibility for the current product', () => {
+        ReviewService.getReviewEligibility(1001);
+
+        expect(mockApiGet).toHaveBeenCalledWith('/api/reviews/products/1001/eligibility');
     });
 });
 

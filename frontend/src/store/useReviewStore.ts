@@ -1,16 +1,8 @@
 import { create } from 'zustand';
 import { PageResponse } from '../interface/api-response';
 import { OrderResponseDto } from '../interface/order.model';
-import { ProductModel } from '../interface/product.model';
-import { ReviewResponseDto } from '../interface/review.model';
-import { CustomerService } from '../service/custom.service';
+import { ReviewEligibilityResponse, ReviewResponseDto } from '../interface/review.model';
 import { ReviewService } from '../service/review.service';
-import {
-    canReviewProductFromOrder,
-    ReviewEligibilityResult
-} from '../utils/review-eligibility';
-
-export type ReviewOrderLookupType = 'orderId' | 'nhanhOrderId';
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message ||
@@ -35,19 +27,15 @@ interface ReviewState {
     isReviewsLoading: boolean;
     reviewsError: string | null;
     verifiedOrder: OrderResponseDto | null;
-    verificationResult: ReviewEligibilityResult | null;
-    isVerifyingOrder: boolean;
-    verificationError: string | null;
+    reviewEligibility: ReviewEligibilityResponse | null;
+    isCheckingEligibility: boolean;
+    eligibilityError: string | null;
     isSubmittingReview: boolean;
     submitError: string | null;
     submitSuccessMessage: string | null;
 
     fetchPublicReviews: (productId: string | number, page?: number) => Promise<void>;
-    verifyOrderForProduct: (
-        product: ProductModel,
-        lookupType: ReviewOrderLookupType,
-        reference: string
-    ) => Promise<ReviewEligibilityResult>;
+    checkReviewEligibility: (productId: string | number) => Promise<ReviewEligibilityResponse>;
     submitReview: (
         productId: string | number,
         orderId: string | number,
@@ -65,9 +53,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     isReviewsLoading: false,
     reviewsError: null,
     verifiedOrder: null,
-    verificationResult: null,
-    isVerifyingOrder: false,
-    verificationError: null,
+    reviewEligibility: null,
+    isCheckingEligibility: false,
+    eligibilityError: null,
     isSubmittingReview: false,
     submitError: null,
     submitSuccessMessage: null,
@@ -103,51 +91,41 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         }
     },
 
-    verifyOrderForProduct: async (product, lookupType, reference) => {
-        const normalizedReference = reference.trim();
-        if (!normalizedReference) {
-            const result = {
-                canReview: false,
-                reason: 'Vui lòng nhập mã đơn hàng để xác minh.'
-            };
-            set({
-                verifiedOrder: null,
-                verificationResult: result,
-                verificationError: result.reason
-            });
-            return result;
-        }
-
+    checkReviewEligibility: async (productId) => {
         set({
-            isVerifyingOrder: true,
-            verificationError: null,
-            verificationResult: null,
+            isCheckingEligibility: true,
+            eligibilityError: null,
+            reviewEligibility: null,
             verifiedOrder: null,
             submitError: null,
             submitSuccessMessage: null
         });
 
         try {
-            const response = lookupType === 'orderId'
-                ? await CustomerService.getMyOrder(normalizedReference)
-                : await CustomerService.getOrderByNhanhId(normalizedReference);
-            const order = response.data;
-            const result = canReviewProductFromOrder(order, product);
+            const response = await ReviewService.getReviewEligibility(productId);
+            const result = response.data;
             set({
-                verifiedOrder: result.canReview ? order : null,
-                verificationResult: result,
-                verificationError: result.canReview ? null : result.reason,
-                isVerifyingOrder: false
+                verifiedOrder: result.canReview && result.orderId
+                    ? ({ id: result.orderId } as OrderResponseDto)
+                    : null,
+                reviewEligibility: result,
+                eligibilityError: result.canReview ? null : result.reason,
+                isCheckingEligibility: false
             });
             return result;
         } catch (error) {
-            const message = getErrorMessage(error, 'Không thể xác minh đơn hàng này.');
-            const result = { canReview: false, reason: message };
+            const message = getErrorMessage(error, 'Không thể kiểm tra quyền đánh giá lúc này.');
+            const result: ReviewEligibilityResponse = {
+                canReview: false,
+                reason: message,
+                alreadyReviewed: false,
+                deliveredOrderFound: false
+            };
             set({
                 verifiedOrder: null,
-                verificationResult: result,
-                verificationError: message,
-                isVerifyingOrder: false
+                reviewEligibility: result,
+                eligibilityError: message,
+                isCheckingEligibility: false
             });
             return result;
         }
@@ -186,6 +164,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
                 imageUrls
             });
             await get().fetchPublicReviews(numericProductId, 0);
+            await get().checkReviewEligibility(numericProductId);
 
             set({
                 isSubmittingReview: false,
@@ -205,8 +184,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
     resetVerification: () => set({
         verifiedOrder: null,
-        verificationResult: null,
-        verificationError: null,
+        reviewEligibility: null,
+        eligibilityError: null,
         submitError: null,
         submitSuccessMessage: null
     }),

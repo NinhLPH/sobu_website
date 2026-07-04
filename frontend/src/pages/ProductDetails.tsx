@@ -124,7 +124,7 @@ export default function ProductDetail() {
                             </span>
                             <div className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-full">
                                 <Star className="text-[#FFB800] w-3.5 h-3.5 fill-[#FFB800]"/>
-                                <span>{product.rating || 5.0}</span>
+                                <span>{(product.rating ?? 0).toFixed(1)}</span>
                                 <span className="text-outline">({product.reviewsCount || 0})</span>
                             </div>
                         </div>

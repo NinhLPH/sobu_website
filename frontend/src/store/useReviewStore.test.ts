@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { CustomerService } from '../service/custom.service';
 import { ReviewService } from '../service/review.service';
 import { useReviewStore } from './useReviewStore';
 
-jest.mock('../service/custom.service');
 jest.mock('../service/review.service');
 
-const mockedCustomerService = jest.mocked(CustomerService);
 const mockedReviewService = jest.mocked(ReviewService);
 
 describe('useReviewStore', () => {
@@ -17,79 +14,56 @@ describe('useReviewStore', () => {
             isReviewsLoading: false,
             reviewsError: null,
             verifiedOrder: null,
-            verificationResult: null,
-            isVerifyingOrder: false,
-            verificationError: null,
+            reviewEligibility: null,
+            isCheckingEligibility: false,
+            eligibilityError: null,
             isSubmittingReview: false,
             submitError: null,
             submitSuccessMessage: null
         });
     });
 
-    it('verifies a single known order by internal order id', async () => {
-        mockedCustomerService.getMyOrder.mockResolvedValue({
+    it('opens review submission when backend eligibility returns a delivered matching order', async () => {
+        mockedReviewService.getReviewEligibility.mockResolvedValue({
             success: true,
-            message: 'Order retrieved',
+            message: 'Review eligibility retrieved',
             data: {
-                id: 42,
-                status: 'DELIVERED',
-                items: [{ id: 1, productId: 1001, name: 'SOBU model', price: 100000, quantity: 1 }]
+                canReview: true,
+                reason: 'Đơn hàng đã giao hợp lệ.',
+                orderId: 42,
+                alreadyReviewed: false,
+                deliveredOrderFound: true
             }
         });
 
-        const result = await useReviewStore.getState().verifyOrderForProduct(
-            {
-                id: '1001',
-                name: 'SOBU model',
-                price: 100000,
-                brand: 'SOBU',
-                imageUrl: '/model.jpg',
-                description: 'Test product',
-                stock: 5
-            },
-            'orderId',
-            '42'
-        );
+        const result = await useReviewStore.getState().checkReviewEligibility(1001);
 
-        expect(mockedCustomerService.getMyOrder).toHaveBeenCalledWith('42');
-        expect(mockedCustomerService.getOrderByNhanhId).not.toHaveBeenCalled();
+        expect(mockedReviewService.getReviewEligibility).toHaveBeenCalledWith(1001);
         expect(result.canReview).toBe(true);
         expect(useReviewStore.getState().verifiedOrder?.id).toBe(42);
+        expect(useReviewStore.getState().eligibilityError).toBeNull();
     });
 
-    it('verifies a single known order by Nhanh id or code', async () => {
-        mockedCustomerService.getOrderByNhanhId.mockResolvedValue({
+    it('keeps the review form locked when the user has not bought the product', async () => {
+        mockedReviewService.getReviewEligibility.mockResolvedValue({
             success: true,
-            message: 'Order retrieved',
+            message: 'Review eligibility retrieved',
             data: {
-                id: 43,
-                status: 'DELIVERED',
-                items: [{ id: 1, nhanhProductId: '9001001', name: 'SOBU model', price: 100000, quantity: 1 }]
+                canReview: false,
+                reason: 'Hãy mua hàng rồi mới đăng review.',
+                alreadyReviewed: false,
+                deliveredOrderFound: false
             }
         });
 
-        const result = await useReviewStore.getState().verifyOrderForProduct(
-            {
-                id: '1001',
-                externalId: '9001001',
-                nhanhProductId: '9001001',
-                name: 'SOBU model',
-                price: 100000,
-                brand: 'SOBU',
-                imageUrl: '/model.jpg',
-                description: 'Test product',
-                stock: 5
-            },
-            'nhanhOrderId',
-            'NH-9001001'
-        );
+        const result = await useReviewStore.getState().checkReviewEligibility(1001);
 
-        expect(mockedCustomerService.getOrderByNhanhId).toHaveBeenCalledWith('NH-9001001');
-        expect(mockedCustomerService.getMyOrder).not.toHaveBeenCalled();
-        expect(result.canReview).toBe(true);
+        expect(result.canReview).toBe(false);
+        expect(useReviewStore.getState().verifiedOrder).toBeNull();
+        expect(useReviewStore.getState().eligibilityError).toMatch(/mua hàng/i);
     });
 
-    it('submits a published review with the verified order id after file upload', async () => {
+    it('submits a published review with the eligible order id after file upload', async () => {
         mockedReviewService.uploadReviewFile.mockResolvedValue({
             success: true,
             message: 'File uploaded',
@@ -105,6 +79,16 @@ describe('useReviewStore', () => {
             last: true,
             hasNext: false,
             hasPrevious: false
+        });
+        mockedReviewService.getReviewEligibility.mockResolvedValue({
+            success: true,
+            message: 'Review eligibility retrieved',
+            data: {
+                canReview: false,
+                reason: 'Bạn đã đánh giá sản phẩm này.',
+                alreadyReviewed: true,
+                deliveredOrderFound: false
+            }
         });
         mockedReviewService.createReview.mockResolvedValue({
             success: true,
@@ -135,6 +119,7 @@ describe('useReviewStore', () => {
             1001,
             expect.objectContaining({ page: 0, size: 10 })
         );
+        expect(mockedReviewService.getReviewEligibility).toHaveBeenCalledWith(1001);
         expect(useReviewStore.getState().submitSuccessMessage).toMatch(/hiển thị công khai/i);
     });
 });

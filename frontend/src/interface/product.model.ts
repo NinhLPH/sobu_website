@@ -50,6 +50,8 @@ export interface ProductListItemDTO {
     brandName?: string;
     categoryName?: string;
     stockAvailable?: number;
+    averageRating?: number;
+    reviewsCount?: number;
     status?: string;
 }
 
@@ -71,6 +73,8 @@ export interface ProductDetailDTO {
     units: ProductUnitDTO[];
     attributes: ProductAttributeDTO[];
     images: string[];
+    averageRating?: number;
+    reviewsCount?: number;
     updatedAt: string;
 }
 
@@ -89,8 +93,8 @@ export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel
         stock: dto.stockAvailable || 0,
         isNew: dto.status === 'NEW',
         isHot: dto.status === 'HOT',
-        rating: 4.8,
-        reviewsCount: 10,
+        rating: dto.averageRating ?? 0,
+        reviewsCount: dto.reviewsCount ?? 0,
         thumbnailUrls: dto.avatarImage ? [dto.avatarImage] : []
     };
 };
@@ -110,8 +114,8 @@ export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => 
         stock: dto.stockAvailable || dto.stockRemain || 0,
         isNew: false,
         isHot: false,
-        rating: 4.8,
-        reviewsCount: 15,
+        rating: dto.averageRating ?? 0,
+        reviewsCount: dto.reviewsCount ?? 0,
         thumbnailUrls: dto.images && dto.images.length > 0 
             ? dto.images
             : ['https://placehold.co/400x300?text=SOBU']

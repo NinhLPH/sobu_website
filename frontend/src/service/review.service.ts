@@ -3,6 +3,7 @@ import { ApiResponseDTO, ApiResponseWithoutDataDTO } from '../interface/api-resp
 import {
     AdminReviewQueryParams,
     CreateReviewDto,
+    ReviewEligibilityResponse,
     ReviewPageResponse,
     ReviewResponseDto,
     ReviewStatus,
@@ -15,6 +16,12 @@ export const ReviewService = {
         params?: Omit<AdminReviewQueryParams, 'status'>
     ): Promise<ReviewPageResponse> => {
         return apiClient.get(`/api/public/products/${productId}/reviews`, { params });
+    },
+
+    getLatestPublicReviews: (
+        params?: Omit<AdminReviewQueryParams, 'status'>
+    ): Promise<ReviewPageResponse> => {
+        return apiClient.get('/api/public/reviews', { params });
     },
 
     uploadReviewFile: (
@@ -32,6 +39,12 @@ export const ReviewService = {
         data: CreateReviewDto
     ): Promise<ApiResponseDTO<ReviewResponseDto>> => {
         return apiClient.post('/api/reviews', data);
+    },
+
+    getReviewEligibility: (
+        productId: string | number
+    ): Promise<ApiResponseDTO<ReviewEligibilityResponse>> => {
+        return apiClient.get(`/api/reviews/products/${productId}/eligibility`);
     }
 };
 

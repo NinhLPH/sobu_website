@@ -12,6 +12,8 @@ import {useResponsiveDeviceType} from '../hooks/useResponsiveDeviceType';
 import {parseJsonConfig, PublicConfigMap} from '../utils/website-config';
 import BannerMedia from '../components/common/BannerMedia';
 import BannerCarousel from '../components/common/BannerCarousel';
+import {ReviewService} from '../service/review.service';
+import {ReviewResponseDto} from '../interface/review.model';
 
 interface SectionHeaderProps {
     title: string;
@@ -85,6 +87,17 @@ const readConfig = (configs: PublicConfigMap, key: string, fallback: string, all
 
 const asArray = <T,>(value: T[] | unknown, fallback: T[]) =>
     Array.isArray(value) ? value : fallback;
+
+const formatReviewDate = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(date);
+};
 
 const SectionHeader = ({title, subtitle}: SectionHeaderProps) => (
     <div className="mb-4 flex flex-wrap items-center gap-2 sm:mb-6 sm:gap-4">
@@ -221,8 +234,52 @@ function PromoTile({
     );
 }
 
+const ReviewStars = ({rating}: { rating: number }) => (
+    <div className="flex items-center gap-0.5" aria-label={`${rating}/5 sao`}>
+        {Array.from({length: 5}).map((_, index) => (
+            <Star
+                key={index}
+                className={`h-3.5 w-3.5 ${
+                    index < rating
+                        ? 'fill-[#FFB800] text-[#FFB800]'
+                        : 'fill-transparent text-outline-variant'
+                }`}
+            />
+        ))}
+    </div>
+);
+
+const HomeReviewCard = ({review}: { review: ReviewResponseDto }) => (
+    <Link
+        to={`/product/${review.productId}`}
+        className="group flex h-full flex-col rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:rounded-2xl sm:p-6"
+    >
+        <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+                <p className="truncate text-sm font-black uppercase text-on-surface">
+                    {review.customerName || 'Khách hàng'}
+                </p>
+                {review.createdAt && (
+                    <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-outline/70">
+                        {formatReviewDate(review.createdAt)}
+                    </p>
+                )}
+            </div>
+            <ReviewStars rating={Math.round(review.rating || 0)} />
+        </div>
+        <p className="line-clamp-4 flex-1 text-sm font-medium leading-relaxed text-on-surface-variant">
+            {review.content}
+        </p>
+        <span className="mt-4 text-[11px] font-black uppercase tracking-wider text-primary opacity-0 transition-opacity group-hover:opacity-100">
+            Xem sản phẩm
+        </span>
+    </Link>
+);
+
 export default function HomePage() {
     const [current, setCurrent] = useState(0);
+    const [homeReviews, setHomeReviews] = useState<ReviewResponseDto[]>([]);
+    const [homeReviewsError, setHomeReviewsError] = useState<string | null>(null);
     const {products, fetchProducts} = useProductStore();
     const banners = usePublicUiStore((state) => state.banners);
     const configMap = usePublicUiStore((state) => state.configMap);
@@ -238,6 +295,31 @@ export default function HomePage() {
     useEffect(() => {
         fetchProducts();
     }, [fetchProducts]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        ReviewService.getLatestPublicReviews({
+            page: 0,
+            size: 6,
+            sortBy: 'createdAt',
+            sortDirection: 'DESC',
+        })
+            .then((response) => {
+                if (!isMounted) return;
+                setHomeReviews((response.content || []).slice(0, 6));
+                setHomeReviewsError(null);
+            })
+            .catch(() => {
+                if (!isMounted) return;
+                setHomeReviews([]);
+                setHomeReviewsError('Không thể tải đánh giá khách hàng lúc này.');
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     useEffect(() => {
         setCurrent(0);
@@ -562,26 +644,21 @@ export default function HomePage() {
 
             <section className="mx-auto w-full px-3 text-center sm:px-6">
                 <h2 className="mb-6 text-2xl font-black uppercase text-on-surface sm:mb-12 sm:text-3xl">
-                    {readConfig(configMap, 'home_testimonials_title', 'Danh gia tu khach hang')}
+                    {readConfig(configMap, 'home_testimonials_title', 'Đánh giá từ khách hàng')}
                 </h2>
-                <div className="mb-6 grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
-                    {[1, 2, 3, 4, 5, 6].map((index) => (
-                        <div key={index} className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4 text-left shadow-sm sm:rounded-2xl sm:p-6">
-                            <div className="mb-3 flex gap-1 text-[#FFB800]">
-                                <Star className="h-4 w-4 fill-current"/>
-                                <Star className="h-4 w-4 fill-current"/>
-                                <Star className="h-4 w-4 fill-current"/>
-                                <Star className="h-4 w-4 fill-current"/>
-                                <Star className="h-4 w-4 fill-current"/>
-                            </div>
-                            <p className="mb-6 line-clamp-3 text-sm font-medium text-on-surface-variant">
-                                "The flowers are beautiful and super fresh. They arrived in bud form and are even more beautiful now that they've bloomed."
-                            </p>
-                            <p className="text-sm font-bold text-on-surface">Customer {index}</p>
-                            <p className="text-xs text-outline">Student</p>
-                        </div>
-                    ))}
-                </div>
+                {homeReviews.length > 0 ? (
+                    <div className="mb-6 grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        {homeReviews.map((review) => (
+                            <HomeReviewCard key={review.id} review={review} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="mx-auto mb-6 max-w-2xl rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-lowest px-5 py-8 text-center sm:rounded-2xl">
+                        <p className="text-sm font-bold text-on-surface-variant">
+                            {homeReviewsError || 'Chưa có đánh giá khách hàng nào được hiển thị.'}
+                        </p>
+                    </div>
+                )}
             </section>
         </main>
     );
