@@ -38,6 +38,8 @@ public class ProductDetailDTO {
     private List<ProductUnitDTO> units;
     private List<ProductAttributeDTO> attributes;
     private List<String> images;
+    private Double averageRating;
+    private Long reviewsCount;
     private java.time.LocalDateTime updatedAt;
 
 }

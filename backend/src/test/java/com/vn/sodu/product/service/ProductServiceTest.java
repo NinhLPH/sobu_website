@@ -12,6 +12,8 @@ import com.vn.sodu.product.repo.ProductAttributeRepo;
 import com.vn.sodu.product.repo.ProductImageRepo;
 import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.product.repo.ProductUnitRepo;
+import com.vn.sodu.review.ReviewRepository;
+import com.vn.sodu.review.ReviewStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,9 @@ class ProductServiceTest {
     @Mock
     private ProductMapper productMapper;
 
+    @Mock
+    private ReviewRepository reviewRepository;
+
     @InjectMocks
     private ProductService productService;
 
@@ -98,6 +103,20 @@ class ProductServiceTest {
 
         assertEquals(2, result.size());
         verify(productRepo).findAll();
+    }
+
+    @Test
+    @DisplayName("Should attach published review summary to product list items")
+    void testGetAllProductsAddsReviewSummary() {
+        when(productRepo.findAll()).thenReturn(List.of(testProduct));
+        when(productMapper.toListItem(testProduct)).thenReturn(testListItemDTO);
+        when(reviewRepository.countByProductIdAndStatus(1L, ReviewStatus.PUBLISHED)).thenReturn(3L);
+        when(reviewRepository.averageRatingByProductIdAndStatus(1L, ReviewStatus.PUBLISHED)).thenReturn(4.5);
+
+        List<ProductListItemDTO> result = productService.getAllProducts();
+
+        assertEquals(3L, result.get(0).getReviewsCount());
+        assertEquals(4.5, result.get(0).getAverageRating());
     }
 
     @Test
@@ -312,6 +331,27 @@ class ProductServiceTest {
         assertNotNull(result);
         assertEquals(1L, result.getId());
         verify(productRepo).findById(1L);
+    }
+
+    @Test
+    @DisplayName("Should attach published review summary to product detail")
+    void testGetProductDetailByIdAddsReviewSummary() {
+        List<ProductImage> images = Arrays.asList(new ProductImage());
+        List<ProductUnit> units = Arrays.asList(new ProductUnit());
+        List<ProductAttribute> attributes = Arrays.asList(new ProductAttribute());
+
+        when(productRepo.findById(1L)).thenReturn(Optional.of(testProduct));
+        when(productImageRepo.findByProductId(1L)).thenReturn(images);
+        when(productUnitRepo.findByProductId(1L)).thenReturn(units);
+        when(productAttributeRepo.findByProductId(1L)).thenReturn(attributes);
+        when(productMapper.toDetail(eq(testProduct), eq(units), eq(attributes), eq(images))).thenReturn(testDetailDTO);
+        when(reviewRepository.countByProductIdAndStatus(1L, ReviewStatus.PUBLISHED)).thenReturn(2L);
+        when(reviewRepository.averageRatingByProductIdAndStatus(1L, ReviewStatus.PUBLISHED)).thenReturn(5.0);
+
+        ProductDetailDTO result = productService.getProductDetailById(1L);
+
+        assertEquals(2L, result.getReviewsCount());
+        assertEquals(5.0, result.getAverageRating());
     }
 
     @Test

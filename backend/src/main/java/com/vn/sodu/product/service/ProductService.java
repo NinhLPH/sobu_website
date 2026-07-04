@@ -13,6 +13,8 @@ import com.vn.sodu.product.repo.ProductAttributeRepo;
 import com.vn.sodu.product.repo.ProductImageRepo;
 import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.product.repo.ProductUnitRepo;
+import com.vn.sodu.review.ReviewRepository;
+import com.vn.sodu.review.ReviewStatus;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -50,12 +52,14 @@ public class ProductService {
     private final ProductAttributeRepo productAttributeRepo;
     private final ProductUnitRepo productUnitRepo;
     private final ProductMapper productMapper;
+    private final ReviewRepository reviewRepository;
 
     @Transactional(readOnly = true)
     public List<ProductListItemDTO> getAllProducts() {
         return productRepo.findAll()
                 .stream()
                 .map(productMapper::toListItem)
+                .map(this::withReviewSummary)
                 .toList();
     }
 
@@ -66,7 +70,8 @@ public class ProductService {
         Specification<Product> specification = buildSpecification(safeRequest);
 
         return productRepo.findAll(specification, pageable)
-                .map(productMapper::toListItem);
+                .map(productMapper::toListItem)
+                .map(this::withReviewSummary);
     }
 
     @Transactional(readOnly = true)
@@ -83,7 +88,25 @@ public class ProductService {
         List<ProductUnit> productUnitList = productUnitRepo.findByProductId(id);
         List<ProductAttribute> productAttributeList = productAttributeRepo.findByProductId(id);
 
-        return productMapper.toDetail(product, productUnitList, productAttributeList, imageList);
+        return withReviewSummary(productMapper.toDetail(product, productUnitList, productAttributeList, imageList));
+    }
+
+    private ProductListItemDTO withReviewSummary(ProductListItemDTO dto) {
+        if (dto == null || dto.getId() == null) {
+            return dto;
+        }
+        dto.setReviewsCount(reviewRepository.countByProductIdAndStatus(dto.getId(), ReviewStatus.PUBLISHED));
+        dto.setAverageRating(reviewRepository.averageRatingByProductIdAndStatus(dto.getId(), ReviewStatus.PUBLISHED));
+        return dto;
+    }
+
+    private ProductDetailDTO withReviewSummary(ProductDetailDTO dto) {
+        if (dto == null || dto.getId() == null) {
+            return dto;
+        }
+        dto.setReviewsCount(reviewRepository.countByProductIdAndStatus(dto.getId(), ReviewStatus.PUBLISHED));
+        dto.setAverageRating(reviewRepository.averageRatingByProductIdAndStatus(dto.getId(), ReviewStatus.PUBLISHED));
+        return dto;
     }
 
     private Pageable toPageable(ProductFilterRequest request) {
