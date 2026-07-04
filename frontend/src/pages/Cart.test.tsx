@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import { ShippingService } from '../service/shipping.service';
 
 const mockNavigate = jest.fn();
 
@@ -19,6 +20,7 @@ jest.mock('../store/useCartStore');
 jest.mock('../store/useAuthStore');
 jest.mock('../store/useLocationStore');
 jest.mock('../store/usePaymentStore');
+jest.mock('../service/shipping.service');
 jest.mock('../utils/payment-session', () => ({
     redirectToPaymentCheckout: require('@jest/globals').jest.fn()
 }));
@@ -28,6 +30,7 @@ const mockedUseAuthStore = jest.mocked(useAuthStore);
 const mockedUseLocationStore = jest.mocked(useLocationStore);
 const mockedUsePaymentStore = jest.mocked(usePaymentStore);
 const mockedRedirectToPaymentCheckout = jest.mocked(redirectToPaymentCheckout);
+const mockedShippingService = jest.mocked(ShippingService);
 const mockSubmitOrder = jest.fn<Promise<any>, any[]>();
 const mockCreatePayment = jest.fn<Promise<any>, any[]>();
 
@@ -55,10 +58,27 @@ const locationTree = {
     }]
 };
 
+const shippingQuote = {
+    carrierId: 10,
+    carrierName: 'GHN',
+    carrierServiceId: 20,
+    carrierServiceName: 'Standard',
+    shipFee: 32000,
+    customerShipFee: 30000,
+    deliveryTime: '2-3 days',
+    description: 'Door delivery'
+};
+
 describe('Cart payment selection', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockSubmitOrder.mockResolvedValue({ id: 12 });
+        mockedShippingService.getQuotes.mockResolvedValue({
+            success: true,
+            statusCode: 200,
+            message: 'Shipping quotes retrieved',
+            data: [shippingQuote]
+        });
         mockedUseCartStore.mockReturnValue({
             items: [{ product, quantity: 1 }],
             removeFromCart: jest.fn(),
@@ -67,7 +87,8 @@ describe('Cart payment selection', () => {
             submitOrder: mockSubmitOrder,
             isSubmitting: false,
             checkoutError: null,
-            clearCheckoutError: jest.fn()
+            clearCheckoutError: jest.fn(),
+            fetchCart: jest.fn()
         } as unknown as ReturnType<typeof useCartStore>);
         mockedUseAuthStore.mockReturnValue({
             isAuthenticated: true,
@@ -98,6 +119,48 @@ describe('Cart payment selection', () => {
         fireEvent.change(selects[2], { target: { value: '3' } });
     };
 
+    const selectShippingQuote = async () => {
+        const option = await screen.findByRole('radio', { name: /GHN - Standard/i });
+        fireEvent.click(option);
+    };
+
+    it('requests shipping quotes after the customer selects a full location', async () => {
+        render(<Cart />);
+        selectShippingLocation();
+
+        await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledWith({
+            customerAddress: undefined,
+            customerCityId: 1,
+            customerDistrictId: 2,
+            customerWardId: 3,
+            cartSubtotal: 350000,
+            codAmount: 0
+        }));
+        expect(await screen.findByRole('radio', { name: /GHN - Standard/i })).not.toBeNull();
+    });
+
+    it('keeps checkout disabled until a shipping quote is selected', async () => {
+        render(<Cart />);
+        selectShippingLocation();
+
+        await screen.findByRole('radio', { name: /GHN - Standard/i });
+
+        expect((screen.getByRole('button', { name: /thanh/i }) as HTMLButtonElement).disabled).toBe(true);
+        expect(mockSubmitOrder).not.toHaveBeenCalled();
+    });
+
+    it('resets the selected shipping quote when the location changes', async () => {
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+
+        expect((screen.getByRole('button', { name: /thanh/i }) as HTMLButtonElement).disabled).toBe(false);
+
+        fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '' } });
+
+        await waitFor(() => expect((screen.getByRole('button', { name: /thanh/i }) as HTMLButtonElement).disabled).toBe(true));
+    });
+
     it('creates COD payment immediately and navigates to tracking', async () => {
         mockCreatePayment.mockResolvedValue({
             id: 21,
@@ -115,11 +178,20 @@ describe('Cart payment selection', () => {
         fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), {
             target: { value: 'COD' }
         });
-        fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng với COD' }));
+        await selectShippingQuote();
+        fireEvent.click(screen.getByRole('button', { name: /COD/i }));
 
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
+            carrierId: 10,
+            carrierServiceId: 20,
+            shippingFee: 30000
+        })));
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
             type: 'FULL',
             paymentMethod: 'COD'
+        }));
+        expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith(expect.objectContaining({
+            codAmount: 350000
         }));
         expect(mockNavigate).toHaveBeenCalledWith(
             '/tracking?orderId=12&paymentSetup=cod',
@@ -143,6 +215,7 @@ describe('Cart payment selection', () => {
         mockCreatePayment.mockResolvedValue(onlinePayment);
         render(<Cart />);
         selectShippingLocation();
+        await selectShippingQuote();
         fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng và thanh toán' }));
 
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
@@ -156,6 +229,7 @@ describe('Cart payment selection', () => {
         mockCreatePayment.mockRejectedValue(new Error('PayOS unavailable'));
         render(<Cart />);
         selectShippingLocation();
+        await selectShippingQuote();
         fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng và thanh toán' }));
 
         await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(

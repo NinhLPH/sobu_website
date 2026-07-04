@@ -27,6 +27,12 @@ const shippingLocation = {
     customerWardId: 1116
 };
 
+const shippingQuote = {
+    carrierId: 10,
+    carrierServiceId: 20,
+    shippingFee: 30000
+};
+
 const emptyCartResponse = {
     success: true,
     statusCode: 200,
@@ -129,7 +135,8 @@ describe('useCartStore order submission', () => {
         const order = await useCartStore.getState().submitOrder({
             customerName: 'Nguyen Van A',
             customerMobile: '0901234567',
-            ...shippingLocation
+            ...shippingLocation,
+            ...shippingQuote
         });
 
         expect(mockedCustomerService.createOrder).toHaveBeenCalledWith(
@@ -137,6 +144,7 @@ describe('useCartStore order submission', () => {
                 customerName: 'Nguyen Van A',
                 customerMobile: '0901234567',
                 ...shippingLocation,
+                ...shippingQuote,
                 items: [{
                     nhanhProductId: '10001',
                     name: 'Ao hoodie',
@@ -167,11 +175,26 @@ describe('useCartStore order submission', () => {
         await expect(useCartStore.getState().submitOrder({
             customerName: 'Nguyen Van A',
             customerMobile: '0901234567',
-            ...shippingLocation
+            ...shippingLocation,
+            ...shippingQuote
         })).rejects.toBeDefined();
 
         expect(useCartStore.getState().items).toHaveLength(1);
         expect(useCartStore.getState().checkoutError).toBe('Idempotency conflict');
         expect(useCartStore.getState().isSubmitting).toBe(false);
+    });
+
+    it('rejects order submission when shipping quote fields are missing', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
+        await useCartStore.getState().addToCart(product);
+
+        await expect(useCartStore.getState().submitOrder({
+            customerName: 'Nguyen Van A',
+            customerMobile: '0901234567',
+            ...shippingLocation
+        })).rejects.toThrow('Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.');
+
+        expect(mockedCustomerService.createOrder).not.toHaveBeenCalled();
+        expect(useCartStore.getState().checkoutError).toBe('Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.');
     });
 });

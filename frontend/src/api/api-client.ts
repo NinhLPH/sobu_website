@@ -31,6 +31,7 @@ const WRAPPED_RESPONSE_ROUTES = [
     '/api/admin/orders',
     '/api/admin/reviews',
     '/api/public/locations',
+    '/api/public/shipping/quotes',
     '/v1/api/admin/payments'
 ];
 
