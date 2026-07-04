@@ -325,7 +325,7 @@ export default function ProductList() {
                         className="mb-5 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-4 py-3 shadow-[0_10px_30px_-15px_rgba(14,48,78,0.12)] sm:mb-8 sm:flex-row sm:items-center sm:gap-4 sm:rounded-2xl sm:px-6 sm:py-4">
                         <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm text-on-surface-variant font-bold">
-                                Hiển thị <span className="text-base font-black leading-none text-primary sm:text-lg">{filteredProducts.length}</span> kết quả
+                                Hiển thị <span className="text-base font-black leading-none text-primary">{filteredProducts.length}</span> kết quả
                                 {searchQuery && (
                                     <> cho từ khóa <span className="text-primary">"{searchQuery}"</span></>
                                 )}

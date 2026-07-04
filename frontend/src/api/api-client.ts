@@ -2,9 +2,10 @@ import axios from 'axios';
 import {authStorage} from '../utils/auth-storage';
 
 export const BASE_URL =
-    process.env.REACT_APP_API_BASE_URL ||
-    process.env.REACT_APP_API_URL ||
-    'https://suffocate-ground-keenness.ngrok-free.dev';
+    // process.env.REACT_APP_API_BASE_URL ||
+    // process.env.REACT_APP_API_URL ||
+    // 'https://suffocate-ground-keenness.ngrok-free.dev';
+    'http://localhost:8081';
 
 const PUBLIC_ROUTES = [
     '/api/auth/login',

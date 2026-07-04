@@ -48,7 +48,7 @@ module.exports = {
         'inverse-primary': colorToken('--color-inverse-primary'),
       },
       fontFamily: {
-        sans: ['"Be Vietnam Pro"', 'sans-serif'],
+        sans: ['"Montserrat"', 'sans-serif'],
       },
       borderRadius: {
         'lg': '2rem', 
