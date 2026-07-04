@@ -3,7 +3,8 @@ import {authStorage} from '../utils/auth-storage';
 
 export const BASE_URL =
     process.env.REACT_APP_API_BASE_URL?.trim() ||
-    process.env.REACT_APP_API_URL?.trim();
+    process.env.REACT_APP_API_URL?.trim() ||
+    'http://localhost:8081';
 
 const PUBLIC_ROUTES = [
     '/api/auth/login',
