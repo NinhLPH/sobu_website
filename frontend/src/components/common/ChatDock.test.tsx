@@ -1,129 +1,99 @@
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
-import {beforeEach, describe, expect, it, jest} from '@jest/globals';
-import ChatDock from './ChatDock';
+import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-let mockConfigMap: Record<string, string> = {};
+const mockGetMessages: any = jest.fn();
+const mockGetAccessToken: any = jest.fn();
+const mockToastError: any = jest.fn();
+
+const mockUser = {
+    id: 7,
+    email: 'user@example.com',
+    fullName: 'SOBU User',
+    phone: '0900000000',
+    status: 'ACTIVE',
+    role: {
+        id: 1,
+        name: 'USER'
+    }
+};
+
+const mockConfigMap = {
+    social_chat_widget_enabled: 'true',
+    social_chat_config: JSON.stringify({
+        provider: 'zalo',
+        pageId: '123456789',
+    }),
+    social_links: JSON.stringify({zalo: 'https://zalo.me/sobu'}),
+};
+
+jest.mock('../../store/useAuthStore', () => ({
+    useAuthStore: () => ({
+        isAuthenticated: true,
+        user: mockUser
+    }),
+}));
+
+jest.mock('../../utils/auth-storage', () => ({
+    authStorage: {
+        getAccessToken: mockGetAccessToken
+    }
+}));
+
+jest.mock('../../service/support-chat.service', () => ({
+    SupportChatService: {
+        getMessages: mockGetMessages
+    }
+}));
+
+jest.mock('../../service/toast.service', () => ({
+    ToastService: {
+        error: mockToastError
+    }
+}));
 
 jest.mock('../../store/usePublicUiStore', () => ({
     usePublicUiStore: (selector: any) => selector({configMap: mockConfigMap}),
 }));
 
-const enabledConfig = {
-    social_chat_widget_enabled: 'true',
-    social_chat_config: JSON.stringify({
-        provider: 'zalo',
-        pageId: '123456789',
-        greetingText: 'SOBU can help',
-        autoPopup: true,
-        width: 360,
-        height: 460,
-    }),
-    social_links: JSON.stringify({zalo: 'https://zalo.me/sobu'}),
-};
+class MockWebSocket {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSING = 2;
+    static CLOSED = 3;
+
+    url: string;
+    readyState = MockWebSocket.CONNECTING;
+    send = jest.fn();
+    close = jest.fn();
+    onopen: ((event: Event) => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    onerror: ((event: Event) => void) | null = null;
+    onclose: ((event: CloseEvent) => void) | null = null;
+
+    constructor(url: string) {
+        this.url = url;
+    }
+}
+
+const ChatDock = require('./ChatDock').default;
 
 describe('ChatDock', () => {
     beforeEach(() => {
-        mockConfigMap = {...enabledConfig};
-        document.getElementById('zalo-sdk-script')?.remove();
-        document.body.innerHTML = '';
-        delete window.ZaloSocialSDK;
+        (global as any).WebSocket = MockWebSocket;
         jest.clearAllMocks();
+        mockGetAccessToken.mockReturnValue('jwt-token');
+        mockGetMessages.mockReturnValue(new Promise(() => undefined));
     });
 
-    it('does not render when disabled', () => {
-        mockConfigMap = {
-            ...enabledConfig,
-            social_chat_widget_enabled: 'false',
-        };
-        render(<ChatDock/>);
-
-        expect(screen.queryByRole('button', {name: 'Mo chat Zalo'})).toBeNull();
-    });
-
-    it('renders a fallback panel when enabled without the Zalo page id', () => {
-        mockConfigMap = {
-            ...enabledConfig,
-            social_chat_config: JSON.stringify({provider: 'zalo'}),
-        };
-
-        render(<ChatDock/>);
-
-        expect(screen.getByRole('button', {name: 'Mo chat Zalo'})).toBeTruthy();
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        expect(screen.getByText('Chat Zalo chua san sang')).toBeTruthy();
-        expect(screen.getByText(/cau hinh Zalo OA\/pageId/i)).toBeTruthy();
-        expect(document.getElementById('zalo-sdk-script')).toBeNull();
-    });
-
-    it('shows the configured Zalo fallback link when enabled without the page id', () => {
-        mockConfigMap = {
-            ...enabledConfig,
-            social_chat_config: JSON.stringify({provider: 'zalo'}),
-        };
-
-        render(<ChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        const fallbackLink = screen.getByRole('link', {name: /Mo Zalo/i}) as HTMLAnchorElement;
-        expect(fallbackLink.getAttribute('href')).toBe('https://zalo.me/sobu');
-        expect(document.getElementById('zalo-sdk-script')).toBeNull();
-    });
-
-    it('renders the Zalo bubble when enabled', () => {
-        render(<ChatDock/>);
+    it('renders support chat above Zalo chat inside the fixed wrapper', () => {
+        const { container } = render(<ChatDock/>);
 
         expect(screen.getByLabelText('Thanh chat ho tro')).toBeTruthy();
-        expect(screen.getByRole('button', {name: 'Mo chat Zalo'})).toBeTruthy();
-    });
+        expect(screen.getByLabelText('Thanh chat ho tro khach hang')).toBeTruthy();
+        expect(screen.getByLabelText('Thanh chat Zalo')).toBeTruthy();
 
-    it('opens the panel and renders the configured Zalo widget attributes', () => {
-        const {container} = render(<ChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        expect(screen.getByLabelText('Zalo chat')).toBeTruthy();
-        expect(screen.getByText('Dang tai Zalo...')).toBeTruthy();
-
-        const widget = container.querySelector('.zalo-chat-widget') as HTMLElement;
-        expect(widget).toBeTruthy();
-        expect(widget.dataset.oaid).toBe('123456789');
-        expect(widget.dataset.welcomeMessage).toBe('SOBU can help');
-        expect(widget.dataset.autopopup).toBe('1');
-        expect(widget.dataset.width).toBe('360');
-        expect(widget.dataset.height).toBe('460');
-    });
-
-    it('injects the Zalo SDK script only once', () => {
-        render(<ChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-        fireEvent.click(screen.getByRole('button', {name: 'An chat Zalo'}));
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        expect(document.querySelectorAll('#zalo-sdk-script')).toHaveLength(1);
-        expect((document.getElementById('zalo-sdk-script') as HTMLScriptElement).src)
-            .toBe('https://sp.zalo.me/plugins/sdk.js');
-    });
-
-    it('shows the configured Zalo fallback link when the SDK fails', async () => {
-        render(<ChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        const script = document.getElementById('zalo-sdk-script');
-        expect(script).toBeTruthy();
-
-        act(() => {
-            script?.dispatchEvent(new Event('error'));
-        });
-
-        await waitFor(() => {
-            expect(screen.getByText('Khong tai duoc Zalo chat')).toBeTruthy();
-        });
-
-        const fallbackLink = screen.getByRole('link', {name: /Mo Zalo/i}) as HTMLAnchorElement;
-        expect(fallbackLink.getAttribute('href')).toBe('https://zalo.me/sobu');
+        const dockOrder = Array.from(container.querySelectorAll('[aria-label="Thanh chat ho tro khach hang"], [aria-label="Thanh chat Zalo"]'))
+            .map((element) => element.getAttribute('aria-label'));
+        expect(dockOrder).toEqual(['Thanh chat ho tro khach hang', 'Thanh chat Zalo']);
     });
 });

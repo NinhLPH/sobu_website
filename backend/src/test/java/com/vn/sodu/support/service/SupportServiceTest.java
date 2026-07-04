@@ -127,6 +127,27 @@ class SupportServiceTest {
     }
 
     @Test
+    void getMyMessages_createsConversationWhenMissing() {
+        Account customer = customerAccount(1L, "user@example.com");
+        SupportConversation saved = SupportConversation.builder()
+                .id(10L)
+                .account(customer)
+                .status(ConversationStatus.OPEN)
+                .lastMessageAt(LocalDateTime.now())
+                .build();
+
+        when(conversationRepo.findByAccountId(1L)).thenReturn(Optional.empty());
+        when(conversationRepo.save(any())).thenReturn(saved);
+        when(messageRepo.findByConversationIdOrderByCreatedAtDesc(10L, PageRequest.of(0, 20)))
+                .thenReturn(Page.empty());
+
+        Page<MessageResponseDTO> messages = supportService.getMyMessages(customer, PageRequest.of(0, 20));
+
+        assertThat(messages).isEmpty();
+        verify(conversationRepo).save(any());
+    }
+
+    @Test
     void sendMessage_updatesLastMessageAt() {
         Account customer = customerAccount(1L, "user@example.com");
         SupportConversation conversation = SupportConversation.builder()
