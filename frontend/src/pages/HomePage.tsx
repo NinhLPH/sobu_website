@@ -176,48 +176,48 @@ function BannerImage({
 }
 
 function PromoTile({
-    banner,
-    config,
-}: {
+                       banner,
+                       config,
+                   }: {
     banner?: BannerDTO;
     config: PromoTileConfig;
 }) {
-    const justifyClass = config.align === 'end' ? 'justify-end' : 'justify-center';
-
     return (
-        <div className={`relative flex h-36 flex-col items-start ${justifyClass} overflow-hidden p-3 text-white min-[390px]:h-40 sm:h-[300px] sm:p-12`}>
+        <Link
+            to={config.ctaUrl || '/products'}
+            data-testid={`promo-tile-${config.position}`}
+            className="group relative block h-[180px] overflow-hidden rounded-2xl bg-surface-container shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:h-[200px] lg:h-[220px]"
+        >
             <BannerImage
                 banner={banner}
                 fallbackImage={config.fallbackImage}
                 alt={config.title || config.description}
                 className="absolute inset-0 h-full w-full"
+                imageClassName="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
             />
-            <div className="absolute inset-0 z-10 bg-black/50"/>
-            <div className="relative z-20">
+
+            <div className="absolute inset-0 bg-black/20 transition-colors duration-300 group-hover:bg-black/30" />
+
+            <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/60 to-transparent p-4 pt-12 sm:p-5 sm:pt-14">
                 {config.title && (
-                    <h2 className="mb-2 text-sm font-black uppercase leading-tight min-[390px]:text-base sm:mb-4 sm:text-3xl">
+                    <h2 className="mb-1 line-clamp-1 text-base font-black uppercase leading-tight text-white sm:text-lg lg:text-xl">
                         {config.title}
                     </h2>
                 )}
+
                 {config.description && (
-                    <p className="mb-3 max-w-sm text-[10px] font-medium uppercase leading-snug text-white/85 sm:mb-6 sm:text-sm">
+                    <p className="line-clamp-2 max-w-[90%] text-[10px] font-bold uppercase leading-snug text-white/85 sm:text-xs">
                         {config.description}
                     </p>
                 )}
-                {config.ctaLabel && config.ctaUrl && (
-                    <Link
-                        to={config.ctaUrl}
-                        className={`inline-flex border border-white px-3 py-1.5 text-[9px] font-bold uppercase transition-colors sm:px-8 sm:py-2 sm:text-xs ${
-                            config.solidButton
-                                ? 'bg-white text-black hover:bg-transparent hover:text-white'
-                                : 'bg-transparent text-white hover:bg-white hover:text-black'
-                        }`}
-                    >
+
+                {config.ctaLabel && (
+                    <span className="mt-3 inline-flex items-center rounded-full bg-white/95 px-4 py-1.5 text-[10px] font-black uppercase text-black transition-all duration-300 group-hover:bg-primary group-hover:text-on-primary">
                         {config.ctaLabel}
-                    </Link>
+                    </span>
                 )}
             </div>
-        </div>
+        </Link>
     );
 }
 
@@ -463,14 +463,18 @@ export default function HomePage() {
                 ctaUrl={readConfig(configMap, 'home_section_03_cta_url', '/products')}
             />
 
-            <section className="mb-14 grid grid-cols-2 sm:mb-20">
-                <div className="flex h-full flex-col">
-                    <PromoTile banner={firstBanner(promoTiles[0].position)} config={promoTiles[0]}/>
-                    <PromoTile banner={firstBanner(promoTiles[1].position)} config={promoTiles[1]}/>
-                </div>
-                <div className="flex h-full flex-col">
-                    <PromoTile banner={firstBanner(promoTiles[2].position)} config={promoTiles[2]}/>
-                    <PromoTile banner={firstBanner(promoTiles[3].position)} config={promoTiles[3]}/>
+            <section className="mb-14 w-full px-3 sm:mb-20 sm:px-6">
+                <div
+                    data-testid="home-promo-grid"
+                    className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2"
+                >
+                    {[promoTiles[0], promoTiles[2], promoTiles[1], promoTiles[3]].map((tile) => (
+                        <PromoTile
+                            key={tile.position}
+                            banner={firstBanner(tile.position)}
+                            config={tile}
+                        />
+                    ))}
                 </div>
             </section>
 

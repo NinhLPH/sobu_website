@@ -103,6 +103,10 @@ describe('HomePage config and banner rendering', () => {
             banner(4, 'Tools Banner', 'home_section_02_banner'),
             banner(5, 'Hotwheels Banner', 'home_section_03_banner'),
             banner(6, 'Sale Banner', 'home_section_04_banner'),
+            banner(7, 'Promo Top Left', 'home_promo_grid_top_left'),
+            banner(8, 'Promo Bottom Left', 'home_promo_grid_bottom_left'),
+            banner(9, 'Promo Top Right', 'home_promo_grid_top_right'),
+            banner(10, 'Promo Bottom Right', 'home_promo_grid_bottom_right'),
         ];
 
         render(<HomePage/>);
@@ -113,6 +117,33 @@ describe('HomePage config and banner rendering', () => {
         expect(screen.getByText('Tools Banner')).toBeTruthy();
         expect(screen.getByText('Hotwheels Banner')).toBeTruthy();
         expect(screen.getByText('Sale Banner')).toBeTruthy();
+        expect(screen.getByText('Promo Top Left')).toBeTruthy();
+        expect(screen.getByText('Promo Bottom Left')).toBeTruthy();
+        expect(screen.getByText('Promo Top Right')).toBeTruthy();
+        expect(screen.getByText('Promo Bottom Right')).toBeTruthy();
+    });
+
+    it('keeps the promo section as a unified 2x2 image grid', () => {
+        render(<HomePage/>);
+
+        const promoGrid = screen.getByTestId('home-promo-grid');
+        const promoTiles = screen.getAllByTestId(/^promo-tile-/);
+
+        expect(promoGrid.className).toContain('grid-cols-2');
+        expect(promoGrid.className).toContain('grid-rows-2');
+        expect(promoGrid.className).toContain('gap-0');
+        expect(promoGrid.className).toContain('overflow-hidden');
+        expect(promoTiles).toHaveLength(4);
+        expect(promoTiles.map((tile) => tile.getAttribute('data-testid'))).toEqual([
+            'promo-tile-home_promo_grid_top_left',
+            'promo-tile-home_promo_grid_top_right',
+            'promo-tile-home_promo_grid_bottom_left',
+            'promo-tile-home_promo_grid_bottom_right',
+        ]);
+        promoTiles.forEach((tile) => {
+            expect(tile.className).not.toContain('rounded-xl');
+            expect(tile.className).toContain('overflow-hidden');
+        });
     });
 
     it('keeps fallback lists when JSON config is invalid', () => {
