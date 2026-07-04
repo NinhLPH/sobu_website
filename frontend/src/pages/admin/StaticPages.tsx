@@ -21,6 +21,7 @@ import {PageResponse} from '../../interface/api-response';
 import {StaticPageDTO, StaticPageMutationPayload} from '../../interface/static-page.model';
 import {StaticPageService} from '../../service/static-page.service';
 import {ToastService} from '../../service/toast.service';
+import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
 
 const PAGE_SIZE = 10;
 
@@ -118,11 +119,24 @@ export default function AdminStaticPages() {
         [form.htmlContent]
     );
 
+    const searchSuggestions = useMemo<SearchSuggestion[]>(() => pageData.content.map((staticPage) => ({
+        id: staticPage.id,
+        label: staticPage.title,
+        description: staticPage.slug,
+        searchValue: staticPage.title,
+    })), [pageData.content]);
+
     const openCreate = () => {
         setEditing(null);
         setForm(emptyForm());
         setError(null);
         setModalOpen(true);
+    };
+
+    const submitSearch = (value: string) => {
+        setSearchInput(value);
+        setPage(1);
+        setSearchTerm(value.trim());
     };
 
     const openEdit = (staticPage: StaticPageDTO) => {
@@ -207,18 +221,19 @@ export default function AdminStaticPages() {
             <form
                 onSubmit={(event) => {
                     event.preventDefault();
-                    setPage(1);
-                    setSearchTerm(searchInput.trim());
+                    submitSearch(searchInput);
                 }}
                 className="flex gap-3 rounded-2xl border border-outline-variant/30 bg-white p-4"
             >
                 <div className="relative flex-1">
                     <label htmlFor="static-page-search" className="sr-only">Tìm trang</label>
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
-                    <input
+                    <SearchSuggestInput
                         id="static-page-search"
                         value={searchInput}
-                        onChange={(event) => setSearchInput(event.target.value)}
+                        onChange={setSearchInput}
+                        onSubmit={submitSearch}
+                        suggestions={searchSuggestions}
                         placeholder="Tìm theo Slug hoặc Tiêu đề..."
                         className="h-11 w-full rounded-xl bg-surface-container py-2.5 pl-10 pr-4 text-xs font-semibold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                     />

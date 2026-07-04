@@ -326,9 +326,6 @@ export default function ProductList() {
                         <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm text-on-surface-variant font-bold">
                                 Hiển thị <span className="text-base font-black leading-none text-primary">{filteredProducts.length}</span> kết quả
-                                {searchQuery && (
-                                    <> cho từ khóa <span className="text-primary">"{searchQuery}"</span></>
-                                )}
                             </p>
                             {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedScales.length > 0 || searchQuery) && (
                                 <button onClick={clearFilters}

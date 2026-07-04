@@ -10,6 +10,7 @@ import {useAuthStore} from "../../store/useAuthStore";
 import {formatCurrency} from "../../utils/format";
 import {usePublicUiStore} from '../../store/usePublicUiStore';
 import {getPublicImageUrl} from '../../utils/file-url';
+import SearchSuggestInput, {SearchSuggestion} from './SearchSuggestInput';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -77,8 +78,11 @@ export default function Header() {
     const {
         categories,
         brands,
+        allProducts,
+        allProductsLoaded,
         categoriesLoaded,
         brandsLoaded,
+        fetchAllProducts,
         fetchCategories,
         fetchBrands
     } = useProductStore();
@@ -115,7 +119,10 @@ export default function Header() {
         if (!brandsLoaded) {
             fetchBrands();
         }
-    }, [categoriesLoaded, brandsLoaded, fetchCategories, fetchBrands]);
+        if (!allProductsLoaded && typeof fetchAllProducts === 'function') {
+            fetchAllProducts();
+        }
+    }, [allProductsLoaded, categoriesLoaded, brandsLoaded, fetchAllProducts, fetchCategories, fetchBrands]);
 
     const mainCategories = useMemo(() => {
         return categories?.filter(cat => {
@@ -146,6 +153,15 @@ export default function Header() {
         return [];
     }, [categories, activeParentId]);
 
+    const productSearchSuggestions = useMemo<SearchSuggestion[]>(() => {
+        return (allProducts || []).map((product) => ({
+            id: product.id,
+            label: product.name,
+            description: [product.code, product.categoryName, product.brandName].filter(Boolean).join(' • '),
+            searchValue: product.name,
+        }));
+    }, [allProducts]);
+
     useEffect(() => {
         if (mainCategories && mainCategories.length > 0 && activeParentId === null) {
             setActiveParentId(mainCategories[0].id);
@@ -157,13 +173,17 @@ export default function Header() {
         window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     }, [theme]);
 
-    const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (searchQuery.trim()) {
-            navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+    const submitSearch = (query: string) => {
+        if (query.trim()) {
+            navigate(`/products?search=${encodeURIComponent(query.trim())}`);
         } else {
             navigate('/products');
         }
+    };
+
+    const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        submitSearch(searchQuery);
     };
 
     const toggleTheme = () => {
@@ -298,11 +318,15 @@ export default function Header() {
 
                         <form onSubmit={handleSearchSubmit} className="relative min-w-[260px] flex-1 lg:max-w-[360px] xl:max-w-[480px] 2xl:max-w-[560px]">
                             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
-                            <input
+                            <SearchSuggestInput
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={setSearchQuery}
+                                onSubmit={submitSearch}
+                                suggestions={productSearchSuggestions}
                                 className="w-full rounded-full border border-outline-variant/20 bg-surface-container py-3 pl-10 pr-4 text-sm font-semibold text-on-surface outline-none transition-all placeholder:text-outline/70 focus:border-primary/30 focus:ring-2 focus:ring-primary/30"
-                                placeholder="Tìm kiếm mô hình..." type="search"/>
+                                placeholder="Tìm kiếm mô hình..."
+                                ariaLabel="Tìm kiếm mô hình"
+                            />
                         </form>
 
                         <Link to="/services" className="whitespace-nowrap transition-colors hover:text-primary">Dịch vụ</Link>
@@ -557,12 +581,14 @@ export default function Header() {
             <div className="mx-auto w-full max-w-[1504px] px-4 pb-3 sm:px-6 lg:hidden">
                 <form onSubmit={handleSearchSubmit} className="relative">
                     <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
-                    <input
+                    <SearchSuggestInput
                         value={searchQuery}
-                        onChange={(event) => setSearchQuery(event.target.value)}
+                        onChange={setSearchQuery}
+                        onSubmit={submitSearch}
+                        suggestions={productSearchSuggestions}
                         className="h-11 w-full rounded-full border border-outline-variant/20 bg-surface-container py-2.5 pl-10 pr-4 text-sm font-semibold text-on-surface outline-none transition-all placeholder:text-outline/70 focus:border-primary/30 focus:ring-2 focus:ring-primary/30"
                         placeholder="Tìm kiếm mô hình..."
-                        type="search"
+                        ariaLabel="Tìm kiếm mô hình"
                     />
                 </form>
             </div>
