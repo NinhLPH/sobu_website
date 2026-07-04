@@ -5994,6 +5994,7 @@ Create a product review as an authenticated customer.
 ```json
 {
   "productId": 1,
+  "orderId": 100,
   "rating": 5,
   "content": "San pham rat tot, chat lieu dep",
   "imageUrls": [
@@ -6007,6 +6008,7 @@ Create a product review as an authenticated customer.
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
 | productId | Long | Yes | Product ID |
+| orderId | Long | Yes | Delivered order ID used to verify purchase |
 | rating | Integer | Yes | Rating from 1 to 5 |
 | content | String | Yes | Review content |
 | imageUrls | Array<String> | No | Attached image URLs |
@@ -6025,10 +6027,11 @@ Create a product review as an authenticated customer.
   "data": {
     "id": 1,
     "productId": 1,
+    "orderId": 100,
     "rating": 5,
     "content": "San pham rat tot, chat lieu dep",
     "imageUrls": [],
-    "status": "PENDING",
+    "status": "PUBLISHED",
     "createdAt": "2026-07-03T10:00:00"
   }
 }
@@ -6041,7 +6044,8 @@ Uses the common error responses. Typical statuses: `400`, `401`, `500`.
 ### Business Rules
 
 * Reviews require a completed order for the product to verify purchase.
-* New reviews start in `PENDING` status and require admin approval.
+* New reviews are published immediately with `PUBLISHED` status.
+* Admin or staff users can temporarily hide a review by changing its status to `HIDDEN`.
 
 ### Notes
 
@@ -6143,7 +6147,7 @@ Uses the common error responses. Typical statuses: `400`, `401`, `500`.
 
 ### Description
 
-Get paginated public reviews for a product. Only approved/published reviews are returned.
+Get paginated public reviews for a product. Only published reviews are returned.
 
 ### Authorization
 
@@ -6217,7 +6221,7 @@ Typical statuses: `404`, `500`.
 
 ### Business Rules
 
-* Only reviews with `APPROVED` status are visible to the public.
+* Only reviews with `PUBLISHED` status are visible to the public.
 
 ### Notes
 
@@ -6261,7 +6265,7 @@ List all reviews for admin or staff users, optionally filtered by status.
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| status | String | No | Filter by review status (`PENDING`, `APPROVED`, `REJECTED`) |
+| status | String | No | Filter by review status (`PUBLISHED`, `HIDDEN`) |
 | page | Integer | No | Page number, default `0` |
 | size | Integer | No | Page size, default `20` |
 | sortBy | String | No | Sort field, default `createdAt` |
@@ -6270,7 +6274,7 @@ List all reviews for admin or staff users, optionally filtered by status.
 Example:
 
 ```http
-GET /api/admin/reviews?status=PENDING&page=0&size=20
+GET /api/admin/reviews?status=PUBLISHED&page=0&size=20
 ```
 
 ### Request Body
@@ -6366,9 +6370,10 @@ No request body.
   "data": {
     "id": 1,
     "productId": 1,
+    "orderId": 100,
     "rating": 5,
     "content": "Excellent product",
-    "status": "PENDING",
+    "status": "PUBLISHED",
     "imageUrls": [],
     "createdAt": "2026-07-03T10:00:00"
   }
@@ -6401,7 +6406,7 @@ Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
 
 ### Description
 
-Approve or reject a review as admin or staff.
+Show or temporarily hide a review as admin or staff.
 
 ### Authorization
 
@@ -6432,7 +6437,7 @@ Approve or reject a review as admin or staff.
 
 ```json
 {
-  "status": "APPROVED"
+  "status": "HIDDEN"
 }
 ```
 
@@ -6440,7 +6445,7 @@ Approve or reject a review as admin or staff.
 
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
-| status | String | Yes | `APPROVED` or `REJECTED` |
+| status | String | Yes | `PUBLISHED` or `HIDDEN` |
 
 ### Success Response
 
@@ -6454,7 +6459,7 @@ Approve or reject a review as admin or staff.
   "message": "Review status updated",
   "data": {
     "id": 1,
-    "status": "APPROVED"
+    "status": "HIDDEN"
   }
 }
 ```
@@ -6516,7 +6521,7 @@ Reply to a review as admin or staff.
 
 ```json
 {
-  "reply": "Cam on ban da danh gia san pham!"
+  "adminReply": "Cam on ban da danh gia san pham!"
 }
 ```
 
@@ -6524,7 +6529,7 @@ Reply to a review as admin or staff.
 
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
-| reply | String | Yes | Admin reply content |
+| adminReply | String | Yes | Admin reply content |
 
 ### Success Response
 

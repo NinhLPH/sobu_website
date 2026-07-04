@@ -1,6 +1,6 @@
 import { PageResponse } from './api-response';
 
-export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type ReviewStatus = 'PUBLISHED' | 'HIDDEN';
 export type ReviewSortDirection = 'ASC' | 'DESC';
 
 export interface ReviewResponseDto {
@@ -20,6 +20,7 @@ export interface ReviewResponseDto {
 
 export interface CreateReviewDto {
     productId: number;
+    orderId: number;
     rating: number;
     content: string;
     imageUrls: string[];

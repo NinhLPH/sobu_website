@@ -1,14 +1,14 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
-    CheckCircle2,
     ChevronLeft,
     ChevronRight,
+    Eye,
+    EyeOff,
     Loader2,
     MessageSquareReply,
     RefreshCw,
     Star,
-    Trash2,
-    XCircle
+    Trash2
 } from 'lucide-react';
 import { ReviewResponseDto, ReviewStatus } from '../../interface/review.model';
 import { ToastService } from '../../service/toast.service';
@@ -16,19 +16,16 @@ import { useAdminReviewStore } from '../../store/useAdminReviewStore';
 
 const REVIEW_STATUS_FILTERS: Array<{ value: ReviewStatus | 'ALL'; label: string }> = [
     { value: 'ALL', label: 'Tất cả' },
-    { value: 'PENDING', label: 'Chờ duyệt' },
-    { value: 'APPROVED', label: 'Đã duyệt' },
-    { value: 'REJECTED', label: 'Từ chối' }
+    { value: 'PUBLISHED', label: 'Đang hiển thị' },
+    { value: 'HIDDEN', label: 'Đã ẩn' }
 ];
 
 const getStatusText = (status?: ReviewStatus) => {
     switch (status) {
-        case 'PENDING':
-            return 'Chờ duyệt';
-        case 'APPROVED':
-            return 'Đã duyệt';
-        case 'REJECTED':
-            return 'Từ chối';
+        case 'PUBLISHED':
+            return 'Đang hiển thị';
+        case 'HIDDEN':
+            return 'Đã ẩn';
         default:
             return 'Chưa rõ';
     }
@@ -36,12 +33,10 @@ const getStatusText = (status?: ReviewStatus) => {
 
 const getStatusClassName = (status?: ReviewStatus) => {
     switch (status) {
-        case 'PENDING':
-            return 'bg-amber-100 text-amber-800';
-        case 'APPROVED':
+        case 'PUBLISHED':
             return 'bg-green-100 text-green-800';
-        case 'REJECTED':
-            return 'bg-red-100 text-red-800';
+        case 'HIDDEN':
+            return 'bg-slate-100 text-slate-700';
         default:
             return 'bg-gray-100 text-gray-800';
     }
@@ -113,11 +108,11 @@ export default function AdminReviews() {
 
     const handleStatusAction = async (
         reviewId: number,
-        status: Extract<ReviewStatus, 'APPROVED' | 'REJECTED'>
+        status: ReviewStatus
     ) => {
         try {
             await updateReviewStatus(reviewId, status);
-            ToastService.success(status === 'APPROVED' ? 'Đã duyệt đánh giá.' : 'Đã từ chối đánh giá.');
+            ToastService.success(status === 'PUBLISHED' ? 'Đã hiển thị đánh giá.' : 'Đã ẩn đánh giá.');
             refresh();
         } catch {
             // The store exposes the backend error above the table.
@@ -171,7 +166,7 @@ export default function AdminReviews() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-outline">
-                        Pre-moderation
+                        Review visibility
                     </p>
                     <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface">
                         Quản lý đánh giá
@@ -237,6 +232,10 @@ export default function AdminReviews() {
                                 </tr>
                             ) : reviews.map((review) => {
                                 const isActionLoading = actionReviewIds.includes(review.id);
+                                const nextStatus: ReviewStatus = review.status === 'PUBLISHED' ? 'HIDDEN' : 'PUBLISHED';
+                                const toggleLabel = nextStatus === 'HIDDEN'
+                                    ? `Ẩn đánh giá ${review.id}`
+                                    : `Hiển thị đánh giá ${review.id}`;
                                 return (
                                     <tr
                                         key={review.id}
@@ -280,21 +279,23 @@ export default function AdminReviews() {
                                             <div className="flex items-center justify-center gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() => void handleStatusAction(review.id, 'APPROVED')}
-                                                    disabled={isActionLoading || review.status === 'APPROVED'}
-                                                    className="rounded-lg bg-green-50 p-2 text-green-700 transition-colors hover:bg-green-100 disabled:opacity-40"
-                                                    aria-label={`Duyệt đánh giá ${review.id}`}
+                                                    onClick={() => void handleStatusAction(review.id, nextStatus)}
+                                                    disabled={isActionLoading}
+                                                    className={`rounded-lg p-2 transition-colors disabled:opacity-40 ${
+                                                        nextStatus === 'HIDDEN'
+                                                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                            : 'bg-green-50 text-green-700 hover:bg-green-100'
+                                                    }`}
+                                                    aria-label={toggleLabel}
+                                                    title={toggleLabel}
                                                 >
-                                                    {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleStatusAction(review.id, 'REJECTED')}
-                                                    disabled={isActionLoading || review.status === 'REJECTED'}
-                                                    className="rounded-lg bg-red-50 p-2 text-red-700 transition-colors hover:bg-red-100 disabled:opacity-40"
-                                                    aria-label={`Từ chối đánh giá ${review.id}`}
-                                                >
-                                                    <XCircle className="h-4 w-4" />
+                                                    {isActionLoading ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : nextStatus === 'HIDDEN' ? (
+                                                        <EyeOff className="h-4 w-4" />
+                                                    ) : (
+                                                        <Eye className="h-4 w-4" />
+                                                    )}
                                                 </button>
                                                 <button
                                                     type="button"

@@ -27,7 +27,6 @@ interface ProductReviewSectionProps {
 
 const MAX_REVIEW_FILES = 10;
 const MAX_REVIEW_FILE_SIZE = 5 * 1024 * 1024;
-const REVIEW_SUCCESS_MESSAGE = 'Đánh giá của bạn đã được gửi và đang chờ quản trị viên duyệt.';
 
 const getReviewImageSrc = (url: string) => {
     if (!url) return '';
@@ -220,7 +219,7 @@ export default function ProductReviewSection({ product }: ProductReviewSectionPr
         }
 
         try {
-            await submitReview(product.id, rating, content, files);
+            await submitReview(product.id, verifiedOrder.id, rating, content, files);
             setRating(5);
             setContent('');
             setFiles([]);
@@ -265,7 +264,7 @@ export default function ProductReviewSection({ product }: ProductReviewSectionPr
                         <div className="rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-lowest p-8 text-center">
                             <Star className="mx-auto mb-3 h-8 w-8 text-outline-variant" />
                             <p className="text-sm font-black text-on-surface">
-                                Chưa có đánh giá được duyệt
+                                Chưa có đánh giá hiển thị
                             </p>
                             <p className="mt-1 text-xs font-medium text-outline">
                                 Hãy là người đầu tiên chia sẻ trải nghiệm sau khi đơn hàng được giao.
@@ -409,7 +408,7 @@ export default function ProductReviewSection({ product }: ProductReviewSectionPr
                                     <div>
                                         <p className="text-sm font-black text-on-surface">Gửi đánh giá</p>
                                         <p className="mt-1 text-xs font-medium text-outline">
-                                            Đánh giá sẽ được hiển thị sau khi quản trị viên duyệt.
+                                            Đánh giá sẽ được đăng công khai ngay sau khi gửi.
                                         </p>
                                     </div>
                                     <div>
@@ -486,7 +485,7 @@ export default function ProductReviewSection({ product }: ProductReviewSectionPr
                                     )}
                                     {submitSuccessMessage && (
                                         <div className="rounded-xl bg-green-50 p-3 text-xs font-bold text-green-700">
-                                            {REVIEW_SUCCESS_MESSAGE}
+                                            {submitSuccessMessage}
                                         </div>
                                     )}
                                     <button

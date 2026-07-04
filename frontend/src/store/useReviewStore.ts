@@ -50,6 +50,7 @@ interface ReviewState {
     ) => Promise<ReviewEligibilityResult>;
     submitReview: (
         productId: string | number,
+        orderId: string | number,
         rating: number,
         content: string,
         files: File[]
@@ -58,7 +59,7 @@ interface ReviewState {
     clearSubmitState: () => void;
 }
 
-export const useReviewStore = create<ReviewState>((set) => ({
+export const useReviewStore = create<ReviewState>((set, get) => ({
     reviews: [],
     reviewsPage: defaultPage,
     isReviewsLoading: false,
@@ -152,10 +153,14 @@ export const useReviewStore = create<ReviewState>((set) => ({
         }
     },
 
-    submitReview: async (productId, rating, content, files) => {
+    submitReview: async (productId, orderId, rating, content, files) => {
         const numericProductId = Number(productId);
         if (!Number.isFinite(numericProductId)) {
             throw new Error('Mã sản phẩm không hợp lệ.');
+        }
+        const numericOrderId = Number(orderId);
+        if (!Number.isFinite(numericOrderId)) {
+            throw new Error('Mã đơn hàng không hợp lệ.');
         }
 
         set({
@@ -175,14 +180,16 @@ export const useReviewStore = create<ReviewState>((set) => ({
 
             const response = await ReviewService.createReview({
                 productId: numericProductId,
+                orderId: numericOrderId,
                 rating,
                 content: content.trim(),
                 imageUrls
             });
+            await get().fetchPublicReviews(numericProductId, 0);
 
             set({
                 isSubmittingReview: false,
-                submitSuccessMessage: 'Đánh giá của bạn đã được gửi và đang chờ quản trị viên duyệt.',
+                submitSuccessMessage: 'Đánh giá của bạn đã được đăng và hiển thị công khai.',
                 submitError: null
             });
             return response.data;

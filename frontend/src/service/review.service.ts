@@ -44,7 +44,7 @@ export const AdminReviewService = {
 
     updateStatus: (
         reviewId: string | number,
-        status: Extract<ReviewStatus, 'APPROVED' | 'REJECTED'>
+        status: ReviewStatus
     ): Promise<ApiResponseDTO<ReviewResponseDto>> => {
         return apiClient.put(`/api/admin/reviews/${reviewId}/status`, { status });
     },
@@ -53,7 +53,7 @@ export const AdminReviewService = {
         reviewId: string | number,
         reply: string
     ): Promise<ApiResponseDTO<ReviewResponseDto>> => {
-        return apiClient.put(`/api/admin/reviews/${reviewId}/reply`, { reply });
+        return apiClient.put(`/api/admin/reviews/${reviewId}/reply`, { adminReply: reply });
     },
 
     deleteReview: (

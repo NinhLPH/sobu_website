@@ -42,9 +42,10 @@ describe('ReviewService', () => {
         );
     });
 
-    it('creates reviews with a product-only payload and no orderId', () => {
+    it('creates reviews with the verified order id', () => {
         ReviewService.createReview({
             productId: 1001,
+            orderId: 42,
             rating: 5,
             content: 'Sản phẩm tốt',
             imageUrls: ['/api/public/files/reviews/a.jpg']
@@ -52,14 +53,11 @@ describe('ReviewService', () => {
 
         expect(mockApiPost).toHaveBeenCalledWith('/api/reviews', {
             productId: 1001,
+            orderId: 42,
             rating: 5,
             content: 'Sản phẩm tốt',
             imageUrls: ['/api/public/files/reviews/a.jpg']
         });
-        expect(mockApiPost).not.toHaveBeenCalledWith(
-            '/api/reviews',
-            expect.objectContaining({ orderId: expect.anything() })
-        );
     });
 });
 
@@ -69,28 +67,28 @@ describe('AdminReviewService', () => {
     });
 
     it('filters admin reviews by status', () => {
-        AdminReviewService.getReviews({ status: 'PENDING', page: 0, size: 20 });
+        AdminReviewService.getReviews({ status: 'HIDDEN', page: 0, size: 20 });
 
         expect(mockApiGet).toHaveBeenCalledWith('/api/admin/reviews', {
-            params: { status: 'PENDING', page: 0, size: 20 }
+            params: { status: 'HIDDEN', page: 0, size: 20 }
         });
     });
 
-    it('approves or rejects reviews with the documented payload', () => {
-        AdminReviewService.updateStatus(7, 'APPROVED');
+    it('shows or hides reviews with the documented payload', () => {
+        AdminReviewService.updateStatus(7, 'HIDDEN');
 
         expect(mockApiPut).toHaveBeenCalledWith(
             '/api/admin/reviews/7/status',
-            { status: 'APPROVED' }
+            { status: 'HIDDEN' }
         );
     });
 
-    it('sends reply instead of the legacy adminReply field', () => {
+    it('sends adminReply for the backend reply DTO', () => {
         AdminReviewService.reply(7, 'Cảm ơn bạn');
 
         expect(mockApiPut).toHaveBeenCalledWith(
             '/api/admin/reviews/7/reply',
-            { reply: 'Cảm ơn bạn' }
+            { adminReply: 'Cảm ơn bạn' }
         );
     });
 

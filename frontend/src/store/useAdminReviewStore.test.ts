@@ -29,7 +29,7 @@ describe('useAdminReviewStore', () => {
                         productId: 1001,
                         rating: 5,
                         content: 'Good',
-                        status: 'PENDING'
+                        status: 'PUBLISHED'
                     }
                 ],
                 pageNumber: 0,
@@ -39,10 +39,10 @@ describe('useAdminReviewStore', () => {
             }
         });
 
-        await useAdminReviewStore.getState().fetchReviews({ status: 'PENDING', page: 0, size: 20 });
+        await useAdminReviewStore.getState().fetchReviews({ status: 'PUBLISHED', page: 0, size: 20 });
 
         expect(mockedAdminReviewService.getReviews).toHaveBeenCalledWith(
-            expect.objectContaining({ status: 'PENDING', page: 0, size: 20 })
+            expect.objectContaining({ status: 'PUBLISHED', page: 0, size: 20 })
         );
         expect(useAdminReviewStore.getState().reviews).toHaveLength(1);
         expect(useAdminReviewStore.getState().isLoading).toBe(false);
@@ -56,7 +56,7 @@ describe('useAdminReviewStore', () => {
                     productId: 1001,
                     rating: 5,
                     content: 'Good',
-                    status: 'PENDING'
+                    status: 'PUBLISHED'
                 }
             ]
         });
@@ -68,14 +68,14 @@ describe('useAdminReviewStore', () => {
                 productId: 1001,
                 rating: 5,
                 content: 'Good',
-                status: 'APPROVED'
+                status: 'HIDDEN'
             }
         });
 
-        await useAdminReviewStore.getState().updateReviewStatus(1, 'APPROVED');
+        await useAdminReviewStore.getState().updateReviewStatus(1, 'HIDDEN');
 
-        expect(mockedAdminReviewService.updateStatus).toHaveBeenCalledWith(1, 'APPROVED');
-        expect(useAdminReviewStore.getState().reviews[0].status).toBe('APPROVED');
+        expect(mockedAdminReviewService.updateStatus).toHaveBeenCalledWith(1, 'HIDDEN');
+        expect(useAdminReviewStore.getState().reviews[0].status).toBe('HIDDEN');
         expect(useAdminReviewStore.getState().actionReviewIds).toEqual([]);
     });
 
@@ -87,7 +87,7 @@ describe('useAdminReviewStore', () => {
                     productId: 1002,
                     rating: 4,
                     content: 'Nice',
-                    status: 'APPROVED'
+                    status: 'PUBLISHED'
                 }
             ]
         });
@@ -99,7 +99,7 @@ describe('useAdminReviewStore', () => {
                 productId: 1002,
                 rating: 4,
                 content: 'Nice',
-                status: 'APPROVED',
+                status: 'PUBLISHED',
                 adminReply: 'Cảm ơn bạn'
             }
         });
@@ -118,7 +118,7 @@ describe('useAdminReviewStore', () => {
                     productId: 1003,
                     rating: 2,
                     content: 'Bad',
-                    status: 'REJECTED'
+                    status: 'HIDDEN'
                 }
             ]
         });

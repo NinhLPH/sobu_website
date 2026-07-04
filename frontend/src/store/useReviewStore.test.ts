@@ -89,11 +89,22 @@ describe('useReviewStore', () => {
         expect(result.canReview).toBe(true);
     });
 
-    it('submits a product-only review payload after file upload', async () => {
+    it('submits a published review with the verified order id after file upload', async () => {
         mockedReviewService.uploadReviewFile.mockResolvedValue({
             success: true,
             message: 'File uploaded',
             data: { url: '/api/public/files/reviews/a.jpg' }
+        });
+        mockedReviewService.getPublicProductReviews.mockResolvedValue({
+            content: [],
+            pageNumber: 0,
+            pageSize: 10,
+            totalElements: 0,
+            totalPages: 0,
+            first: true,
+            last: true,
+            hasNext: false,
+            hasPrevious: false
         });
         mockedReviewService.createReview.mockResolvedValue({
             success: true,
@@ -101,26 +112,29 @@ describe('useReviewStore', () => {
             data: {
                 id: 9,
                 productId: 1001,
+                orderId: 42,
                 rating: 5,
                 content: 'Sản phẩm tốt',
-                status: 'PENDING',
+                status: 'PUBLISHED',
                 imageUrls: ['/api/public/files/reviews/a.jpg']
             }
         });
 
         const file = new File(['image'], 'review.jpg', { type: 'image/jpeg' });
-        await useReviewStore.getState().submitReview(1001, 5, ' Sản phẩm tốt ', [file]);
+        await useReviewStore.getState().submitReview(1001, 42, 5, ' Sản phẩm tốt ', [file]);
 
         expect(mockedReviewService.uploadReviewFile).toHaveBeenCalledWith(file);
         expect(mockedReviewService.createReview).toHaveBeenCalledWith({
             productId: 1001,
+            orderId: 42,
             rating: 5,
             content: 'Sản phẩm tốt',
             imageUrls: ['/api/public/files/reviews/a.jpg']
         });
-        expect(mockedReviewService.createReview).not.toHaveBeenCalledWith(
-            expect.objectContaining({ orderId: expect.anything() })
+        expect(mockedReviewService.getPublicProductReviews).toHaveBeenCalledWith(
+            1001,
+            expect.objectContaining({ page: 0, size: 10 })
         );
-        expect(useReviewStore.getState().submitSuccessMessage).toMatch(/chờ quản trị viên duyệt/i);
+        expect(useReviewStore.getState().submitSuccessMessage).toMatch(/hiển thị công khai/i);
     });
 });

@@ -24,8 +24,6 @@ const defaultPage: Omit<PageResponse<ReviewResponseDto>, 'content'> = {
     hasPrevious: false
 };
 
-type ReviewActionStatus = Extract<ReviewStatus, 'APPROVED' | 'REJECTED'>;
-
 interface AdminReviewState {
     reviews: ReviewResponseDto[];
     reviewsPage: Omit<PageResponse<ReviewResponseDto>, 'content'>;
@@ -36,7 +34,7 @@ interface AdminReviewState {
 
     setActiveStatus: (status: ReviewStatus | 'ALL') => void;
     fetchReviews: (params?: AdminReviewQueryParams) => Promise<void>;
-    updateReviewStatus: (reviewId: number, status: ReviewActionStatus) => Promise<ReviewResponseDto>;
+    updateReviewStatus: (reviewId: number, status: ReviewStatus) => Promise<ReviewResponseDto>;
     replyToReview: (reviewId: number, reply: string) => Promise<ReviewResponseDto>;
     deleteReview: (reviewId: number) => Promise<void>;
     clearError: () => void;
