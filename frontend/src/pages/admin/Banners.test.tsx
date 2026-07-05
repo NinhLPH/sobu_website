@@ -57,6 +57,26 @@ describe('AdminBanners', () => {
         expect(screen.queryByRole('button', {name: /Vô hiệu hóa banner/i})).toBeNull();
     });
 
+    it('selects a banner suggestion and searches immediately', async () => {
+        mockedService.searchBanners.mockResolvedValue({
+            content: [banner], pageNumber: 1, pageSize: 10, totalElements: 1, totalPages: 1,
+            first: true, last: true, hasNext: false, hasPrevious: false,
+        });
+
+        render(<AdminBanners/>);
+        await screen.findByText('Hero seed');
+
+        fireEvent.change(screen.getByLabelText('Tìm banner'), {target: {value: 'hero'}});
+        fireEvent.mouseDown(screen.getByRole('option', {name: /Hero seed/i}));
+
+        await waitFor(() => expect(mockedService.searchBanners).toHaveBeenLastCalledWith('Hero seed', {
+            page: 1,
+            pageSize: 10,
+            sortBy: 'displayOrder',
+            sortDirection: 'ASC',
+        }));
+    });
+
     it('keeps banner position read-only while updating editable fields', async () => {
         mockedService.searchBanners.mockResolvedValue({
             content: [banner], pageNumber: 1, pageSize: 10, totalElements: 1, totalPages: 1,

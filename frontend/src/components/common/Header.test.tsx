@@ -50,8 +50,14 @@ describe('Header mobile navigation', () => {
         mockedProductStore.mockReturnValue({
             categories: [],
             brands: [],
+            allProducts: [
+                {id: 1, code: 'SD-SERUM', name: 'Sodu Serum', categoryName: 'Skincare', brandName: 'Sodu'},
+                {id: 2, code: 'GD-001', name: 'Gundam RX-78', categoryName: 'Mecha', brandName: 'Bandai'},
+            ],
+            allProductsLoaded: true,
             categoriesLoaded: true,
             brandsLoaded: true,
+            fetchAllProducts: jest.fn(),
             fetchCategories: jest.fn(),
             fetchBrands: jest.fn(),
         } as any);
@@ -112,6 +118,16 @@ describe('Header mobile navigation', () => {
         fireEvent.submit(mobileInput.closest('form') as HTMLFormElement);
 
         expect(mockNavigate).toHaveBeenCalledWith('/products?search=sodu%20serum');
+    });
+
+    it('selects a header suggestion and navigates to product search', () => {
+        render(<Header/>);
+
+        const desktopInput = screen.getAllByPlaceholderText('Tìm kiếm mô hình...')[0];
+        fireEvent.change(desktopInput, {target: {value: 'ser'}});
+        fireEvent.mouseDown(screen.getByRole('option', {name: /Sodu Serum/i}));
+
+        expect(mockNavigate).toHaveBeenCalledWith('/products?search=Sodu%20Serum');
     });
 
     it('opens a guest user dropdown with dark mode and login actions', () => {

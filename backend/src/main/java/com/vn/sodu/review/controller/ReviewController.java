@@ -3,6 +3,7 @@ package com.vn.sodu.review.controller;
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.review.ReviewService;
 import com.vn.sodu.review.dto.CreateReviewRequest;
+import com.vn.sodu.review.dto.ReviewEligibilityResponse;
 import com.vn.sodu.review.dto.ReviewResponseDto;
 import com.vn.sodu.storage.StorageService;
 import jakarta.validation.Valid;
@@ -33,6 +34,15 @@ public class ReviewController {
         ReviewResponseDto data = reviewService.createReview(request, email);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponseDTO.success(data, "Review created", HttpStatus.CREATED.value()));
+    }
+
+    @GetMapping("/products/{productId}/eligibility")
+    public ResponseEntity<ApiResponseDTO<ReviewEligibilityResponse>> getReviewEligibility(
+            @PathVariable Long productId,
+            Authentication authentication) {
+        String email = authentication == null ? null : authentication.getName();
+        ReviewEligibilityResponse data = reviewService.getReviewEligibility(productId, email);
+        return ResponseEntity.ok(ApiResponseDTO.success(data, "Review eligibility retrieved"));
     }
 
     @PostMapping(value = "/files/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

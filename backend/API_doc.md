@@ -45,6 +45,7 @@ These public catalog endpoints return raw objects or raw page responses instead 
 - `GET /api/public/products/search`
 - `POST /api/public/products/search`
 - `GET /api/public/products/{id}`
+- `GET /api/public/reviews`
 - `GET /api/public/categories`
 - `GET /api/public/brands`
 - `GET /api/public/files/**`
@@ -60,6 +61,7 @@ Some modules expose multiple base paths:
 - Public shipping quotes: `/api/public/shipping/quotes`
 - Admin Nhanh shipping: `/api/admin/shipping/...` only
 - Public static pages: `/api/public/pages/...` only
+- Public reviews: `/api/public/reviews` and `/api/public/products/{id}/reviews` only
 - Requests: `/api/requests/...`, `/api/request/...`, `/api/v1/requests/...`, `/api/v1/request/...`
 - Cart: `/api/cart/...` and `/api/v1/cart/...`
 - Orders: `/api/orders/...` and `/api/v1/orders/...`
@@ -747,7 +749,9 @@ No request body.
       "avatarImage": "/api/public/files/products/a.jpg",
       "brandName": "Sobu",
       "categoryName": "Ao",
-      "stockAvailable": 12
+      "stockAvailable": 12,
+      "averageRating": 4.5,
+      "reviewsCount": 8
     }
   ],
   "pageNumber": 0,
@@ -835,7 +839,9 @@ No request body.
     "avatarImage": "/api/public/files/products/a.jpg",
     "brandName": "Sobu",
     "categoryName": "Ao",
-    "stockAvailable": 12
+    "stockAvailable": 12,
+    "averageRating": 4.5,
+    "reviewsCount": 8
   }
 ]
 ```
@@ -928,6 +934,8 @@ No request body.
   "categoryName": "Ao",
   "stockAvailable": 10,
   "stockRemain": 10,
+  "averageRating": 4.5,
+  "reviewsCount": 8,
   "units": [
     {
       "id": 1,
@@ -6229,6 +6237,7 @@ Create a product review as an authenticated customer.
 ```json
 {
   "productId": 1,
+  "orderId": 100,
   "rating": 5,
   "content": "San pham rat tot, chat lieu dep",
   "imageUrls": [
@@ -6242,6 +6251,7 @@ Create a product review as an authenticated customer.
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
 | productId | Long | Yes | Product ID |
+| orderId | Long | Yes | Delivered order ID used to verify purchase |
 | rating | Integer | Yes | Rating from 1 to 5 |
 | content | String | Yes | Review content |
 | imageUrls | Array<String> | No | Attached image URLs |
@@ -6260,10 +6270,11 @@ Create a product review as an authenticated customer.
   "data": {
     "id": 1,
     "productId": 1,
+    "orderId": 100,
     "rating": 5,
     "content": "San pham rat tot, chat lieu dep",
     "imageUrls": [],
-    "status": "PENDING",
+    "status": "PUBLISHED",
     "createdAt": "2026-07-03T10:00:00"
   }
 }
@@ -6275,12 +6286,114 @@ Uses the common error responses. Typical statuses: `400`, `401`, `500`.
 
 ### Business Rules
 
-* Reviews require a completed order for the product to verify purchase.
-* New reviews start in `PENDING` status and require admin approval.
+* Reviews require a delivered order for the product to verify purchase.
+* The frontend should call `GET /api/reviews/products/{productId}/eligibility` first and use the returned `orderId` when `canReview` is `true`.
+* New reviews are published immediately with `PUBLISHED` status.
+* Admin or staff users can temporarily hide a review by changing its status to `HIDDEN`.
 
 ### Notes
 
 * Returns `ApiResponseDTO<ReviewResponseDto>`.
+
+## Endpoint
+
+**Get Review Eligibility**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/reviews/products/{productId}/eligibility`
+
+### Description
+
+Check whether the authenticated customer can review a product. This endpoint replaces the old UI flow where users manually entered an order code before reviewing.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+| Content-Type | String | No | Optional for GET requests |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| productId | Long | Yes | Product ID |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+Example:
+
+```http
+GET /api/reviews/products/1/eligibility
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "Review eligibility retrieved",
+  "data": {
+    "canReview": true,
+    "reason": "Đơn hàng đã giao hợp lệ. Bạn có thể gửi đánh giá cho sản phẩm này.",
+    "orderId": 100,
+    "alreadyReviewed": false,
+    "deliveredOrderFound": true
+  },
+  "timestamp": "2026-07-04T10:00:00"
+}
+```
+
+### Response Data Fields
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| canReview | Boolean | `true` when the user can submit a review now |
+| reason | String | Human-readable reason for the current state |
+| orderId | Long | Delivered order ID to send to `POST /api/reviews`; present only when eligible |
+| alreadyReviewed | Boolean | `true` when this account already reviewed the product |
+| deliveredOrderFound | Boolean | `true` when a delivered matching order was found |
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
+
+### Business Rules
+
+* The current account must exist and be authenticated.
+* The product must exist and have `externalId`.
+* The current user must have a `DELIVERED` order whose item `nhanhProductId` matches the product external id.
+* A user can review a product only once.
+* If no delivered matching order is found, the frontend should keep the form locked with `Hãy mua hàng rồi mới đăng review`.
+
+### Notes
+
+* Returns `ApiResponseDTO<ReviewEligibilityResponse>`.
+* This endpoint decides whether the review form should open; `POST /api/reviews` still validates the same rules before saving.
 
 ## Endpoint
 
@@ -6378,7 +6491,7 @@ Uses the common error responses. Typical statuses: `400`, `401`, `500`.
 
 ### Description
 
-Get paginated public reviews for a product. Only approved/published reviews are returned.
+Get paginated public reviews for a product. Only published reviews are returned.
 
 ### Authorization
 
@@ -6452,10 +6565,87 @@ Typical statuses: `404`, `500`.
 
 ### Business Rules
 
-* Only reviews with `APPROVED` status are visible to the public.
+* Only reviews with `PUBLISHED` status are visible to the public.
 
 ### Notes
 
+* This endpoint returns a raw page response, not `ApiResponseDTO`.
+
+## Endpoint
+
+**List Latest Public Reviews**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/public/reviews`
+
+### Description
+
+Get the latest published reviews for public surfaces such as HomePage customer reviews.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| page | Integer | No | Page number, default `0` |
+| size | Integer | No | Page size, default `6`, maximum `6` |
+| sortBy | String | No | Sort field, default `createdAt` |
+| sortDirection | String | No | `ASC` or `DESC`, default `DESC` |
+
+Example:
+
+```http
+GET /api/public/reviews?page=0&size=6&sortBy=createdAt&sortDirection=DESC
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "productId": 1,
+      "rating": 5,
+      "content": "San pham rat tot",
+      "imageUrls": [],
+      "customerName": "Nguyen Van A",
+      "createdAt": "2026-07-03T10:00:00"
+    }
+  ],
+  "pageNumber": 0,
+  "pageSize": 6,
+  "totalElements": 1,
+  "totalPages": 1,
+  "first": true,
+  "last": true,
+  "hasNext": false,
+  "hasPrevious": false
+}
+```
+
+### Business Rules
+
+* Only reviews with `PUBLISHED` status are visible to the public.
+* The public page size is capped at `6` for HomePage display.
 * This endpoint returns a raw page response, not `ApiResponseDTO`.
 
 ## Endpoint
@@ -6496,7 +6686,7 @@ List all reviews for admin or staff users, optionally filtered by status.
 
 | Parameter | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| status | String | No | Filter by review status (`PENDING`, `APPROVED`, `REJECTED`) |
+| status | String | No | Filter by review status (`PUBLISHED`, `HIDDEN`) |
 | page | Integer | No | Page number, default `0` |
 | size | Integer | No | Page size, default `20` |
 | sortBy | String | No | Sort field, default `createdAt` |
@@ -6505,7 +6695,7 @@ List all reviews for admin or staff users, optionally filtered by status.
 Example:
 
 ```http
-GET /api/admin/reviews?status=PENDING&page=0&size=20
+GET /api/admin/reviews?status=PUBLISHED&page=0&size=20
 ```
 
 ### Request Body
@@ -6601,9 +6791,10 @@ No request body.
   "data": {
     "id": 1,
     "productId": 1,
+    "orderId": 100,
     "rating": 5,
     "content": "Excellent product",
-    "status": "PENDING",
+    "status": "PUBLISHED",
     "imageUrls": [],
     "createdAt": "2026-07-03T10:00:00"
   }
@@ -6636,7 +6827,7 @@ Uses the common error responses. Typical statuses: `401`, `403`, `404`, `500`.
 
 ### Description
 
-Approve or reject a review as admin or staff.
+Show or temporarily hide a review as admin or staff.
 
 ### Authorization
 
@@ -6667,7 +6858,7 @@ Approve or reject a review as admin or staff.
 
 ```json
 {
-  "status": "APPROVED"
+  "status": "HIDDEN"
 }
 ```
 
@@ -6675,7 +6866,7 @@ Approve or reject a review as admin or staff.
 
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
-| status | String | Yes | `APPROVED` or `REJECTED` |
+| status | String | Yes | `PUBLISHED` or `HIDDEN` |
 
 ### Success Response
 
@@ -6689,7 +6880,7 @@ Approve or reject a review as admin or staff.
   "message": "Review status updated",
   "data": {
     "id": 1,
-    "status": "APPROVED"
+    "status": "HIDDEN"
   }
 }
 ```
@@ -6751,7 +6942,7 @@ Reply to a review as admin or staff.
 
 ```json
 {
-  "reply": "Cam on ban da danh gia san pham!"
+  "adminReply": "Cam on ban da danh gia san pham!"
 }
 ```
 
@@ -6759,7 +6950,7 @@ Reply to a review as admin or staff.
 
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
-| reply | String | Yes | Admin reply content |
+| adminReply | String | Yes | Admin reply content |
 
 ### Success Response
 

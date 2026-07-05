@@ -69,10 +69,9 @@ public class SupportService {
                 .map(this::toMessageResponse);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<MessageResponseDTO> getMyMessages(Account account, Pageable pageable) {
-        SupportConversation conversation = conversationRepo.findByAccountId(account.getId())
-                .orElseThrow(() -> new NotFoundException("Support conversation not found"));
+        SupportConversation conversation = getOrCreateConversation(account);
 
         return messageRepo.findByConversationIdOrderByCreatedAtDesc(conversation.getId(), pageable)
                 .map(this::toMessageResponse);

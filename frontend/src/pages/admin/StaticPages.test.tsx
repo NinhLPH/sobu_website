@@ -66,10 +66,26 @@ describe('AdminStaticPages', () => {
         expect(await screen.findByText('About')).toBeTruthy();
         expect(screen.getByText('privacy-policy')).toBeTruthy();
 
-        fireEvent.change(screen.getByLabelText(/Tim trang tinh/i), {target: {value: 'privacy'}});
-        fireEvent.click(screen.getByRole('button', {name: /^Tim$/i}));
+        fireEvent.change(screen.getByPlaceholderText('Tìm theo Slug hoặc Tiêu đề...'), {target: {value: 'privacy'}});
+        fireEvent.click(screen.getByRole('button', {name: /^Tìm$|^Tim$/i}));
 
         await waitFor(() => expect(mockedService.searchPages).toHaveBeenLastCalledWith('privacy', {
+            page: 1,
+            pageSize: 10,
+            sortBy: 'updatedAt',
+            sortDirection: 'DESC',
+        }));
+    });
+
+    it('selects a static page suggestion and searches immediately', async () => {
+        render(<AdminStaticPages/>);
+
+        expect(await screen.findByText('Privacy Policy')).toBeTruthy();
+
+        fireEvent.change(screen.getByPlaceholderText('Tìm theo Slug hoặc Tiêu đề...'), {target: {value: 'privacy'}});
+        fireEvent.mouseDown(screen.getByRole('option', {name: /Privacy Policy/i}));
+
+        await waitFor(() => expect(mockedService.searchPages).toHaveBeenLastCalledWith('Privacy Policy', {
             page: 1,
             pageSize: 10,
             sortBy: 'updatedAt',
@@ -80,11 +96,11 @@ describe('AdminStaticPages', () => {
     it('creates a page with editor html', async () => {
         render(<AdminStaticPages/>);
 
-        fireEvent.click(await screen.findByRole('button', {name: /Them trang/i}));
-        fireEvent.change(screen.getByLabelText(/Tieu de/i), {target: {value: 'Terms'}});
+        fireEvent.click(await screen.findByRole('button', {name: /Thêm trang/i}));
+        fireEvent.change(screen.getByLabelText(/Tiêu đề/i), {target: {value: 'Terms'}});
         fireEvent.change(screen.getByLabelText(/Slug/i), {target: {value: 'terms'}});
         fireEvent.change(screen.getByLabelText(/Noi dung HTML/i), {target: {value: '<h1>Terms</h1>'}});
-        fireEvent.click(screen.getByRole('button', {name: /Luu trang/i}));
+        fireEvent.click(screen.getByRole('button', {name: /Lưu trang/i}));
 
         await waitFor(() => expect(mockedService.createPage).toHaveBeenCalledWith({
             slug: 'terms',
@@ -97,10 +113,10 @@ describe('AdminStaticPages', () => {
     it('updates an existing page and toggles publish state', async () => {
         render(<AdminStaticPages/>);
 
-        fireEvent.click(await screen.findByLabelText(/Sua trang About/i));
-        fireEvent.click(screen.getByLabelText(/Publish tren Storefront/i));
+        fireEvent.click(await screen.findByLabelText(/Sửa trang About/i));
+        fireEvent.click(screen.getByLabelText(/Publish/i));
         fireEvent.change(screen.getByLabelText(/Noi dung HTML/i), {target: {value: '<p>Updated</p>'}});
-        fireEvent.click(screen.getByRole('button', {name: /Luu trang/i}));
+        fireEvent.click(screen.getByRole('button', {name: /Lưu trang/i}));
 
         await waitFor(() => expect(mockedService.updatePage).toHaveBeenCalledWith(1, {
             slug: 'about',
@@ -113,7 +129,7 @@ describe('AdminStaticPages', () => {
     it('deletes a page after confirmation', async () => {
         render(<AdminStaticPages/>);
 
-        fireEvent.click(await screen.findByLabelText(/Xoa trang About/i));
+        fireEvent.click(await screen.findByLabelText(/Xóa trang About/i));
 
         await waitFor(() => expect(mockedService.deletePage).toHaveBeenCalledWith(1));
     });

@@ -11,6 +11,7 @@ import com.vn.sodu.product.Product;
 import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.review.dto.CreateReviewRequest;
 import com.vn.sodu.review.dto.ReplyReviewRequest;
+import com.vn.sodu.review.dto.ReviewEligibilityResponse;
 import com.vn.sodu.review.dto.ReviewResponseDto;
 import com.vn.sodu.review.dto.UpdateReviewStatusRequest;
 import com.vn.sodu.user.Account;
@@ -211,6 +212,88 @@ class ReviewServiceTest {
         assertThatThrownBy(() -> reviewService.createReview(validRequest, "customer@example.com"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("already reviewed");
+    }
+
+    @Test
+    void reviewEligibilityRejectsMissingAuthentication() {
+        assertThatThrownBy(() -> reviewService.getReviewEligibility(100L, null))
+                .isInstanceOf(ForbiddenOperationException.class)
+                .hasMessageContaining("Authentication is required");
+    }
+
+    @Test
+    void reviewEligibilityRejectsMissingAccount() {
+        when(accountRepo.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reviewService.getReviewEligibility(100L, "unknown@example.com"))
+                .isInstanceOf(ForbiddenOperationException.class)
+                .hasMessageContaining("Account not found");
+    }
+
+    @Test
+    void reviewEligibilityRejectsMissingProduct() {
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(productRepo.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reviewService.getReviewEligibility(999L, "customer@example.com"))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("Product not found");
+    }
+
+    @Test
+    void reviewEligibilityRejectsProductWithoutExternalId() {
+        product.setExternalId(null);
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(productRepo.findById(100L)).thenReturn(Optional.of(product));
+        when(reviewRepository.existsByAccountIdAndProductId(1L, 100L)).thenReturn(false);
+
+        ReviewEligibilityResponse result = reviewService.getReviewEligibility(100L, "customer@example.com");
+
+        assertThat(result.isCanReview()).isFalse();
+        assertThat(result.isAlreadyReviewed()).isFalse();
+        assertThat(result.isDeliveredOrderFound()).isFalse();
+        assertThat(result.getReason()).contains("mã đồng bộ");
+    }
+
+    @Test
+    void reviewEligibilityReturnsAlreadyReviewed() {
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(productRepo.findById(100L)).thenReturn(Optional.of(product));
+        when(reviewRepository.existsByAccountIdAndProductId(1L, 100L)).thenReturn(true);
+
+        ReviewEligibilityResponse result = reviewService.getReviewEligibility(100L, "customer@example.com");
+
+        assertThat(result.isCanReview()).isFalse();
+        assertThat(result.isAlreadyReviewed()).isTrue();
+        assertThat(result.getReason()).contains("đã đánh giá");
+    }
+
+    @Test
+    void reviewEligibilityRejectsWhenNoDeliveredMatchingOrderExists() {
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(productRepo.findById(100L)).thenReturn(Optional.of(product));
+        when(reviewRepository.existsByAccountIdAndProductId(1L, 100L)).thenReturn(false);
+        when(orderRepository.findDeliveredCustomerOrdersForReview("customer@example.com")).thenReturn(List.of());
+
+        ReviewEligibilityResponse result = reviewService.getReviewEligibility(100L, "customer@example.com");
+
+        assertThat(result.isCanReview()).isFalse();
+        assertThat(result.isDeliveredOrderFound()).isFalse();
+        assertThat(result.getReason()).contains("mua hàng");
+    }
+
+    @Test
+    void reviewEligibilityAllowsDeliveredOrderWithMatchingProduct() {
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(productRepo.findById(100L)).thenReturn(Optional.of(product));
+        when(reviewRepository.existsByAccountIdAndProductId(1L, 100L)).thenReturn(false);
+        when(orderRepository.findDeliveredCustomerOrdersForReview("customer@example.com")).thenReturn(List.of(order));
+
+        ReviewEligibilityResponse result = reviewService.getReviewEligibility(100L, "customer@example.com");
+
+        assertThat(result.isCanReview()).isTrue();
+        assertThat(result.isDeliveredOrderFound()).isTrue();
+        assertThat(result.getOrderId()).isEqualTo(200L);
     }
 
     @Test

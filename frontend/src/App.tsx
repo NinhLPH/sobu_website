@@ -37,6 +37,7 @@ import AdminBanners from './pages/admin/Banners';
 import ScrollToTop from './components/common/ScrollToTop';
 import AdminConfigs from './pages/admin/Configs';
 import AdminStaticPages from './pages/admin/StaticPages';
+import AdminReviews from './pages/admin/Reviews';
 
 export default function App() {
     const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
@@ -95,6 +96,7 @@ export default function App() {
                             <Route path="orders/:id" element={<AdminOrderDetail/>}/>
                             <Route path="requests" element={<AdminRequests/>}/>
                             <Route path="requests/:id" element={<AdminRequestDetail/>}/>
+                            <Route path="reviews" element={<AdminReviews/>}/>
                             <Route path="banners" element={<AdminBanners/>}/>
                             <Route path="configs" element={<AdminConfigs/>}/>
                             <Route path="static-pages" element={<AdminStaticPages/>}/>

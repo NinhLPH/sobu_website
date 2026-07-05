@@ -1,10 +1,11 @@
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useMemo} from 'react';
 import {Plus, Edit, Trash2, Search, X} from 'lucide-react';
 
 import {ProductModel, mapListItemToProductModel} from "../../interface/product.model";
 import {CategoryModel, mapCategoryDtoToModel} from "../../interface/category.model";
 import {useProductStore} from '../../store/useProductStore';
 import {formatCurrency} from "../../utils/format";
+import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
 
 export default function AdminProducts() {
     const { products: dbProducts, categories: dbCategories, fetchProducts, fetchCategories } = useProductStore();
@@ -44,6 +45,13 @@ export default function AdminProducts() {
     flatten(localCategories);
 
     const filteredProducts = localProducts.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const searchSuggestions = useMemo<SearchSuggestion[]>(() => localProducts.map((product) => ({
+        id: product.id,
+        label: product.name,
+        description: [product.id, product.category, product.brand].filter(Boolean).join(' • '),
+        searchValue: product.name,
+    })), [localProducts]);
 
     const handleOpenModal = (product?: ProductModel) => {
         if (product) {
@@ -103,14 +111,16 @@ export default function AdminProducts() {
                 </button>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-outline-variant/30 flex items-center gap-3">
+            <div className="relative flex items-center gap-3 rounded-xl border border-outline-variant/30 bg-white p-4">
                 <Search className="text-outline w-5 h-5"/>
-                <input
-                    type="text"
+                <SearchSuggestInput
                     placeholder="Tìm kiếm sản phẩm..."
                     className="bg-transparent border-none outline-none w-full text-sm"
                     value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
+                    onChange={setSearchTerm}
+                    onSubmit={setSearchTerm}
+                    suggestions={searchSuggestions}
+                    ariaLabel="Tìm kiếm sản phẩm quản trị"
                 />
             </div>
 

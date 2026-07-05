@@ -4,6 +4,7 @@ import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.review.ReviewService;
 import com.vn.sodu.review.ReviewStatus;
 import com.vn.sodu.review.dto.CreateReviewRequest;
+import com.vn.sodu.review.dto.ReviewEligibilityResponse;
 import com.vn.sodu.review.dto.ReviewResponseDto;
 import com.vn.sodu.storage.StorageService;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,29 @@ class ReviewControllerTest {
         assertThat(response.getBody().getData().getId()).isEqualTo(1L);
         assertThat(response.getBody().getMessage()).isEqualTo("Review created");
         verify(reviewService).createReview(request, "customer@example.com");
+    }
+
+    @Test
+    void getReviewEligibilityReturnsWrappedResponse() {
+        Authentication auth = new UsernamePasswordAuthenticationToken("customer@example.com", "n/a");
+        ReviewEligibilityResponse dto = ReviewEligibilityResponse.builder()
+                .canReview(true)
+                .reason("Eligible")
+                .orderId(42L)
+                .alreadyReviewed(false)
+                .deliveredOrderFound(true)
+                .build();
+        when(reviewService.getReviewEligibility(100L, "customer@example.com")).thenReturn(dto);
+
+        ReviewController controller = new ReviewController(reviewService, storageService);
+        ResponseEntity<ApiResponseDTO<ReviewEligibilityResponse>> response =
+                controller.getReviewEligibility(100L, auth);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData().isCanReview()).isTrue();
+        assertThat(response.getBody().getData().getOrderId()).isEqualTo(42L);
+        verify(reviewService).getReviewEligibility(100L, "customer@example.com");
     }
 
     @Test

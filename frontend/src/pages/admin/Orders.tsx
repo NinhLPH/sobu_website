@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAdminStore } from '../../store/useAdminStore';
 import { formatCurrency } from '../../utils/format';
+import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
 
 const getStatusColor = (status?: string) => {
     switch (status) {
@@ -136,6 +137,20 @@ export default function AdminOrders() {
         });
     }, [workflowOrders, searchTerm, statusFilter, syncFilter]);
 
+    const searchSuggestions = useMemo<SearchSuggestion[]>(() => workflowOrders.map((order) => {
+        const primaryCode = order.orderCode || String(order.id);
+        return {
+            id: order.id,
+            label: `#${primaryCode}`,
+            description: [
+                order.customerName,
+                order.customerMobile,
+                order.nhanhOrderCode || order.nhanhOrderId,
+            ].filter(Boolean).join(' • '),
+            searchValue: primaryCode,
+        };
+    }), [workflowOrders]);
+
     const refresh = () => {
         fetchOrders({ page, size: 10, sortBy, sortDirection });
     };
@@ -172,13 +187,15 @@ export default function AdminOrders() {
             )}
 
             <div className="space-y-3 rounded-2xl border border-outline-variant/30 bg-white p-4 shadow-sm">
-                <div className="flex items-center gap-3 rounded-xl bg-surface-container px-4 py-2.5">
+                <div className="relative flex items-center gap-3 rounded-xl bg-surface-container px-4 py-2.5">
                     <Search className="h-4 w-4 text-outline" />
-                    <input
-                        type="text"
+                    <SearchSuggestInput
                         value={searchTerm}
-                        onChange={(event) => setSearchTerm(event.target.value)}
+                        onChange={setSearchTerm}
+                        onSubmit={setSearchTerm}
+                        suggestions={searchSuggestions}
                         placeholder="Tìm mã đơn, khách hàng, điện thoại hoặc mã Nhanh.vn..."
+                        ariaLabel="Tìm kiếm đơn hàng quản trị"
                         className="w-full border-none bg-transparent text-xs font-semibold outline-none"
                     />
                 </div>

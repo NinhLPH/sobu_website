@@ -5,6 +5,7 @@ import { useRequestStore } from '../../store/useRequestStore';
 import { RequestStatusBadge } from '../../components/request/RequestWorkflow';
 import { REQUEST_STATUS_VIEWS } from '../../utils/request-workflow';
 import { formatCurrency } from '../../utils/format';
+import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
 
 const typeLabels: Record<string, string> = {
     NORMAL: 'Thông thường',
@@ -45,6 +46,17 @@ export default function AdminRequests() {
         });
     }, [adminRequests, search, status, type]);
 
+    const searchSuggestions = useMemo<SearchSuggestion[]>(() => adminRequests.map((request) => {
+        const primaryCode = request.requestCode || String(request.id);
+        const itemNames = request.items?.map((item) => item.name).filter(Boolean).join(', ');
+        return {
+            id: request.id,
+            label: `#${primaryCode}`,
+            description: [request.customerPhone, itemNames].filter(Boolean).join(' • '),
+            searchValue: primaryCode,
+        };
+    }), [adminRequests]);
+
     return (
         <main className="space-y-6 pb-10 pt-6">
             <header className="flex flex-col justify-between gap-3 lg:flex-row lg:items-end">
@@ -59,16 +71,18 @@ export default function AdminRequests() {
 
             <section className="rounded-2xl border border-outline-variant/30 bg-white p-4 shadow-sm">
                 <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_220px_200px]">
-                    <label className="flex items-center gap-2 rounded-xl bg-surface-container px-4 py-2.5">
+                    <div className="relative flex items-center gap-2 rounded-xl bg-surface-container px-4 py-2.5">
                         <Search className="h-4 w-4 text-outline" />
-                        <input
+                        <SearchSuggestInput
                             value={search}
-                            onChange={(event) => setSearch(event.target.value)}
+                            onChange={setSearch}
+                            onSubmit={setSearch}
+                            suggestions={searchSuggestions}
                             className="w-full border-0 bg-transparent text-xs font-semibold outline-none"
                             placeholder="Mã yêu cầu, SĐT hoặc sản phẩm..."
-                            aria-label="Tìm trong trang hiện tại"
+                            ariaLabel="Tìm trong trang hiện tại"
                         />
-                    </label>
+                    </div>
                     <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border-0 bg-surface-container px-4 py-2.5 text-xs font-bold">
                         <option value="ALL">Tất cả trạng thái</option>
                         {Object.entries(REQUEST_STATUS_VIEWS).map(([value, view]) => (

@@ -25,5 +25,6 @@ public class ProductListItemDTO {
     private String brandName;
     private String categoryName;
     private Double stockAvailable;
+    private Double averageRating;
+    private Long reviewsCount;
 }
-

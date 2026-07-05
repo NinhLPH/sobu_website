@@ -9,6 +9,8 @@ import { ToastService } from '../service/toast.service';
 import { formatCurrency } from '../utils/format';
 import { PaymentMethod } from '../enum/union-types';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import { ShippingService } from '../service/shipping.service';
+import { ShippingQuoteDto } from '../interface/shipping.model';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -50,6 +52,18 @@ const initialCheckoutForm: CheckoutForm = {
     customerWardId: null,
     description: ''
 };
+
+const shippingQuoteKey = (quote: Pick<ShippingQuoteDto, 'carrierId' | 'carrierServiceId'>) =>
+    `${quote.carrierId}-${quote.carrierServiceId}`;
+
+const shippingQuoteFee = (quote: ShippingQuoteDto | null | undefined) =>
+    Number(quote?.customerShipFee ?? quote?.shipFee ?? 0);
+
+const getErrorMessage = (error: any, fallback: string) =>
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    fallback;
 
 function QuantityController({
     quantity,
@@ -145,6 +159,10 @@ export default function Cart() {
     const [form, setForm] = useState<CheckoutForm>(initialCheckoutForm);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ONLINE');
     const [validationError, setValidationError] = useState<string | null>(null);
+    const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteDto[]>([]);
+    const [selectedShippingQuoteKey, setSelectedShippingQuoteKey] = useState('');
+    const [isLoadingShippingQuotes, setIsLoadingShippingQuotes] = useState(false);
+    const [shippingQuoteError, setShippingQuoteError] = useState<string | null>(null);
 
     useEffect(() => {
         void fetchLocations(true);
@@ -182,6 +200,88 @@ export default function Cart() {
         (district) => district.districtId === form.customerDistrictId
     );
     const wards = selectedDistrict?.wards ?? [];
+    const hasSelectedShippingLocation =
+        form.customerCityId !== null &&
+        form.customerDistrictId !== null &&
+        form.customerWardId !== null &&
+        Boolean(form.customerCityName) &&
+        Boolean(form.customerDistrictName) &&
+        Boolean(form.customerWardName);
+    const selectedShippingQuote = shippingQuotes.find(
+        (quote) => shippingQuoteKey(quote) === selectedShippingQuoteKey
+    ) ?? null;
+    const selectedShippingFee = shippingQuoteFee(selectedShippingQuote);
+    const orderTotal = subtotal + selectedShippingFee;
+    const isCheckoutDisabled =
+        isSubmitting ||
+        isCreatingPayment ||
+        isLoadingShippingQuotes ||
+        !locationsLoaded ||
+        items.length === 0 ||
+        !selectedShippingQuote;
+
+    useEffect(() => {
+        setShippingQuotes([]);
+        setSelectedShippingQuoteKey('');
+        setShippingQuoteError(null);
+
+        if (!hasSelectedShippingLocation || subtotal <= 0) {
+            setIsLoadingShippingQuotes(false);
+            return;
+        }
+
+        let isCancelled = false;
+        setIsLoadingShippingQuotes(true);
+
+        void ShippingService.getQuotes({
+            customerAddress: form.customerAddress.trim() || undefined,
+            customerCityId: form.customerCityId as number,
+            customerDistrictId: form.customerDistrictId as number,
+            customerWardId: form.customerWardId as number,
+            cartSubtotal: subtotal,
+            codAmount: paymentMethod === 'COD' ? subtotal : 0
+        })
+            .then((response) => {
+                if (isCancelled) {
+                    return;
+                }
+                if (!response.success) {
+                    throw new Error(response.message || 'Could not load shipping quotes.');
+                }
+                const quotes = response.data ?? [];
+                setShippingQuotes(quotes);
+                if (quotes.length === 0) {
+                    setShippingQuoteError('Không có tùy chọn giao hàng phù hợp với địa chỉ này.');
+                }
+            })
+            .catch((error) => {
+                if (!isCancelled) {
+                    setShippingQuoteError(
+                        getErrorMessage(error, 'Không thể tính phí giao hàng. Vui lòng thử lại.')
+                    );
+                }
+            })
+            .finally(() => {
+                if (!isCancelled) {
+                    setIsLoadingShippingQuotes(false);
+                }
+            });
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [
+        form.customerAddress,
+        form.customerCityId,
+        form.customerDistrictId,
+        form.customerWardId,
+        form.customerCityName,
+        form.customerDistrictName,
+        form.customerWardName,
+        hasSelectedShippingLocation,
+        paymentMethod,
+        subtotal
+    ]);
 
     const handleCityChange = (event: ChangeEvent<HTMLSelectElement>) => {
         const cityId = event.target.value ? Number(event.target.value) : null;
@@ -257,6 +357,13 @@ export default function Cart() {
             return;
         }
 
+        if (!selectedShippingQuote) {
+            setValidationError('Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.');
+            return;
+        }
+
+        const shippingFee = shippingQuoteFee(selectedShippingQuote);
+
         try {
             const order = await submitOrder({
                 customerName: form.customerName.trim(),
@@ -269,7 +376,9 @@ export default function Cart() {
                 customerCityId: form.customerCityId,
                 customerDistrictId: form.customerDistrictId,
                 customerWardId: form.customerWardId,
-                shippingFee: 0,
+                carrierId: selectedShippingQuote.carrierId,
+                carrierServiceId: selectedShippingQuote.carrierServiceId,
+                shippingFee,
                 description: form.description.trim() || undefined
             });
 
@@ -356,9 +465,9 @@ export default function Cart() {
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="space-y-8 lg:col-span-7">
-                    {(validationError || checkoutError || locationError) && (
+                    {(validationError || checkoutError || locationError || shippingQuoteError) && (
                         <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">
-                            {validationError || checkoutError || locationError}
+                            {validationError || checkoutError || locationError || shippingQuoteError}
                         </div>
                     )}
 
@@ -473,16 +582,6 @@ export default function Cart() {
                                     Đang sử dụng dữ liệu địa điểm được lưu gần nhất.
                                 </p>
                             )}
-                            {locationError && !locationsLoaded && (
-                                <button
-                                    type="button"
-                                    onClick={() => void fetchLocations()}
-                                    disabled={isLocationsLoading}
-                                    className="text-left text-xs font-bold text-primary underline disabled:opacity-50"
-                                >
-                                    Thử tải lại danh sách địa điểm
-                                </button>
-                            )}
                             <textarea
                                 value={form.description}
                                 onChange={(event) => updateField('description', event.target.value)}
@@ -540,6 +639,70 @@ export default function Cart() {
                             ))}
                         </div>
 
+                        <fieldset className="mb-5 border-t border-surface-container-high pt-4">
+                            <legend className="text-[10px] font-black uppercase tracking-wider text-outline">
+                                Đơn vị giao hàng
+                            </legend>
+                            {!hasSelectedShippingLocation && (
+                                <p className="mt-2 text-xs font-semibold text-on-surface-variant">
+                                    Chọn đầy đủ tỉnh/thành, quận/huyện và phường/xã để tính phí giao hàng.
+                                </p>
+                            )}
+                            {hasSelectedShippingLocation && isLoadingShippingQuotes && (
+                                <div className="mt-3 flex items-center gap-2 text-xs font-bold text-primary">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Đang tính phí giao hàng...
+                                </div>
+                            )}
+                            {hasSelectedShippingLocation && !isLoadingShippingQuotes && shippingQuotes.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    {shippingQuotes.map((quote) => {
+                                        const key = shippingQuoteKey(quote);
+                                        const fee = shippingQuoteFee(quote);
+                                        const isSelected = selectedShippingQuoteKey === key;
+
+                                        return (
+                                            <label
+                                                key={key}
+                                                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-xs transition-colors ${
+                                                    isSelected
+                                                        ? 'border-primary bg-primary/5 text-on-surface'
+                                                        : 'border-surface-container-high bg-surface-container-lowest text-on-surface-variant hover:border-primary/50'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    name="shippingQuote"
+                                                    value={key}
+                                                    checked={isSelected}
+                                                    onChange={() => {
+                                                        setSelectedShippingQuoteKey(key);
+                                                        setValidationError(null);
+                                                        clearCheckoutError();
+                                                    }}
+                                                    disabled={isSubmitting || isCreatingPayment}
+                                                    className="mt-1 h-3.5 w-3.5 shrink-0 accent-primary"
+                                                />
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block font-black text-on-surface">
+                                                        {quote.carrierName || 'Carrier'} - {quote.carrierServiceName || 'Service'}
+                                                    </span>
+                                                    {(quote.deliveryTime || quote.description) && (
+                                                        <span className="mt-1 block font-medium">
+                                                            {[quote.deliveryTime, quote.description].filter(Boolean).join(' - ')}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <span className="shrink-0 font-black text-primary">
+                                                    {formatCurrency(fee)}
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </fieldset>
+
                         <div className="space-y-2.5 border-t border-surface-container-high pt-4 text-xs font-bold">
                             <div className="flex justify-between text-on-surface-variant">
                                 <span>Tạm tính</span>
@@ -547,12 +710,14 @@ export default function Cart() {
                             </div>
                             <div className="flex justify-between text-on-surface-variant">
                                 <span>Phí giao hàng</span>
-                                <span className="text-[10px] uppercase tracking-wider text-primary">0 đ</span>
+                                <span className="text-[10px] uppercase tracking-wider text-primary">
+                                    {selectedShippingQuote ? formatCurrency(selectedShippingFee) : 'Chưa chọn'}
+                                </span>
                             </div>
                             <div className="mt-2 flex items-end justify-between border-t border-dashed border-surface-container-high pt-3">
                                 <span className="text-sm font-black uppercase">Tổng thanh toán</span>
                                 <span className="text-xl font-black leading-none tracking-tight text-primary sm:text-2xl">
-                                    {formatCurrency(subtotal)}
+                                    {formatCurrency(orderTotal)}
                                 </span>
                             </div>
                         </div>
@@ -578,12 +743,7 @@ export default function Cart() {
 
                         <button
                             type="submit"
-                            disabled={
-                                isSubmitting ||
-                                isCreatingPayment ||
-                                !locationsLoaded ||
-                                items.length === 0
-                            }
+                            disabled={isCheckoutDisabled}
                             className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-on-primary shadow-md shadow-primary/10 transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {(isSubmitting || isCreatingPayment) && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -12,6 +12,7 @@ import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.review.dto.CreateReviewRequest;
+import com.vn.sodu.review.dto.ReviewEligibilityResponse;
 import com.vn.sodu.review.dto.ReviewResponseDto;
 import com.vn.sodu.review.dto.UpdateReviewStatusRequest;
 import com.vn.sodu.review.dto.ReplyReviewRequest;
@@ -42,8 +43,7 @@ public class ReviewService {
 
     @Transactional
     public ReviewResponseDto createReview(CreateReviewRequest request, String accountEmail) {
-        Account account = accountRepo.findByEmail(accountEmail)
-                .orElseThrow(() -> new ForbiddenOperationException("Account not found"));
+        Account account = resolveAccount(accountEmail);
 
         Product product = productRepo.findById(request.getProductId())
                 .orElseThrow(() -> new NotFoundException("Product not found with id: " + request.getProductId()));
@@ -106,6 +106,56 @@ public class ReviewService {
         return toResponseDto(review);
     }
 
+    @Transactional(readOnly = true)
+    public ReviewEligibilityResponse getReviewEligibility(Long productId, String accountEmail) {
+        Account account = resolveAccount(accountEmail);
+
+        Product product = productRepo.findById(productId)
+                .orElseThrow(() -> new NotFoundException("Product not found with id: " + productId));
+
+        if (reviewRepository.existsByAccountIdAndProductId(account.getId(), product.getId())) {
+            return ReviewEligibilityResponse.builder()
+                    .canReview(false)
+                    .reason("Bạn đã đánh giá sản phẩm này.")
+                    .alreadyReviewed(true)
+                    .deliveredOrderFound(false)
+                    .build();
+        }
+
+        Long productExternalId = product.getExternalId();
+        if (productExternalId == null) {
+            return ReviewEligibilityResponse.builder()
+                    .canReview(false)
+                    .reason("Sản phẩm chưa có mã đồng bộ để xác minh đơn hàng.")
+                    .alreadyReviewed(false)
+                    .deliveredOrderFound(false)
+                    .build();
+        }
+
+        List<Order> deliveredOrders = orderRepository.findDeliveredCustomerOrdersForReview(account.getEmail().trim());
+        Optional<Order> matchingOrder = deliveredOrders.stream()
+                .filter(order -> order.getItems() != null)
+                .filter(order -> order.getItems().stream().anyMatch(item -> itemMatchesProduct(item, productExternalId)))
+                .findFirst();
+
+        if (matchingOrder.isEmpty()) {
+            return ReviewEligibilityResponse.builder()
+                    .canReview(false)
+                    .reason("Hãy mua hàng rồi mới đăng review.")
+                    .alreadyReviewed(false)
+                    .deliveredOrderFound(false)
+                    .build();
+        }
+
+        return ReviewEligibilityResponse.builder()
+                .canReview(true)
+                .reason("Đơn hàng đã giao hợp lệ. Bạn có thể gửi đánh giá cho sản phẩm này.")
+                .orderId(matchingOrder.get().getId())
+                .alreadyReviewed(false)
+                .deliveredOrderFound(true)
+                .build();
+    }
+
     @Transactional
     public ReviewResponseDto updateReviewStatus(Long reviewId, UpdateReviewStatusRequest request) {
         Review review = reviewRepository.findById(reviewId)
@@ -139,6 +189,11 @@ public class ReviewService {
 
     public Page<ReviewResponseDto> getPublicReviews(Long productId, Pageable pageable) {
         return reviewRepository.findByProductIdAndStatus(productId, ReviewStatus.PUBLISHED, pageable)
+                .map(this::toResponseDto);
+    }
+
+    public Page<ReviewResponseDto> getLatestPublicReviews(Pageable pageable) {
+        return reviewRepository.findByStatus(ReviewStatus.PUBLISHED, pageable)
                 .map(this::toResponseDto);
     }
 
@@ -183,6 +238,22 @@ public class ReviewService {
         } catch (Exception e) {
             return Collections.emptyList();
         }
+    }
+
+    private Account resolveAccount(String accountEmail) {
+        if (accountEmail == null || accountEmail.isBlank()) {
+            throw new ForbiddenOperationException("Authentication is required");
+        }
+        return accountRepo.findByEmail(accountEmail)
+                .orElseThrow(() -> new ForbiddenOperationException("Account not found"));
+    }
+
+    private boolean itemMatchesProduct(OrderItem item, Long productExternalId) {
+        if (item == null || productExternalId == null) {
+            return false;
+        }
+        Long nhanhId = safeParseLong(item.getNhanhProductId());
+        return nhanhId != null && nhanhId.equals(productExternalId);
     }
 
     static Long safeParseLong(String value) {

@@ -5,6 +5,7 @@ import {useNavigate} from 'react-router-dom';
 import {useCartStore} from "../../store/useCartStore";
 import {ProductModel} from "../../interface/product.model";
 import {formatCurrency} from "../../utils/format";
+import ProductRatingSummary from './ProductRatingSummary';
 
 interface ProductCardProps {
     product: ProductModel;
@@ -54,6 +55,12 @@ export default function ProductCard({product}: ProductCardProps) {
                 <h3 className="mb-1.5 line-clamp-2 min-h-[34px] flex-1 text-xs font-bold leading-snug text-on-surface transition-colors group-hover:text-primary sm:mb-2 sm:min-h-[40px] sm:text-sm sm:leading-tight">
                     {product.name}
                 </h3>
+                <ProductRatingSummary
+                    rating={product.rating}
+                    reviewsCount={product.reviewsCount}
+                    className="mb-2 text-[10px] font-black text-on-surface sm:text-xs"
+                    starClassName="h-2.5 w-2.5 sm:h-3 sm:w-3"
+                />
                 {product.originalPrice && (
                     <div className="mb-0.5 flex items-baseline gap-2">
                         <span className="text-[10px] leading-none text-outline line-through sm:text-xs">

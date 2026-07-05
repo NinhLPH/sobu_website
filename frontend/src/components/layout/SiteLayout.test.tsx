@@ -14,6 +14,11 @@ jest.mock('react-router-dom', () => ({
     useLocation: () => ({pathname: mockPathname}),
 }), {virtual: true});
 
+jest.mock('../common/ChatDock', () => ({
+    __esModule: true,
+    default: () => <div aria-label="Thanh chat ho tro"/>,
+}));
+
 describe('SiteLayout', () => {
     beforeEach(() => {
         mockPathname = '/products';
@@ -33,6 +38,12 @@ describe('SiteLayout', () => {
         expect(screen.getByLabelText('Quảng cáo bên trái').className).toContain('min-[1440px]:block');
         expect(screen.getByLabelText('Quảng cáo bên trái').firstElementChild?.className).toContain('top-28');
         expect(screen.getByLabelText('Quảng cáo bên phải').firstElementChild?.className).toContain('top-28');
+    });
+
+    it('renders the chat dock inside the public customer layout', () => {
+        render(<SiteLayout/>);
+
+        expect(screen.getByLabelText('Thanh chat ho tro')).toBeTruthy();
     });
 
     it('lowers desktop sidebars on static pages so the fixed header does not cover them', () => {

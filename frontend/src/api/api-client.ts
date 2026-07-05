@@ -2,9 +2,9 @@ import axios from 'axios';
 import {authStorage} from '../utils/auth-storage';
 
 export const BASE_URL =
-    process.env.REACT_APP_API_BASE_URL ||
-    process.env.REACT_APP_API_URL ||
-    'https://suffocate-ground-keenness.ngrok-free.dev';
+    process.env.REACT_APP_API_BASE_URL?.trim() ||
+    process.env.REACT_APP_API_URL?.trim() ||
+    'http://localhost:8081';
 
 const PUBLIC_ROUTES = [
     '/api/auth/login',
@@ -25,10 +25,14 @@ const WRAPPED_RESPONSE_ROUTES = [
     '/api/auth',
     '/api/requests',
     '/api/orders',
+    '/api/reviews',
     '/api/cart',
+    '/api/support',
     '/api/admin/requests',
     '/api/admin/orders',
+    '/api/admin/reviews',
     '/api/public/locations',
+    '/api/public/shipping/quotes',
     '/v1/api/admin/payments'
 ];
 

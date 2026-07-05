@@ -18,6 +18,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,5 +56,23 @@ class PublicReviewControllerTest {
 
         assertThat(response.getBody().getContent()).isEmpty();
         assertThat(response.getBody().getPageSize()).isEqualTo(0);
+    }
+
+    @Test
+    void getLatestReviewsCapsPublicHomepageSizeAtSix() {
+        ReviewResponseDto dto = ReviewResponseDto.builder()
+                .id(7L)
+                .productId(100L)
+                .rating(4)
+                .status(ReviewStatus.PUBLISHED)
+                .build();
+        when(reviewService.getLatestPublicReviews(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(dto)));
+
+        PublicReviewController controller = new PublicReviewController(reviewService);
+        ResponseEntity<PageResponse<ReviewResponseDto>> response = controller.getLatestReviews(0, 20, "createdAt", "DESC");
+
+        assertThat(response.getBody().getContent()).hasSize(1);
+        assertThat(response.getBody().getContent().get(0).getId()).isEqualTo(7L);
+        verify(reviewService).getLatestPublicReviews(any(Pageable.class));
     }
 }
