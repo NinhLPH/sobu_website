@@ -96,6 +96,40 @@ public class OrderSyncService {
         return loadOrder(orderId);
     }
 
+    public void cancelOrderOnNhanh(Long orderId) {
+        Order order = loadOrder(orderId);
+
+        if (order.getNhanhOrderId() == null || order.getNhanhOrderId().isBlank()) {
+            log.info("Order id={} has no Nhanh order id, skipping Nhanh cancellation", orderId);
+            return;
+        }
+
+        try {
+            String accessToken = nhanhService.getValidAccessToken();
+            nhanhOrderGateway.cancelOrder(order, accessToken);
+
+            transactionTemplate.executeWithoutResult(status -> {
+                Order o = loadOrder(orderId);
+                o.setNhanhSyncStage(NhanhSyncStage.CANCELLED);
+                o.setSyncError(null);
+                o.setLastSyncAt(LocalDateTime.now());
+                o.setLastSyncMessage("Order cancelled on Nhanh successfully");
+                orderRepository.save(o);
+            });
+            log.info("Successfully cancelled order id={} on Nhanh, nhanhOrderId={}", orderId, order.getNhanhOrderId());
+        } catch (Exception ex) {
+            String msg = "Failed to cancel order on Nhanh: " + messageOf(ex);
+            log.warn("Failed to cancel order id={} on Nhanh, nhanhOrderId={}: {}", orderId, order.getNhanhOrderId(), msg);
+            transactionTemplate.executeWithoutResult(status -> {
+                Order o = loadOrder(orderId);
+                o.setSyncError(msg);
+                o.setLastSyncAt(LocalDateTime.now());
+                o.setLastSyncMessage(msg);
+                orderRepository.save(o);
+            });
+        }
+    }
+
     @Scheduled(
             initialDelayString = "#{@nhanhProperties.sync.recovery.initialDelayMs}",
             fixedDelayString = "#{@nhanhProperties.sync.recovery.fixedDelayMs}"
@@ -499,6 +533,7 @@ public class OrderSyncService {
             case NHANH_ADD_NORMAL -> "nhanh:add:normal:" + orderId + ":" + paymentId;
             case NHANH_ADD_PREORDER_DEPOSIT -> "nhanh:add:preorder-deposit:" + orderId + ":" + paymentId;
             case NHANH_EDIT_PREORDER_FINAL -> "nhanh:edit:preorder-final:" + orderId + ":" + paymentId;
+            case NHANH_CANCEL -> "nhanh:cancel:" + orderId;
         };
     }
 
@@ -567,6 +602,7 @@ public class OrderSyncService {
             case NHANH_ADD_NORMAL -> "Nhanh normal order created successfully.";
             case NHANH_ADD_PREORDER_DEPOSIT -> "Nhanh preorder deposit order created successfully.";
             case NHANH_EDIT_PREORDER_FINAL -> "Nhanh preorder final payment updated successfully.";
+            case NHANH_CANCEL -> "Nhanh order cancelled successfully.";
         };
     }
 
@@ -578,6 +614,7 @@ public class OrderSyncService {
             case NHANH_EDIT_PREORDER_FINAL -> "Nhanh preorder final payment updated successfully.";
             case NHANH_ADD_NORMAL -> "Nhanh normal order created successfully.";
             case NHANH_ADD_PREORDER_DEPOSIT -> "Nhanh preorder deposit order created successfully.";
+            case NHANH_CANCEL -> "Nhanh order cancelled successfully.";
         };
     }
 

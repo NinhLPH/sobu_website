@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,9 +14,17 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "District information")
 public class LocationDistrictDTO {
+    @Schema(description = "District ID", example = "1")
     private Long districtId;
+
+    @Schema(description = "District name", example = "Quận 1")
     private String districtName;
+
+    @Schema(description = "Alternative name", example = "Quận 1")
     private String otherName;
+
+    @Schema(description = "List of wards in this district")
     private List<LocationWardDTO> wards;
 }

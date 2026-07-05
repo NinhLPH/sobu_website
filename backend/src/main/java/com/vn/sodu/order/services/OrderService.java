@@ -16,6 +16,7 @@ import com.vn.sodu.user.Account;
 import com.vn.sodu.user.AccountRepo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -44,6 +45,7 @@ public class OrderService {
     private final RequestToOrderMapper requestToOrderMapper;
     private final PaymentService paymentService;
     private final AccountRepo accountRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public Order createFromApprovedRequest(Request request) {
@@ -144,7 +146,9 @@ public class OrderService {
         }
 
         order.setStatus(OrderStatus.CANCELLED);
-        return orderRepository.save(order);
+        Order cancelled = orderRepository.save(order);
+        eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
+        return cancelled;
     }
 
     private void validateDirectOrder(CreateNormalOrderDto dto) {

@@ -24,4 +24,14 @@ public class OrderSyncEventListener {
         }
         orderSyncService.syncOrderToNhanh(event.orderId(), event.paymentCode());
     }
+
+    @Async("nhanhSyncExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onOrderCancelled(OrderCancelledEvent event) {
+        if (event == null || event.orderId() == null) {
+            log.warn("Skipping Nhanh order cancel event with missing order id");
+            return;
+        }
+        orderSyncService.cancelOrderOnNhanh(event.orderId());
+    }
 }

@@ -195,6 +195,15 @@ public class NhanhClient {
         return postWithAuthorization(apiPath, accessToken, body, responseType);
     }
 
+    public NhanhResponse<com.fasterxml.jackson.databind.JsonNode> getCarriers(String accessToken) {
+        return post(
+                "/v3.0/shipping/carrier",
+                accessToken,
+                Map.of(),
+                new ParameterizedTypeReference<NhanhResponse<com.fasterxml.jackson.databind.JsonNode>>() {}
+        );
+    }
+
     public <REQ, RESP> RESP postOnce(
             String apiPath,
             String accessToken,
