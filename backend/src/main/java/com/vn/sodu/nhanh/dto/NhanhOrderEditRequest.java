@@ -13,6 +13,7 @@ public class NhanhOrderEditRequest {
     private Info info;
     private Carrier carrier;
     private Payment payment;
+    private String status;
 
     @Getter
     @Setter

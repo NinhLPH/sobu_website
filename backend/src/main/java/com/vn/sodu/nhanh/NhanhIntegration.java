@@ -32,6 +32,11 @@ public class NhanhIntegration {
 
     private Long lastProductSyncTime;
 
+    private Long carrierId;
+    private String standardService;
+    private String expressService;
+    private Long expressFallbackId;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

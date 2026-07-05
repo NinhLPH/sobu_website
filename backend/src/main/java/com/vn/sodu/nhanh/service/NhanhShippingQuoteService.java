@@ -2,11 +2,12 @@ package com.vn.sodu.nhanh.service;
 
 import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.nhanh.NhanhProperties;
-import com.vn.sodu.nhanh.dto.NhanhShippingFeeOption;
-import com.vn.sodu.nhanh.dto.ShippingQuoteDto;
-import com.vn.sodu.nhanh.dto.ShippingQuoteRequestDto;
+import com.vn.sodu.nhanh.NhanhIntegration;
+import com.vn.sodu.nhanh.NhanhIntegrationRepo;
+import com.vn.sodu.nhanh.dto.*;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 
@@ -18,51 +19,199 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class NhanhShippingQuoteService {
 
     private final NhanhClient nhanhClient;
     private final NhanhService nhanhService;
     private final NhanhProperties nhanhProperties;
+    private final NhanhIntegrationRepo nhanhIntegrationRepo;
 
     public List<ShippingQuoteDto> quote(ShippingQuoteRequestDto request) {
         validateRequest(request);
         validateOrigin();
 
         String accessToken = nhanhService.getValidAccessToken();
-        NhanhResponse<List<NhanhShippingFeeOption>> response = nhanhClient.post(
-                nhanhProperties.getShipping().getFeePath(),
-                accessToken,
-                buildRequestBody(request),
-                new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
-        );
 
-        if (response == null || response.getData() == null) {
-            throw new ExternalServiceException("Nhanh shipping fee response is empty");
+        // Load config with database override
+        Long standardCarrierId = nhanhProperties.getShipping().getCarrier().getId();
+        String standardService = nhanhProperties.getShipping().getCarrier().getStandardService();
+        String expressService = nhanhProperties.getShipping().getCarrier().getExpressService();
+        Long fallbackId = nhanhProperties.getShipping().getCarrier().getExpressFallbackId();
+
+        java.util.Optional<com.vn.sodu.nhanh.NhanhIntegration> integrationOpt = nhanhService.getIntegration();
+        if (integrationOpt.isPresent()) {
+            com.vn.sodu.nhanh.NhanhIntegration integration = integrationOpt.get();
+            if (integration.getCarrierId() != null) {
+                standardCarrierId = integration.getCarrierId();
+            }
+            if (integration.getStandardService() != null) {
+                standardService = integration.getStandardService();
+            }
+            if (integration.getExpressService() != null) {
+                expressService = integration.getExpressService();
+            }
+            if (integration.getExpressFallbackId() != null) {
+                fallbackId = integration.getExpressFallbackId();
+            }
         }
 
-        return response.getData().stream()
-                .filter(option -> option != null)
-                .map(this::toDto)
-                .toList();
+        List<ShippingQuoteDto> quotes = new java.util.ArrayList<>();
+
+        // 1. Get Standard Option
+        try {
+            NhanhResponse<List<NhanhShippingFeeOption>> stdResp = nhanhClient.post(
+                    nhanhProperties.getShipping().getFeePath(),
+                    accessToken,
+                    buildRequestBody(request, standardCarrierId, standardService),
+                    new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
+            );
+            if (stdResp != null && stdResp.getData() != null) {
+                stdResp.getData().stream()
+                        .filter(java.util.Objects::nonNull)
+                        .map(this::toDto)
+                        .findFirst()
+                        .ifPresent(quotes::add);
+            }
+        } catch (Exception ex) {
+            log.error("Failed to fetch standard shipping quote", ex);
+        }
+
+        // 2. Get Express Option
+        boolean hasExpress = false;
+        if (expressService != null && !expressService.isBlank()) {
+            try {
+                NhanhResponse<List<NhanhShippingFeeOption>> expResp = nhanhClient.post(
+                        nhanhProperties.getShipping().getFeePath(),
+                        accessToken,
+                        buildRequestBody(request, standardCarrierId, expressService),
+                        new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
+                );
+                if (expResp != null && expResp.getData() != null && !expResp.getData().isEmpty()) {
+                    expResp.getData().stream()
+                            .filter(java.util.Objects::nonNull)
+                            .map(this::toDto)
+                            .findFirst()
+                            .ifPresent(dto -> {
+                                dto.setCarrierServiceName("Hỏa tốc (" + dto.getCarrierServiceName() + ")");
+                                quotes.add(dto);
+                            });
+                    hasExpress = true;
+                }
+            } catch (Exception ex) {
+                log.warn("Express service [{}] failed, will try fallback", expressService, ex);
+            }
+        }
+
+        // 3. Fallback to expressFallbackId (AhaMove) if no express found yet
+        if (!hasExpress) {
+            if (fallbackId != null && fallbackId > 0) {
+                try {
+                    NhanhResponse<List<NhanhShippingFeeOption>> fbResp = nhanhClient.post(
+                            nhanhProperties.getShipping().getFeePath(),
+                            accessToken,
+                            buildRequestBody(request, fallbackId, null),
+                            new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
+                    );
+                    if (fbResp != null && fbResp.getData() != null && !fbResp.getData().isEmpty()) {
+                        fbResp.getData().stream()
+                                .filter(java.util.Objects::nonNull)
+                                .map(this::toDto)
+                                .findFirst()
+                                .ifPresent(dto -> {
+                                    dto.setCarrierServiceName("Hỏa tốc (" + dto.getCarrierName() + ")");
+                                    quotes.add(dto);
+                                });
+                    }
+                } catch (Exception ex) {
+                    log.error("Failed to fetch express fallback shipping quote", ex);
+                }
+            }
+        }
+
+        if (quotes.isEmpty()) {
+            throw new ExternalServiceException("No shipping options available for the selected destination.");
+        }
+
+        return quotes;
     }
 
-    private Map<String, Object> buildRequestBody(ShippingQuoteRequestDto request) {
+    // Admin APIs for fetching carriers and saving carrier settings
+    public com.fasterxml.jackson.databind.JsonNode getCarriers() {
+        String accessToken = nhanhService.getValidAccessToken();
+        NhanhResponse<com.fasterxml.jackson.databind.JsonNode> response = nhanhClient.getCarriers(accessToken);
+        if (response == null || response.getData() == null) {
+            throw new ExternalServiceException("Failed to fetch carriers from Nhanh");
+        }
+        return response.getData();
+    }
+
+    public CarrierConfigResponseDto getCarrierConfig() {
+        Long standardCarrierId = nhanhProperties.getShipping().getCarrier().getId();
+        String standardService = nhanhProperties.getShipping().getCarrier().getStandardService();
+        String expressService = nhanhProperties.getShipping().getCarrier().getExpressService();
+        Long fallbackId = nhanhProperties.getShipping().getCarrier().getExpressFallbackId();
+
+        java.util.Optional<com.vn.sodu.nhanh.NhanhIntegration> integrationOpt = nhanhService.getIntegration();
+        if (integrationOpt.isPresent()) {
+            com.vn.sodu.nhanh.NhanhIntegration integration = integrationOpt.get();
+            if (integration.getCarrierId() != null) {
+                standardCarrierId = integration.getCarrierId();
+            }
+            if (integration.getStandardService() != null) {
+                standardService = integration.getStandardService();
+            }
+            if (integration.getExpressService() != null) {
+                expressService = integration.getExpressService();
+            }
+            if (integration.getExpressFallbackId() != null) {
+                fallbackId = integration.getExpressFallbackId();
+            }
+        }
+
+        return CarrierConfigResponseDto.builder()
+                .carrierId(standardCarrierId)
+                .standardService(standardService)
+                .expressService(expressService)
+                .expressFallbackId(fallbackId)
+                .build();
+    }
+
+    public void saveCarrierConfig(CarrierConfigRequestDto request) {
+        com.vn.sodu.nhanh.NhanhIntegration integration = nhanhService.getIntegration()
+                .orElseThrow(() -> new ExternalServiceException("No Nhanh integration found. Please authenticate first."));
+
+        integration.setCarrierId(request.getCarrierId());
+        integration.setStandardService(request.getStandardService());
+        integration.setExpressService(request.getExpressService());
+        integration.setExpressFallbackId(request.getExpressFallbackId());
+
+        nhanhIntegrationRepo.save(integration);
+    }
+
+    private Map<String, Object> buildRequestBody(ShippingQuoteRequestDto request, Long carrierId, String serviceCode) {
         Map<String, Object> filters = new HashMap<>();
         filters.put("type", nhanhProperties.getShipping().getType());
-        filters.put("shippingWeight", money(resolveWeight(request)));
-        filters.put("price", money(request.getCartSubtotal()));
-        filters.put("totalCod", money(request.getCodAmount()));
+        filters.put("shippingWeight", resolveWeight(request).intValue());
+        filters.put("price", money(request.getCartSubtotal()).intValue());
+        filters.put("totalCod", money(request.getCodAmount()).intValue());
+
+        if (nhanhProperties.getDepotId() != null && nhanhProperties.getDepotId() > 0) {
+            filters.put("depotId", nhanhProperties.getDepotId().intValue());
+        }
+
         filters.put("shippingFrom", shippingFrom());
         filters.put("shippingTo", shippingTo(request));
-        if (nhanhProperties.getShipping().getSendCarrierType() != null) {
-            filters.put("sendCarrierType", nhanhProperties.getShipping().getSendCarrierType());
+
+        if (carrierId != null) {
+            Map<String, Object> carrierOpt = new HashMap<>();
+            carrierOpt.put("id", carrierId);
+            if (serviceCode != null && !serviceCode.isBlank()) {
+                carrierOpt.put("service", serviceCode);
+            }
+            filters.put("carrier", List.of(carrierOpt));
         }
-        if (request.getCarrierId() != null) {
-            filters.put("carrierId", request.getCarrierId());
-        }
-        if (request.getCarrierServiceId() != null) {
-            filters.put("carrierServiceId", request.getCarrierServiceId());
-        }
+
         return Map.of("filters", filters);
     }
 
@@ -70,18 +219,19 @@ public class NhanhShippingQuoteService {
         NhanhProperties.Origin origin = nhanhProperties.getShipping().getOrigin();
         Map<String, Object> value = new HashMap<>();
         value.put("address", origin.getAddress());
-        value.put("cityId", origin.getCityId());
-        value.put("districtId", origin.getDistrictId());
-        value.put("wardId", origin.getWardId());
+        value.put("cityId", origin.getCityId() != null ? origin.getCityId().intValue() : null);
+        value.put("districtId", origin.getDistrictId() != null ? origin.getDistrictId().intValue() : null);
+        value.put("wardId", origin.getWardId() != null ? origin.getWardId().intValue() : null);
+        value.put("locationVersion", "v1");
         return value;
     }
 
     private Map<String, Object> shippingTo(ShippingQuoteRequestDto request) {
         Map<String, Object> value = new HashMap<>();
-        value.put("address", request.getCustomerAddress());
-        value.put("cityId", request.getCustomerCityId());
-        value.put("districtId", request.getCustomerDistrictId());
-        value.put("wardId", request.getCustomerWardId());
+        value.put("cityId", request.getCustomerCityId() != null ? request.getCustomerCityId().intValue() : null);
+        value.put("districtId", request.getCustomerDistrictId() != null ? request.getCustomerDistrictId().intValue() : null);
+        value.put("wardId", request.getCustomerWardId() != null ? request.getCustomerWardId().intValue() : null);
+        value.put("locationVersion", "v1");
         return value;
     }
 
