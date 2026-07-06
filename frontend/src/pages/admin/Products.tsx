@@ -102,14 +102,6 @@ export default function AdminProducts() {
 
     return (
         <div className="pt-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-on-surface">Quản lý Sản phẩm</h1>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="bg-primary text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:brightness-110">
-                    <Plus className="w-5 h-5"/> Thêm sản phẩm
-                </button>
-            </div>
 
             <div className="relative flex items-center gap-3 rounded-xl border border-outline-variant/30 bg-white p-4">
                 <Search className="text-outline w-5 h-5"/>

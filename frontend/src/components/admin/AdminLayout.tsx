@@ -12,7 +12,6 @@ export default function AdminLayout() {
         { name: 'Yêu cầu', path: '/admin/requests', icon: MessageSquare },
         { name: 'Chat hỗ trợ', path: '/admin/support', icon: Headphones },
         { name: 'Đánh giá', path: '/admin/reviews', icon: Star },
-        { name: 'Vận chuyển', path: '/admin/shipping', icon: Truck },
         { name: 'Banner', path: '/admin/banners', icon: Images },
         { name: 'Cấu hình website', path: '/admin/configs', icon: SlidersHorizontal },
         { name: 'Trang tĩnh', path: '/admin/static-pages', icon: FileText },
