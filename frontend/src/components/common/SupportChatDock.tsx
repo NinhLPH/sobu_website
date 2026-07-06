@@ -330,9 +330,9 @@ export default function SupportChatDock({
                     ) : isStaffAccount ? (
                         <div className="flex h-72 flex-col items-center justify-center bg-surface-container-lowest px-6 text-center">
                             <MessageCircle className="mb-3 h-8 w-8 text-primary"/>
-                            <p className="text-sm font-black text-on-surface">Chat ho tro cho nhan vien</p>
+                            <p className="text-sm font-black text-on-surface">Chat Hỗ trợ</p>
                             <p className="mt-2 max-w-[18rem] text-xs font-semibold leading-relaxed text-outline">
-                                Tai khoan admin/staff tra loi khach hang tai trang quan tri chat ho tro.
+                                Quản trị viên truy cập mục Chat Hỗ trợ để phản hồi tin nhắn
                             </p>
                             <a
                                 href="/admin/support"
@@ -344,9 +344,9 @@ export default function SupportChatDock({
                     ) : !canUseCustomerChat ? (
                         <div className="flex h-72 flex-col items-center justify-center bg-surface-container-lowest px-6 text-center">
                             <MessageCircle className="mb-3 h-8 w-8 text-primary"/>
-                            <p className="text-sm font-black text-on-surface">Chat ho tro dang san sang</p>
+                            <p className="text-sm font-black text-on-surface">Đang sẵn sàng</p>
                             <p className="mt-2 max-w-[18rem] text-xs font-semibold leading-relaxed text-outline">
-                                Hay tai lai trang neu thong tin tai khoan chua duoc dong bo.
+                                Hãy tải lại trang nếu thông tin tài khoản chưa được đồng bộ
                             </p>
                         </div>
                     ) : (

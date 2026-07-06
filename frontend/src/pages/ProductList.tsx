@@ -337,7 +337,7 @@ export default function ProductList() {
                         <div className="flex items-center justify-between gap-3 sm:justify-start sm:gap-4">
                             <span className="text-xs font-bold uppercase tracking-widest text-outline">Sắp xếp:</span>
                             <select
-                                className="cursor-pointer rounded-full bg-surface-container px-4 py-2 text-xs font-bold text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 sm:px-5 sm:text-sm">
+                                className="min-w-[10rem] cursor-pointer rounded-full bg-surface-container px-4 pr-8 py-2 text-xs font-bold text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 sm:min-w-[12rem] sm:px-5 sm:pr-10 sm:text-sm">
                                 <option>Hàng Mới Nhất</option>
                                 <option>Giá tăng dần</option>
                                 <option>Giá giảm dần</option>

@@ -299,7 +299,7 @@ export default function AdminSupport() {
                 </button>
             </div>
 
-            <div className="grid min-h-[36rem] overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm lg:grid-cols-[20rem_minmax(0,1fr)]">
+            <div className="grid h-[36rem] overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm lg:grid-cols-[20rem_minmax(0,1fr)]">
                 <aside className="border-b border-outline-variant/30 bg-surface-container-lowest lg:border-b-0 lg:border-r">
                     <div className="flex items-center justify-between border-b border-outline-variant/20 px-4 py-3">
                         <p className="text-xs font-black uppercase tracking-widest text-outline">
@@ -348,7 +348,7 @@ export default function AdminSupport() {
                     </div>
                 </aside>
 
-                <section className="flex min-h-[36rem] min-w-0 flex-col">
+                <section className="flex min-w-0 flex-col overflow-hidden">
                     <div className="border-b border-outline-variant/20 bg-surface-container-low px-5 py-4">
                         <p className="text-sm font-black text-on-surface">
                             {selectedConversation

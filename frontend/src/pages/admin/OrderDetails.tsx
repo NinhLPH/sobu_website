@@ -429,7 +429,6 @@ export default function AdminOrderDetail() {
                             </div>
                         ) : (
                             <p className="rounded-xl border border-dashed border-outline-variant/30 p-4 text-xs font-medium leading-relaxed text-outline">
-                                Backend hiện chưa có API Admin để tải lịch sử thanh toán cũ.
                                 Các giao dịch vừa tạo hoặc xác nhận trong màn hình này sẽ xuất hiện tại đây.
                             </p>
                         )}
