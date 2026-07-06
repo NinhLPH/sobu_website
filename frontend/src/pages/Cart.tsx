@@ -53,24 +53,49 @@ const initialCheckoutForm: CheckoutForm = {
     description: ''
 };
 
-const shippingQuoteKey = (quote: Pick<ShippingQuoteDto, 'carrierId' | 'carrierServiceId'>) =>
-    `${quote.carrierId ?? 'missing'}-${quote.carrierServiceId ?? 'missing'}`;
+const MAX_CUSTOMER_ADDRESS_LENGTH = 500;
 
-const shippingQuoteFee = (quote: ShippingQuoteDto | null | undefined) =>
-    Number(quote?.customerShipFee ?? quote?.shipFee);
+const shippingQuoteFee = (quote: ShippingQuoteDto | null | undefined) => {
+    const fee = quote?.customerShipFee ?? quote?.shipFee;
+    return fee === null || fee === undefined ? Number.NaN : Number(fee);
+};
+
+type CompleteShippingQuote = ShippingQuoteDto & {
+    carrierId: number;
+    carrierName: string;
+    carrierServiceId: number;
+    carrierServiceName: string;
+};
+
+const isPositiveInteger = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isInteger(value) && value > 0;
+
+const hasText = (value: unknown): value is string =>
+    typeof value === 'string' && value.trim().length > 0;
 
 const isUsableShippingQuote = (
     quote: ShippingQuoteDto | null | undefined
-): quote is ShippingQuoteDto & { carrierId: number; carrierServiceId: number } => {
+): quote is CompleteShippingQuote => {
     const fee = shippingQuoteFee(quote);
     return Boolean(quote)
-        && Number.isInteger(quote?.carrierId)
-        && Number(quote?.carrierId) > 0
-        && Number.isInteger(quote?.carrierServiceId)
-        && Number(quote?.carrierServiceId) > 0
+        && isPositiveInteger(quote?.carrierId)
+        && hasText(quote?.carrierName)
+        && isPositiveInteger(quote?.carrierServiceId)
+        && hasText(quote?.carrierServiceName)
         && Number.isFinite(fee)
         && fee >= 0;
 };
+
+const shippingQuoteLabel = (quote: CompleteShippingQuote) =>
+    `${quote.carrierName.trim()} - ${quote.carrierServiceName.trim()}`;
+
+const shippingQuoteKey = (quote: CompleteShippingQuote, index: number) =>
+    [
+        index,
+        quote.carrierId,
+        quote.carrierServiceId,
+        shippingQuoteFee(quote)
+    ].join('-');
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message ||
@@ -172,7 +197,7 @@ export default function Cart() {
     const [form, setForm] = useState<CheckoutForm>(initialCheckoutForm);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ONLINE');
     const [validationError, setValidationError] = useState<string | null>(null);
-    const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteDto[]>([]);
+    const [shippingQuotes, setShippingQuotes] = useState<CompleteShippingQuote[]>([]);
     const [selectedShippingQuoteKey, setSelectedShippingQuoteKey] = useState('');
     const [confirmedShippingQuote, setConfirmedShippingQuote] = useState<ShippingQuoteDto | null>(null);
     const [isLoadingShippingQuotes, setIsLoadingShippingQuotes] = useState(false);
@@ -224,7 +249,7 @@ export default function Cart() {
         Boolean(form.customerDistrictName) &&
         Boolean(form.customerWardName);
     const selectedShippingQuote = shippingQuotes.find(
-        (quote) => shippingQuoteKey(quote) === selectedShippingQuoteKey
+        (quote, index) => shippingQuoteKey(quote, index) === selectedShippingQuoteKey
     ) ?? null;
     const displayShippingQuote = confirmedShippingQuote ?? selectedShippingQuote;
     const selectedShippingFee = isUsableShippingQuote(displayShippingQuote)
@@ -243,7 +268,6 @@ export default function Cart() {
     const buildShippingQuoteRequest = useCallback((
         quote?: { carrierId: number; carrierServiceId: number }
     ) => ({
-        customerAddress: form.customerAddress.trim() || undefined,
         customerCityId: form.customerCityId as number,
         customerDistrictId: form.customerDistrictId as number,
         customerWardId: form.customerWardId as number,
@@ -256,7 +280,6 @@ export default function Cart() {
             }
             : {})
     }), [
-        form.customerAddress,
         form.customerCityId,
         form.customerDistrictId,
         form.customerWardId,
@@ -321,7 +344,7 @@ export default function Cart() {
         subtotal
     ]);
 
-    const handleShippingQuoteSelect = async (quote: ShippingQuoteDto) => {
+    const handleShippingQuoteSelect = async (quote: ShippingQuoteDto, index: number) => {
         if (!isUsableShippingQuote(quote)) {
             setSelectedShippingQuoteKey('');
             setConfirmedShippingQuote(null);
@@ -329,7 +352,7 @@ export default function Cart() {
             return;
         }
 
-        const key = shippingQuoteKey(quote);
+        const key = shippingQuoteKey(quote, index);
         const requestId = confirmShippingQuoteRequestRef.current + 1;
         confirmShippingQuoteRequestRef.current = requestId;
 
@@ -338,6 +361,7 @@ export default function Cart() {
         setShippingQuoteError(null);
         setValidationError(null);
         clearCheckoutError();
+
         setIsConfirmingShippingQuote(true);
 
         try {
@@ -350,7 +374,7 @@ export default function Cart() {
             }
 
             const confirmedQuote = (response.data ?? []).find(
-                (item) => isUsableShippingQuote(item) && shippingQuoteKey(item) === key
+                (item) => isUsableShippingQuote(item) && shippingQuoteKey(item, index) === key
             );
             if (!confirmedQuote) {
                 throw new Error('Khong the xac nhan phi giao hang da chon. Vui long chon phuong thuc khac.');
@@ -427,6 +451,11 @@ export default function Cart() {
 
         if (!form.customerName.trim() || !form.customerMobile.trim()) {
             setValidationError('Vui lòng nhập họ tên và số điện thoại người nhận.');
+            return;
+        }
+
+        if (form.customerAddress.trim().length > MAX_CUSTOMER_ADDRESS_LENGTH) {
+            setValidationError('Dia chi giao hang khong duoc vuot qua 500 ky tu.');
             return;
         }
 
@@ -602,6 +631,7 @@ export default function Cart() {
                                 value={form.customerAddress}
                                 onChange={(event) => updateField('customerAddress', event.target.value)}
                                 disabled={isSubmitting || isCreatingPayment}
+                                maxLength={MAX_CUSTOMER_ADDRESS_LENGTH}
                                 placeholder="Địa chỉ giao hàng chi tiết"
                                 className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                             />
@@ -743,22 +773,20 @@ export default function Cart() {
                             )}
                             {hasSelectedShippingLocation && !isLoadingShippingQuotes && shippingQuotes.length > 0 && (
                                 <div className="mt-3 space-y-2">
-                                    <p className="text-xs font-semibold text-on-surface-variant">
-                                        Chon mot don vi van chuyen ben duoi. Phi ap dung uu tien customerShipFee neu Nhanh tra ve, nguoc lai dung shipFee.
-                                    </p>
-                                    {shippingQuotes.map((quote) => {
-                                        const key = shippingQuoteKey(quote);
+                                    {shippingQuotes.map((quote, index) => {
+                                        const key = shippingQuoteKey(quote, index);
                                         const fee = shippingQuoteFee(quote);
+                                        const label = shippingQuoteLabel(quote);
                                         const isSelected = selectedShippingQuoteKey === key;
                                         const hasCustomerFee = quote.customerShipFee !== undefined && quote.customerShipFee !== null;
 
                                         return (
                                             <label
                                                 key={key}
-                                                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-xs transition-colors ${
+                                                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 text-xs transition-colors duration-200 focus-within:ring-2 focus-within:ring-primary/30 ${
                                                     isSelected
-                                                        ? 'border-primary bg-primary/5 text-on-surface'
-                                                        : 'border-surface-container-high bg-surface-container-lowest text-on-surface-variant hover:border-primary/50'
+                                                        ? 'border-primary bg-primary/10 text-on-surface shadow-sm'
+                                                        : 'border-surface-container-high bg-surface-container-lowest text-on-surface-variant hover:border-primary/60 hover:bg-primary/5'
                                                 }`}
                                             >
                                                 <input
@@ -767,14 +795,14 @@ export default function Cart() {
                                                     value={key}
                                                     checked={isSelected}
                                                     onChange={() => {
-                                                        void handleShippingQuoteSelect(quote);
+                                                        void handleShippingQuoteSelect(quote, index);
                                                     }}
                                                     disabled={isSubmitting || isCreatingPayment || isConfirmingShippingQuote}
                                                     className="mt-1 h-3.5 w-3.5 shrink-0 accent-primary"
                                                 />
                                                 <span className="min-w-0 flex-1">
-                                                    <span className="block font-black text-on-surface">
-                                                        {quote.carrierName || 'Carrier'} - {quote.carrierServiceName || 'Service'}
+                                                    <span className="block text-sm font-black text-on-surface">
+                                                        {label}
                                                     </span>
                                                     <span className="mt-1 block font-medium">
                                                         Carrier ID: {quote.carrierId} | Service ID: {quote.carrierServiceId}
@@ -785,9 +813,9 @@ export default function Cart() {
                                                         </span>
                                                     )}
                                                     <span className="mt-1 block font-medium">
-                                                        Phi ap dung: {formatCurrency(fee)}
+                                                        Phí ship: {formatCurrency(fee)}
                                                         {hasCustomerFee
-                                                            ? ` | Ship fee goc: ${formatCurrency(Number(quote.shipFee ?? 0))}`
+                                                            ? ` | Phí gốc: ${formatCurrency(Number(quote.shipFee ?? 0))}`
                                                             : ''}
                                                     </span>
                                                 </span>
