@@ -98,10 +98,19 @@ public class NhanhProperties {
     @Setter
     public static class Shipping {
         private String feePath = "/v3.0/shipping/fee";
-        private String type = "SHOPPING";
+        private Integer type = 1;
+        private Carrier carrier = new Carrier();
         private ShippingDefaults defaults = new ShippingDefaults();
         private Origin origin = new Origin();
-        private Integer sendCarrierType = 1;
+    }
+
+    @Getter
+    @Setter
+    public static class Carrier {
+        private Long id;
+        private String standardService;
+        private String expressService;
+        private Long expressFallbackId;
     }
 
     @Getter

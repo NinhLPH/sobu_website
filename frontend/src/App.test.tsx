@@ -51,6 +51,7 @@ jest.mock('./pages/admin/NhanhCallback', () => () => null);
 jest.mock('./pages/admin/Banners', () => () => null);
 jest.mock('./pages/admin/Configs', () => () => null);
 jest.mock('./pages/admin/StaticPages', () => () => null);
+jest.mock('./pages/admin/Support', () => () => null);
 
 describe('App route layout', () => {
     it('places customer routes inside SiteLayout and keeps auth/admin routes outside', () => {
@@ -76,5 +77,6 @@ describe('App route layout', () => {
         expect(container.querySelector('[data-path="banners"]')).toBeTruthy();
         expect(container.querySelector('[data-path="configs"]')).toBeTruthy();
         expect(container.querySelector('[data-path="static-pages"]')).toBeTruthy();
+        expect(container.querySelector('[data-path="support"]')).toBeTruthy();
     });
 });

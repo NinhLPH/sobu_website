@@ -6,9 +6,11 @@ import com.vn.sodu.support.SupportConversation;
 import com.vn.sodu.support.SupportMessage;
 import com.vn.sodu.support.dto.ConversationSummaryDTO;
 import com.vn.sodu.support.dto.MessageResponseDTO;
+import com.vn.sodu.support.dto.SupportPrincipalDTO;
 import com.vn.sodu.support.repo.SupportConversationRepo;
 import com.vn.sodu.support.repo.SupportMessageRepo;
 import com.vn.sodu.user.Account;
+import com.vn.sodu.user.AccountRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,9 +26,31 @@ public class SupportService {
 
     private final SupportConversationRepo conversationRepo;
     private final SupportMessageRepo messageRepo;
+    private final AccountRepo accountRepo;
 
     @Transactional
-    public SupportConversation getOrCreateConversation(Account account) {
+    public ConversationSummaryDTO getOrCreateConversationSummary(String accountEmail) {
+        Account account = resolveAccount(accountEmail);
+        if (isStaff(account)) {
+            throw new AccessDeniedException("Staff accounts do not have a personal support conversation");
+        }
+        return toSummary(getOrCreateConversation(account));
+    }
+
+    @Transactional(readOnly = true)
+    public SupportPrincipalDTO getSupportPrincipal(String accountEmail) {
+        Account account = resolveAccount(accountEmail);
+        String roleName = getRoleName(account);
+        return SupportPrincipalDTO.builder()
+                .accountId(account.getId())
+                .email(account.getEmail())
+                .roleName(roleName)
+                .staff(isStaffRole(roleName))
+                .active(Account.AccountStatus.ACTIVE.equals(account.getStatus()))
+                .build();
+    }
+
+    private SupportConversation getOrCreateConversation(Account account) {
         return conversationRepo.findByAccountId(account.getId())
                 .orElseGet(() -> {
                     SupportConversation conversation = SupportConversation.builder()
@@ -39,25 +63,15 @@ public class SupportService {
     }
 
     @Transactional(readOnly = true)
-    public SupportConversation getConversationForAccount(Long accountId) {
-        return conversationRepo.findByAccountId(accountId)
-                .orElseThrow(() -> new NotFoundException("Support conversation not found"));
+    public Long getConversationCustomerId(Long conversationId) {
+        SupportConversation conversation = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+        return conversation.getAccount().getId();
     }
 
     @Transactional(readOnly = true)
-    public ConversationSummaryDTO toSummary(SupportConversation conversation) {
-        return ConversationSummaryDTO.builder()
-                .id(conversation.getId())
-                .status(conversation.getStatus())
-                .lastMessageAt(conversation.getLastMessageAt())
-                .createdAt(conversation.getCreatedAt())
-                .customerEmail(conversation.getAccount().getEmail())
-                .customerName(conversation.getAccount().getFullName())
-                .build();
-    }
-
-    @Transactional(readOnly = true)
-    public Page<MessageResponseDTO> getMessages(Account account, Long conversationId, Pageable pageable) {
+    public Page<MessageResponseDTO> getMessages(String accountEmail, Long conversationId, Pageable pageable) {
+        Account account = resolveAccount(accountEmail);
         SupportConversation conversation = conversationRepo.findById(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
 
@@ -70,7 +84,8 @@ public class SupportService {
     }
 
     @Transactional
-    public Page<MessageResponseDTO> getMyMessages(Account account, Pageable pageable) {
+    public Page<MessageResponseDTO> getMyMessages(String accountEmail, Pageable pageable) {
+        Account account = resolveAccount(accountEmail);
         SupportConversation conversation = getOrCreateConversation(account);
 
         return messageRepo.findByConversationIdOrderByCreatedAtDesc(conversation.getId(), pageable)
@@ -78,7 +93,8 @@ public class SupportService {
     }
 
     @Transactional
-    public SupportMessage sendMessage(Account sender, String role, Long conversationId, String content) {
+    public MessageResponseDTO sendMessage(Long senderId, String role, Long conversationId, String content) {
+        Account sender = resolveAccount(senderId);
         SupportConversation conversation = conversationRepo.findById(conversationId)
                 .orElseThrow(() -> new NotFoundException("Conversation not found"));
 
@@ -98,7 +114,7 @@ public class SupportService {
         conversation.setLastMessageAt(message.getCreatedAt());
         conversationRepo.save(conversation);
 
-        return message;
+        return toMessageResponse(message);
     }
 
     @Transactional(readOnly = true)
@@ -107,13 +123,7 @@ public class SupportService {
                 .map(this::toSummary);
     }
 
-    @Transactional(readOnly = true)
-    public SupportConversation getConversationById(Long conversationId) {
-        return conversationRepo.findById(conversationId)
-                .orElseThrow(() -> new NotFoundException("Conversation not found"));
-    }
-
-    public MessageResponseDTO toMessageResponse(SupportMessage message) {
+    private MessageResponseDTO toMessageResponse(SupportMessage message) {
         return MessageResponseDTO.builder()
                 .id(message.getId())
                 .conversationId(message.getConversation().getId())
@@ -125,11 +135,49 @@ public class SupportService {
                 .build();
     }
 
-    public boolean isStaff(Account account) {
-        if (account == null || account.getRole() == null || account.getRole().getName() == null) {
+    private ConversationSummaryDTO toSummary(SupportConversation conversation) {
+        return ConversationSummaryDTO.builder()
+                .id(conversation.getId())
+                .status(conversation.getStatus())
+                .lastMessageAt(conversation.getLastMessageAt())
+                .createdAt(conversation.getCreatedAt())
+                .customerEmail(conversation.getAccount().getEmail())
+                .customerName(conversation.getAccount().getFullName())
+                .build();
+    }
+
+    private Account resolveAccount(String email) {
+        if (email == null || email.isBlank()) {
+            throw new AccessDeniedException("Authentication is required");
+        }
+        return accountRepo.findByEmail(email)
+                .orElseThrow(() -> new NotFoundException("Authenticated account not found"));
+    }
+
+    private Account resolveAccount(Long accountId) {
+        if (accountId == null) {
+            throw new AccessDeniedException("Authentication is required");
+        }
+        return accountRepo.findById(accountId)
+                .orElseThrow(() -> new NotFoundException("Authenticated account not found"));
+    }
+
+    private boolean isStaff(Account account) {
+        return isStaffRole(getRoleName(account));
+    }
+
+    private boolean isStaffRole(String roleName) {
+        if (roleName == null) {
             return false;
         }
-        String name = account.getRole().getName().toUpperCase();
+        String name = roleName.toUpperCase();
         return "ADMIN".equals(name) || "STAFF".equals(name);
+    }
+
+    private String getRoleName(Account account) {
+        if (account == null || account.getRole() == null || account.getRole().getName() == null) {
+            return "USER";
+        }
+        return account.getRole().getName().toUpperCase();
     }
 }

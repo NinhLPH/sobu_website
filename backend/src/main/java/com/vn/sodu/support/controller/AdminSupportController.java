@@ -2,12 +2,9 @@ package com.vn.sodu.support.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.dto.PageResponse;
-import com.vn.sodu.global.exception.NotFoundException;
 import com.vn.sodu.support.dto.ConversationSummaryDTO;
 import com.vn.sodu.support.dto.MessageResponseDTO;
 import com.vn.sodu.support.service.SupportService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.AccountRepo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -38,7 +35,6 @@ import java.util.Locale;
 public class AdminSupportController {
 
     private final SupportService supportService;
-    private final AccountRepo accountRepo;
 
     @GetMapping
     @Operation(summary = "List all support conversations",
@@ -85,10 +81,9 @@ public class AdminSupportController {
             @RequestParam(name = "size", defaultValue = "20") int size
     ) {
         requireStaff(authentication);
-        Account account = resolveAccount(authentication);
         Pageable pageable = buildPageable(page, size);
         PageResponse<MessageResponseDTO> response = PageResponse.from(
-                supportService.getMessages(account, conversationId, pageable));
+                supportService.getMessages(resolveAuthenticatedEmail(authentication), conversationId, pageable));
         return ResponseEntity.ok(ApiResponseDTO.success(response, "Messages retrieved", HttpStatus.OK.value()));
     }
 
@@ -114,12 +109,11 @@ public class AdminSupportController {
         return false;
     }
 
-    private Account resolveAccount(Authentication authentication) {
+    private String resolveAuthenticatedEmail(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) {
             throw new AccessDeniedException("Authentication is required");
         }
-        return accountRepo.findByEmail(authentication.getName())
-                .orElseThrow(() -> new NotFoundException("Authenticated account not found"));
+        return authentication.getName();
     }
 
     private Pageable buildPageable(int page, int size) {

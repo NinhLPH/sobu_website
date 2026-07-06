@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockGetMessages: any = jest.fn();
+const mockGetConversation: any = jest.fn();
 const mockGetAccessToken: any = jest.fn();
 const mockToastError: any = jest.fn();
 
@@ -23,14 +24,21 @@ const mockConfigMap = {
         provider: 'zalo',
         pageId: '123456789',
     }),
-    social_links: JSON.stringify({zalo: 'https://zalo.me/sobu'}),
+    social_links: JSON.stringify({
+        facebook: 'https://facebook.com/sobu',
+        instagram: 'https://instagram.com/sobu',
+        zalo: 'https://zalo.me/sobu',
+        tiktok: 'https://tiktok.com/@sobu',
+    }),
+};
+
+let mockAuthState: any = {
+    isAuthenticated: true,
+    user: mockUser
 };
 
 jest.mock('../../store/useAuthStore', () => ({
-    useAuthStore: () => ({
-        isAuthenticated: true,
-        user: mockUser
-    }),
+    useAuthStore: () => mockAuthState,
 }));
 
 jest.mock('../../utils/auth-storage', () => ({
@@ -41,6 +49,7 @@ jest.mock('../../utils/auth-storage', () => ({
 
 jest.mock('../../service/support-chat.service', () => ({
     SupportChatService: {
+        getConversation: mockGetConversation,
         getMessages: mockGetMessages
     }
 }));
@@ -52,7 +61,12 @@ jest.mock('../../service/toast.service', () => ({
 }));
 
 jest.mock('../../store/usePublicUiStore', () => ({
-    usePublicUiStore: (selector: any) => selector({configMap: mockConfigMap}),
+    usePublicUiStore: (selector: any) => selector({
+        configMap: mockConfigMap,
+        configsLoaded: true,
+        isConfigsLoading: false,
+        configsError: null,
+    }),
 }));
 
 class MockWebSocket {
@@ -79,21 +93,57 @@ const ChatDock = require('./ChatDock').default;
 
 describe('ChatDock', () => {
     beforeEach(() => {
+        mockAuthState = {
+            isAuthenticated: true,
+            user: mockUser
+        };
         (global as any).WebSocket = MockWebSocket;
         jest.clearAllMocks();
         mockGetAccessToken.mockReturnValue('jwt-token');
+        mockGetConversation.mockResolvedValue({ success: true, message: 'ok', data: {} });
         mockGetMessages.mockReturnValue(new Promise(() => undefined));
     });
 
-    it('renders support chat above Zalo chat inside the fixed wrapper', () => {
+    it('renders support chat above social links inside the fixed wrapper', () => {
         const { container } = render(<ChatDock/>);
 
         expect(screen.getByLabelText('Thanh chat ho tro')).toBeTruthy();
         expect(screen.getByLabelText('Thanh chat ho tro khach hang')).toBeTruthy();
-        expect(screen.getByLabelText('Thanh chat Zalo')).toBeTruthy();
+        expect(screen.getByLabelText('Thanh lien ket social')).toBeTruthy();
 
-        const dockOrder = Array.from(container.querySelectorAll('[aria-label="Thanh chat ho tro khach hang"], [aria-label="Thanh chat Zalo"]'))
+        const dockOrder = Array.from(container.querySelectorAll('[aria-label="Thanh chat ho tro khach hang"], [aria-label="Thanh lien ket social"]'))
             .map((element) => element.getAttribute('aria-label'));
-        expect(dockOrder).toEqual(['Thanh chat ho tro khach hang', 'Thanh chat Zalo']);
+        expect(dockOrder).toEqual(['Thanh chat ho tro khach hang', 'Thanh lien ket social']);
+    });
+
+    it('renders support and configured social links for guests', () => {
+        mockAuthState = {
+            isAuthenticated: false,
+            user: null
+        };
+
+        render(<ChatDock/>);
+
+        expect(screen.getByRole('button', { name: 'Mo chat ho tro' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Facebook' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Instagram' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Zalo' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Tiktok' })).toBeTruthy();
+    });
+
+    it('keeps social links visible when support chat is open', () => {
+        mockAuthState = {
+            isAuthenticated: false,
+            user: null
+        };
+
+        render(<ChatDock/>);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Mo chat ho tro' }));
+        expect(screen.getByLabelText('Support chat')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Facebook' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Instagram' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Zalo' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Tiktok' })).toBeTruthy();
     });
 });

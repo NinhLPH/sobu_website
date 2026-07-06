@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
@@ -54,10 +54,23 @@ const initialCheckoutForm: CheckoutForm = {
 };
 
 const shippingQuoteKey = (quote: Pick<ShippingQuoteDto, 'carrierId' | 'carrierServiceId'>) =>
-    `${quote.carrierId}-${quote.carrierServiceId}`;
+    `${quote.carrierId ?? 'missing'}-${quote.carrierServiceId ?? 'missing'}`;
 
 const shippingQuoteFee = (quote: ShippingQuoteDto | null | undefined) =>
-    Number(quote?.customerShipFee ?? quote?.shipFee ?? 0);
+    Number(quote?.customerShipFee ?? quote?.shipFee);
+
+const isUsableShippingQuote = (
+    quote: ShippingQuoteDto | null | undefined
+): quote is ShippingQuoteDto & { carrierId: number; carrierServiceId: number } => {
+    const fee = shippingQuoteFee(quote);
+    return Boolean(quote)
+        && Number.isInteger(quote?.carrierId)
+        && Number(quote?.carrierId) > 0
+        && Number.isInteger(quote?.carrierServiceId)
+        && Number(quote?.carrierServiceId) > 0
+        && Number.isFinite(fee)
+        && fee >= 0;
+};
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message ||
@@ -161,8 +174,11 @@ export default function Cart() {
     const [validationError, setValidationError] = useState<string | null>(null);
     const [shippingQuotes, setShippingQuotes] = useState<ShippingQuoteDto[]>([]);
     const [selectedShippingQuoteKey, setSelectedShippingQuoteKey] = useState('');
+    const [confirmedShippingQuote, setConfirmedShippingQuote] = useState<ShippingQuoteDto | null>(null);
     const [isLoadingShippingQuotes, setIsLoadingShippingQuotes] = useState(false);
+    const [isConfirmingShippingQuote, setIsConfirmingShippingQuote] = useState(false);
     const [shippingQuoteError, setShippingQuoteError] = useState<string | null>(null);
+    const confirmShippingQuoteRequestRef = useRef(0);
 
     useEffect(() => {
         void fetchLocations(true);
@@ -210,19 +226,50 @@ export default function Cart() {
     const selectedShippingQuote = shippingQuotes.find(
         (quote) => shippingQuoteKey(quote) === selectedShippingQuoteKey
     ) ?? null;
-    const selectedShippingFee = shippingQuoteFee(selectedShippingQuote);
+    const displayShippingQuote = confirmedShippingQuote ?? selectedShippingQuote;
+    const selectedShippingFee = isUsableShippingQuote(displayShippingQuote)
+        ? shippingQuoteFee(displayShippingQuote)
+        : 0;
     const orderTotal = subtotal + selectedShippingFee;
     const isCheckoutDisabled =
         isSubmitting ||
         isCreatingPayment ||
         isLoadingShippingQuotes ||
+        isConfirmingShippingQuote ||
         !locationsLoaded ||
         items.length === 0 ||
-        !selectedShippingQuote;
+        !isUsableShippingQuote(confirmedShippingQuote);
+
+    const buildShippingQuoteRequest = useCallback((
+        quote?: { carrierId: number; carrierServiceId: number }
+    ) => ({
+        customerAddress: form.customerAddress.trim() || undefined,
+        customerCityId: form.customerCityId as number,
+        customerDistrictId: form.customerDistrictId as number,
+        customerWardId: form.customerWardId as number,
+        cartSubtotal: subtotal,
+        codAmount: paymentMethod === 'COD' ? subtotal : 0,
+        ...(quote
+            ? {
+                carrierId: quote.carrierId,
+                carrierServiceId: quote.carrierServiceId
+            }
+            : {})
+    }), [
+        form.customerAddress,
+        form.customerCityId,
+        form.customerDistrictId,
+        form.customerWardId,
+        paymentMethod,
+        subtotal
+    ]);
 
     useEffect(() => {
+        confirmShippingQuoteRequestRef.current += 1;
         setShippingQuotes([]);
         setSelectedShippingQuoteKey('');
+        setConfirmedShippingQuote(null);
+        setIsConfirmingShippingQuote(false);
         setShippingQuoteError(null);
 
         if (!hasSelectedShippingLocation || subtotal <= 0) {
@@ -233,14 +280,7 @@ export default function Cart() {
         let isCancelled = false;
         setIsLoadingShippingQuotes(true);
 
-        void ShippingService.getQuotes({
-            customerAddress: form.customerAddress.trim() || undefined,
-            customerCityId: form.customerCityId as number,
-            customerDistrictId: form.customerDistrictId as number,
-            customerWardId: form.customerWardId as number,
-            cartSubtotal: subtotal,
-            codAmount: paymentMethod === 'COD' ? subtotal : 0
-        })
+        void ShippingService.getQuotes(buildShippingQuoteRequest())
             .then((response) => {
                 if (isCancelled) {
                     return;
@@ -249,9 +289,14 @@ export default function Cart() {
                     throw new Error(response.message || 'Could not load shipping quotes.');
                 }
                 const quotes = response.data ?? [];
-                setShippingQuotes(quotes);
-                if (quotes.length === 0) {
-                    setShippingQuoteError('Không có tùy chọn giao hàng phù hợp với địa chỉ này.');
+                const usableQuotes = quotes.filter(isUsableShippingQuote);
+                setShippingQuotes(usableQuotes);
+                if (usableQuotes.length === 0) {
+                    setShippingQuoteError(
+                        quotes.length === 0
+                            ? 'Khong co tuy chon giao hang phu hop voi dia chi nay.'
+                            : 'Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.'
+                    );
                 }
             })
             .catch((error) => {
@@ -271,17 +316,59 @@ export default function Cart() {
             isCancelled = true;
         };
     }, [
-        form.customerAddress,
-        form.customerCityId,
-        form.customerDistrictId,
-        form.customerWardId,
-        form.customerCityName,
-        form.customerDistrictName,
-        form.customerWardName,
+        buildShippingQuoteRequest,
         hasSelectedShippingLocation,
-        paymentMethod,
         subtotal
     ]);
+
+    const handleShippingQuoteSelect = async (quote: ShippingQuoteDto) => {
+        if (!isUsableShippingQuote(quote)) {
+            setSelectedShippingQuoteKey('');
+            setConfirmedShippingQuote(null);
+            setShippingQuoteError('Tuy chon giao hang khong hop le. Vui long chon phuong thuc khac.');
+            return;
+        }
+
+        const key = shippingQuoteKey(quote);
+        const requestId = confirmShippingQuoteRequestRef.current + 1;
+        confirmShippingQuoteRequestRef.current = requestId;
+
+        setSelectedShippingQuoteKey(key);
+        setConfirmedShippingQuote(null);
+        setShippingQuoteError(null);
+        setValidationError(null);
+        clearCheckoutError();
+        setIsConfirmingShippingQuote(true);
+
+        try {
+            const response = await ShippingService.getQuotes(buildShippingQuoteRequest(quote));
+            if (confirmShippingQuoteRequestRef.current !== requestId) {
+                return;
+            }
+            if (!response.success) {
+                throw new Error(response.message || 'Could not confirm shipping quote.');
+            }
+
+            const confirmedQuote = (response.data ?? []).find(
+                (item) => isUsableShippingQuote(item) && shippingQuoteKey(item) === key
+            );
+            if (!confirmedQuote) {
+                throw new Error('Khong the xac nhan phi giao hang da chon. Vui long chon phuong thuc khac.');
+            }
+
+            setConfirmedShippingQuote(confirmedQuote);
+        } catch (error) {
+            if (confirmShippingQuoteRequestRef.current === requestId) {
+                setShippingQuoteError(
+                    getErrorMessage(error, 'Khong the xac nhan phi giao hang. Vui long thu lai.')
+                );
+            }
+        } finally {
+            if (confirmShippingQuoteRequestRef.current === requestId) {
+                setIsConfirmingShippingQuote(false);
+            }
+        }
+    };
 
     const handleCityChange = (event: ChangeEvent<HTMLSelectElement>) => {
         const cityId = event.target.value ? Number(event.target.value) : null;
@@ -357,12 +444,12 @@ export default function Cart() {
             return;
         }
 
-        if (!selectedShippingQuote) {
+        if (!isUsableShippingQuote(confirmedShippingQuote)) {
             setValidationError('Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.');
             return;
         }
 
-        const shippingFee = shippingQuoteFee(selectedShippingQuote);
+        const shippingFee = shippingQuoteFee(confirmedShippingQuote);
 
         try {
             const order = await submitOrder({
@@ -376,8 +463,8 @@ export default function Cart() {
                 customerCityId: form.customerCityId,
                 customerDistrictId: form.customerDistrictId,
                 customerWardId: form.customerWardId,
-                carrierId: selectedShippingQuote.carrierId,
-                carrierServiceId: selectedShippingQuote.carrierServiceId,
+                carrierId: confirmedShippingQuote.carrierId,
+                carrierServiceId: confirmedShippingQuote.carrierServiceId,
                 shippingFee,
                 description: form.description.trim() || undefined
             });
@@ -656,10 +743,14 @@ export default function Cart() {
                             )}
                             {hasSelectedShippingLocation && !isLoadingShippingQuotes && shippingQuotes.length > 0 && (
                                 <div className="mt-3 space-y-2">
+                                    <p className="text-xs font-semibold text-on-surface-variant">
+                                        Chon mot don vi van chuyen ben duoi. Phi ap dung uu tien customerShipFee neu Nhanh tra ve, nguoc lai dung shipFee.
+                                    </p>
                                     {shippingQuotes.map((quote) => {
                                         const key = shippingQuoteKey(quote);
                                         const fee = shippingQuoteFee(quote);
                                         const isSelected = selectedShippingQuoteKey === key;
+                                        const hasCustomerFee = quote.customerShipFee !== undefined && quote.customerShipFee !== null;
 
                                         return (
                                             <label
@@ -676,22 +767,29 @@ export default function Cart() {
                                                     value={key}
                                                     checked={isSelected}
                                                     onChange={() => {
-                                                        setSelectedShippingQuoteKey(key);
-                                                        setValidationError(null);
-                                                        clearCheckoutError();
+                                                        void handleShippingQuoteSelect(quote);
                                                     }}
-                                                    disabled={isSubmitting || isCreatingPayment}
+                                                    disabled={isSubmitting || isCreatingPayment || isConfirmingShippingQuote}
                                                     className="mt-1 h-3.5 w-3.5 shrink-0 accent-primary"
                                                 />
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block font-black text-on-surface">
                                                         {quote.carrierName || 'Carrier'} - {quote.carrierServiceName || 'Service'}
                                                     </span>
+                                                    <span className="mt-1 block font-medium">
+                                                        Carrier ID: {quote.carrierId} | Service ID: {quote.carrierServiceId}
+                                                    </span>
                                                     {(quote.deliveryTime || quote.description) && (
                                                         <span className="mt-1 block font-medium">
                                                             {[quote.deliveryTime, quote.description].filter(Boolean).join(' - ')}
                                                         </span>
                                                     )}
+                                                    <span className="mt-1 block font-medium">
+                                                        Phi ap dung: {formatCurrency(fee)}
+                                                        {hasCustomerFee
+                                                            ? ` | Ship fee goc: ${formatCurrency(Number(quote.shipFee ?? 0))}`
+                                                            : ''}
+                                                    </span>
                                                 </span>
                                                 <span className="shrink-0 font-black text-primary">
                                                     {formatCurrency(fee)}
@@ -699,6 +797,12 @@ export default function Cart() {
                                             </label>
                                         );
                                     })}
+                                    {isConfirmingShippingQuote && (
+                                        <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-bold text-primary">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Dang xac nhan phi giao hang...
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </fieldset>
@@ -711,7 +815,13 @@ export default function Cart() {
                             <div className="flex justify-between text-on-surface-variant">
                                 <span>Phí giao hàng</span>
                                 <span className="text-[10px] uppercase tracking-wider text-primary">
-                                    {selectedShippingQuote ? formatCurrency(selectedShippingFee) : 'Chưa chọn'}
+                                    {isConfirmingShippingQuote
+                                        ? 'Dang xac nhan'
+                                        : confirmedShippingQuote
+                                            ? formatCurrency(selectedShippingFee)
+                                            : selectedShippingQuote
+                                                ? 'Can xac nhan'
+                                                : 'Chưa chọn'}
                                 </span>
                             </div>
                             <div className="mt-2 flex items-end justify-between border-t border-dashed border-surface-container-high pt-3">
@@ -746,11 +856,13 @@ export default function Cart() {
                             disabled={isCheckoutDisabled}
                             className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-on-primary shadow-md shadow-primary/10 transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            {(isSubmitting || isCreatingPayment) && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {(isSubmitting || isCreatingPayment || isConfirmingShippingQuote) && <Loader2 className="h-4 w-4 animate-spin" />}
                             {isSubmitting
                                 ? 'Đang tạo đơn hàng...'
                                 : isCreatingPayment
                                     ? 'Đang khởi tạo thanh toán...'
+                                    : isConfirmingShippingQuote
+                                        ? 'Dang xac nhan phi giao hang...'
                                     : paymentMethod === 'COD'
                                         ? 'Đặt hàng với COD'
                                         : 'Đặt hàng và thanh toán'}

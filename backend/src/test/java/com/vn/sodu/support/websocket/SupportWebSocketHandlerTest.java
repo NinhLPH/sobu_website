@@ -2,15 +2,12 @@ package com.vn.sodu.support.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.security.JwtService;
-import com.vn.sodu.support.SupportConversation;
-import com.vn.sodu.support.SupportMessage;
+import com.vn.sodu.support.ConversationStatus;
+import com.vn.sodu.support.dto.ConversationSummaryDTO;
 import com.vn.sodu.support.dto.MessageResponseDTO;
+import com.vn.sodu.support.dto.SupportPrincipalDTO;
 import com.vn.sodu.support.dto.WebSocketMessage;
 import com.vn.sodu.support.service.SupportService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.Account.AccountStatus;
-import com.vn.sodu.user.AccountRepo;
-import com.vn.sodu.user.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,8 +18,8 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,9 +32,6 @@ class SupportWebSocketHandlerTest {
     private JwtService jwtService;
 
     @Mock
-    private AccountRepo accountRepo;
-
-    @Mock
     private SupportService supportService;
 
     @Mock
@@ -48,7 +42,7 @@ class SupportWebSocketHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new SupportWebSocketHandler(jwtService, accountRepo, supportService, objectMapper);
+        handler = new SupportWebSocketHandler(jwtService, supportService, objectMapper);
     }
 
     @Test
@@ -85,12 +79,12 @@ class SupportWebSocketHandlerTest {
 
     @Test
     void validAuth_doesNotCloseSession() throws Exception {
-        Account account = Account.builder()
-                .id(1L)
+        SupportPrincipalDTO principal = SupportPrincipalDTO.builder()
+                .accountId(1L)
                 .email("user@example.com")
-                .fullName("User")
-                .role(Role.builder().name("USER").build())
-                .status(AccountStatus.ACTIVE)
+                .roleName("USER")
+                .staff(false)
+                .active(true)
                 .build();
 
         WebSocketMessage msg = WebSocketMessage.builder()
@@ -100,9 +94,8 @@ class SupportWebSocketHandlerTest {
 
         when(jwtService.isTokenValid("valid-token")).thenReturn(true);
         when(jwtService.extractUsername("valid-token")).thenReturn("user@example.com");
-        when(accountRepo.findByEmail("user@example.com")).thenReturn(Optional.of(account));
-        when(supportService.isStaff(account)).thenReturn(false);
-        when(session.getAttributes()).thenReturn(new java.util.HashMap<>());
+        when(supportService.getSupportPrincipal("user@example.com")).thenReturn(principal);
+        when(session.getAttributes()).thenReturn(new HashMap<>());
         when(session.isOpen()).thenReturn(true);
 
         handler.handleTextMessage(session, new TextMessage(objectMapper.writeValueAsString(msg)));
@@ -111,35 +104,19 @@ class SupportWebSocketHandlerTest {
     }
 
     @Test
-    void sendMessage_persistsMessage() throws Exception {
-        Account customer = Account.builder()
-                .id(1L)
+    void authThenSendMessage_persistsMessageAndBroadcasts() throws Exception {
+        SupportPrincipalDTO principal = SupportPrincipalDTO.builder()
+                .accountId(1L)
                 .email("user@example.com")
-                .fullName("User")
-                .role(Role.builder().name("USER").build())
-                .status(AccountStatus.ACTIVE)
+                .roleName("USER")
+                .staff(false)
+                .active(true)
                 .build();
 
-        SupportConversation conversation = SupportConversation.builder()
+        ConversationSummaryDTO conversation = ConversationSummaryDTO.builder()
                 .id(10L)
-                .account(customer)
+                .status(ConversationStatus.OPEN)
                 .build();
-
-        SupportMessage savedMessage = SupportMessage.builder()
-                .id(100L)
-                .conversation(conversation)
-                .sender(customer)
-                .senderRole("USER")
-                .content("Hello")
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        when(session.getAttributes()).thenReturn(new java.util.HashMap<>() {{
-            put("account", customer);
-        }});
-        when(supportService.isStaff(customer)).thenReturn(false);
-        when(supportService.getOrCreateConversation(customer)).thenReturn(conversation);
-        when(supportService.sendMessage(customer, "USER", 10L, "Hello")).thenReturn(savedMessage);
 
         MessageResponseDTO dto = MessageResponseDTO.builder()
                 .id(100L)
@@ -149,16 +126,31 @@ class SupportWebSocketHandlerTest {
                 .senderRole("USER")
                 .content("Hello")
                 .build();
-        when(supportService.toMessageResponse(savedMessage)).thenReturn(dto);
-        when(supportService.getConversationById(10L)).thenReturn(conversation);
+
+        Map<String, Object> attrs = new HashMap<>();
+        when(session.getAttributes()).thenReturn(attrs);
+        when(session.isOpen()).thenReturn(true);
+        when(jwtService.isTokenValid("valid-token")).thenReturn(true);
+        when(jwtService.extractUsername("valid-token")).thenReturn("user@example.com");
+        when(supportService.getSupportPrincipal("user@example.com")).thenReturn(principal);
+        when(supportService.getOrCreateConversationSummary("user@example.com")).thenReturn(conversation);
+        when(supportService.sendMessage(1L, "USER", 10L, "Hello")).thenReturn(dto);
+        when(supportService.getConversationCustomerId(10L)).thenReturn(1L);
+
+        WebSocketMessage auth = WebSocketMessage.builder()
+                .type("AUTH")
+                .accessToken("valid-token")
+                .build();
 
         WebSocketMessage msg = WebSocketMessage.builder()
                 .type("SEND_MESSAGE")
                 .content("Hello")
                 .build();
 
+        handler.handleTextMessage(session, new TextMessage(objectMapper.writeValueAsString(auth)));
         handler.handleTextMessage(session, new TextMessage(objectMapper.writeValueAsString(msg)));
 
-        verify(supportService).sendMessage(customer, "USER", 10L, "Hello");
+        verify(supportService).sendMessage(1L, "USER", 10L, "Hello");
+        verify(supportService).getConversationCustomerId(10L);
     }
 }

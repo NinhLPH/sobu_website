@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Package, ListTree, ShoppingCart, MessageSquare, Settings, Tag, Images, SlidersHorizontal, FileText, Star } from 'lucide-react';
+import { Package, ListTree, ShoppingCart, MessageSquare, Settings, Tag, Images, SlidersHorizontal, FileText, Star, Truck, Headphones } from 'lucide-react';
 
 export default function AdminLayout() {
     const location = useLocation();
@@ -10,7 +10,9 @@ export default function AdminLayout() {
         { name: 'Thương hiệu', path: '/admin/brands', icon: Tag },
         { name: 'Đơn hàng', path: '/admin/orders', icon: ShoppingCart },
         { name: 'Yêu cầu', path: '/admin/requests', icon: MessageSquare },
+        { name: 'Chat hỗ trợ', path: '/admin/support', icon: Headphones },
         { name: 'Đánh giá', path: '/admin/reviews', icon: Star },
+        { name: 'Vận chuyển', path: '/admin/shipping', icon: Truck },
         { name: 'Banner', path: '/admin/banners', icon: Images },
         { name: 'Cấu hình website', path: '/admin/configs', icon: SlidersHorizontal },
         { name: 'Trang tĩnh', path: '/admin/static-pages', icon: FileText },

@@ -6,9 +6,9 @@ This document rewrites the Sobu backend API into a consistent endpoint-by-endpoi
 
 ### Base URLs
 
-- Local API: `http://localhost:8080`
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+- Local API: `http://localhost:8081`
+- Swagger UI: `http://localhost:8081/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8081/v3/api-docs`
 
 ### Standard Success Response
 
@@ -59,6 +59,7 @@ Some modules expose multiple base paths:
 - Public catalog: `/api/public/...` and `/api/v1/public/...`
 - Public Nhanh locations: `/api/public/locations` only
 - Public shipping quotes: `/api/public/shipping/quotes`
+- Admin Nhanh shipping: `/api/admin/shipping/...` only
 - Public static pages: `/api/public/pages/...` only
 - Public reviews: `/api/public/reviews` and `/api/public/products/{id}/reviews` only
 - Requests: `/api/requests/...`, `/api/request/...`, `/api/v1/requests/...`, `/api/v1/request/...`
@@ -1517,6 +1518,239 @@ Uses the common error responses. Typical statuses: `400`, `502`, `500`.
 
 * This endpoint returns `ApiResponseDTO<List<ShippingQuoteDto>>`.
 * No `/api/v1/public/shipping/quotes` alias is currently defined.
+
+## Endpoint
+
+**List Admin Shipping Carriers**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/admin/shipping/carriers`
+
+### Description
+
+Get all active shipping carriers connected to the Nhanh POS account.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Carriers retrieved successfully from Nhanh",
+  "data": {}
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `502`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+
+### Notes
+
+* Data shape depends on the Nhanh POS carrier endpoint response.
+
+## Endpoint
+
+**Get Admin Shipping Carrier Configuration**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/admin/shipping/carrier-config`
+
+### Description
+
+Get the current default and express shipping carrier configuration.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Carrier configuration retrieved successfully",
+  "data": {
+    "carrierId": 22151,
+    "standardService": "VCN",
+    "expressService": "VHT",
+    "expressFallbackId": 22384
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `401`, `403`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+
+### Notes
+
+* Returns `ApiResponseDTO<CarrierConfigResponseDto>`.
+
+## Endpoint
+
+**Update Admin Shipping Carrier Configuration**
+
+### Method
+
+`PUT`
+
+### URI
+
+`/api/admin/shipping/carrier-config`
+
+### Description
+
+Save new standard, express, and fallback shipping carrier IDs and service codes.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | Yes | `application/json` |
+| Authorization | String | Yes | Bearer token |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Request Body
+
+```json
+{
+  "carrierId": 22151,
+  "standardService": "VCN",
+  "expressService": "VHT",
+  "expressFallbackId": 22384
+}
+```
+
+#### Body Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| carrierId | Long | No | Default carrier ID |
+| standardService | String | No | Standard delivery service code |
+| expressService | String | No | Express delivery service code |
+| expressFallbackId | Long | No | Fallback carrier ID for express delivery |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Carrier configuration updated successfully",
+  "data": null
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `403`, `502`, `500`.
+
+### Business Rules
+
+* Requires role `ADMIN` or `STAFF`.
+* Nhanh integration must be authenticated before updating carrier config.
+
+### Notes
+
+* Returns `ApiResponseDTO<Void>`.
 
 ## Endpoint
 
@@ -5655,6 +5889,79 @@ Typical statuses: `500`.
 
 ## Endpoint
 
+**Handle Nhanh OAuth Callback**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/nhanh/oauth/callback`
+
+### Description
+
+Handle OAuth callback from Nhanh after admin authorization, exchange the access code for a token, and store the connection.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| None | No |
+
+### Headers
+
+| Header | Type | Required | Description |
+| ------ | ---- | -------- | ----------- |
+| Content-Type | String | No | Optional for GET requests |
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| None | - | - | - |
+
+### Query Parameters
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| accessCode | String | Yes | Nhanh OAuth access code returned after authorization |
+
+Example:
+
+```http
+GET /api/nhanh/oauth/callback?accessCode=abc123
+```
+
+### Request Body
+
+No request body.
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```text
+Connected
+```
+
+### Error Responses
+
+Typical statuses: `400`, `500`.
+
+### Business Rules
+
+* The access code is exchanged for an access token and stored in the database.
+* Subsequent API calls to Nhanh use the stored token automatically.
+
+### Notes
+
+* Response is raw text, not `ApiResponseDTO`.
+
+## Endpoint
+
 **Receive Nhanh Webhook**
 
 ### Method
@@ -5883,78 +6190,6 @@ Typical statuses: `400`, `404`, `500`.
 ### Notes
 
 * Response has no JSON body.
-
-## Endpoint
-
-**Handle Nhanh OAuth Callback**
-
-### Method
-
-`GET`
-
-### URI
-
-`/api/nhanh/oauth/callback`
-
-### Description
-
-Handle OAuth callback from Nhanh after authorization.
-
-### Authorization
-
-| Type | Required |
-| ---- | -------- |
-| None | No |
-
-### Headers
-
-| Header | Type | Required | Description |
-| ------ | ---- | -------- | ----------- |
-| Content-Type | String | No | Optional for GET requests |
-
-### Path Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| None | - | - | - |
-
-### Query Parameters
-
-| Parameter | Type | Required | Description |
-| --------- | ---- | -------- | ----------- |
-| accessCode | String | Yes | Nhanh OAuth access code |
-
-Example:
-
-```http
-GET /api/nhanh/oauth/callback?accessCode=abc123
-```
-
-### Request Body
-
-No request body.
-
-### Success Response
-
-#### HTTP Status
-
-`200 OK`
-
-```json
-"Connected"
-```
-
-### Error Responses
-
-Typical statuses: `400`, `500`.
-
-### Business Rules
-
-* Callback should be invoked by Nhanh after user approval.
-
-### Notes
-
-* Intended for integration/admin tooling, not end-user shopping flow.
 
 ## Endpoint
 

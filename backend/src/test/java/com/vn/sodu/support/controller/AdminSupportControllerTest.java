@@ -6,9 +6,6 @@ import com.vn.sodu.support.ConversationStatus;
 import com.vn.sodu.support.dto.ConversationSummaryDTO;
 import com.vn.sodu.support.dto.MessageResponseDTO;
 import com.vn.sodu.support.service.SupportService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.AccountRepo;
-import com.vn.sodu.user.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,7 +24,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -40,14 +36,11 @@ class AdminSupportControllerTest {
     @Mock
     private SupportService supportService;
 
-    @Mock
-    private AccountRepo accountRepo;
-
     private AdminSupportController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminSupportController(supportService, accountRepo);
+        controller = new AdminSupportController(supportService);
     }
 
     @Test
@@ -93,7 +86,6 @@ class AdminSupportControllerTest {
     @Test
     void getConversationMessages_acceptsStaff() {
         Authentication auth = authentication("staff@example.com", "ROLE_STAFF");
-        Account account = account(2L, "staff@example.com", "STAFF");
         Page<MessageResponseDTO> messagePage = new PageImpl<>(List.of(
                 MessageResponseDTO.builder()
                         .id(100L)
@@ -105,7 +97,6 @@ class AdminSupportControllerTest {
                         .build()
         ));
 
-        when(accountRepo.findByEmail("staff@example.com")).thenReturn(Optional.of(account));
         when(supportService.getMessages(any(), any(), any(Pageable.class))).thenReturn(messagePage);
 
         ResponseEntity<?> response = controller.getConversationMessages(auth, 10L, 0, 20);
@@ -147,12 +138,4 @@ class AdminSupportControllerTest {
         };
     }
 
-    private Account account(Long id, String email, String roleName) {
-        return Account.builder()
-                .id(id)
-                .email(email)
-                .fullName("User")
-                .role(Role.builder().name(roleName).build())
-                .build();
-    }
 }

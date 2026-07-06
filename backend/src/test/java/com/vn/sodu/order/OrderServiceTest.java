@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
@@ -54,6 +55,9 @@ class OrderServiceTest {
     @Mock
     private AccountRepo accountRepo;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private OrderService orderService;
 
     @BeforeEach
@@ -64,7 +68,8 @@ class OrderServiceTest {
                 orderCustomerResolver,
                 requestToOrderMapper,
                 paymentService,
-                accountRepo
+                accountRepo,
+                eventPublisher
         );
     }
 

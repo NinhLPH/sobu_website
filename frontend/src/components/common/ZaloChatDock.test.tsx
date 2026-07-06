@@ -1,130 +1,98 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import {render, screen} from '@testing-library/react';
+import {beforeEach, describe, expect, it, jest} from '@jest/globals';
 import ZaloChatDock from './ZaloChatDock';
 
 let mockConfigMap: Record<string, string> = {};
 
 jest.mock('../../store/usePublicUiStore', () => ({
-    usePublicUiStore: (selector: any) => selector({configMap: mockConfigMap}),
+    usePublicUiStore: (selector: any) => selector({
+        configMap: mockConfigMap,
+        configsLoaded: true,
+        isConfigsLoading: false,
+        configsError: null,
+    }),
 }));
 
-const enabledConfig = {
-    social_chat_widget_enabled: 'true',
-    social_chat_config: JSON.stringify({
-        provider: 'zalo',
-        pageId: '123456789',
-        greetingText: 'SOBU can help',
-        autoPopup: true,
-        width: 360,
-        height: 460,
-    }),
-    social_links: JSON.stringify({zalo: 'https://zalo.me/sobu'}),
+const socialLinks = {
+    facebook: 'https://facebook.com/sobu',
+    instagram: 'https://instagram.com/sobu',
+    zalo: 'https://zalo.me/sobu',
+    tiktok: 'https://tiktok.com/@sobu',
 };
 
 describe('ZaloChatDock', () => {
     beforeEach(() => {
-        mockConfigMap = {...enabledConfig};
+        mockConfigMap = {
+            social_chat_widget_enabled: 'false',
+            social_chat_config: JSON.stringify({
+                provider: 'disabled-provider',
+                pageId: '',
+            }),
+            social_links: JSON.stringify(socialLinks),
+        };
         document.getElementById('zalo-sdk-script')?.remove();
         document.body.innerHTML = '';
-        delete window.ZaloSocialSDK;
         jest.clearAllMocks();
     });
 
-    it('does not render when disabled', () => {
-        mockConfigMap = {
-            ...enabledConfig,
-            social_chat_widget_enabled: 'false',
-        };
-
+    it('renders configured social links from social_links only', () => {
         render(<ZaloChatDock/>);
 
-        expect(screen.queryByRole('button', {name: 'Mo chat Zalo'})).toBeNull();
+        expect(screen.getByLabelText('Thanh lien ket social')).toBeTruthy();
+        expect(screen.getByRole('link', {name: 'Mo Facebook'})).toBeTruthy();
+        expect(screen.getByRole('link', {name: 'Mo Instagram'})).toBeTruthy();
+        expect(screen.getByRole('link', {name: 'Mo Zalo'})).toBeTruthy();
+        expect(screen.getByRole('link', {name: 'Mo Tiktok'})).toBeTruthy();
     });
 
-    it('renders a fallback panel when enabled without the Zalo page id', () => {
-        mockConfigMap = {
-            ...enabledConfig,
-            social_chat_config: JSON.stringify({provider: 'zalo'}),
-        };
-
+    it('opens each configured social link in a new tab', () => {
         render(<ZaloChatDock/>);
 
-        expect(screen.getByRole('button', {name: 'Mo chat Zalo'})).toBeTruthy();
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        expect(screen.getByText('Chat Zalo chua san sang')).toBeTruthy();
-        expect(screen.getByText(/cau hinh Zalo OA\/pageId/i)).toBeTruthy();
-        expect(document.getElementById('zalo-sdk-script')).toBeNull();
-    });
-
-    it('shows the configured Zalo fallback link when enabled without the page id', () => {
-        mockConfigMap = {
-            ...enabledConfig,
-            social_chat_config: JSON.stringify({provider: 'zalo'}),
-        };
-
-        render(<ZaloChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        const fallbackLink = screen.getByRole('link', {name: /Mo Zalo/i}) as HTMLAnchorElement;
-        expect(fallbackLink.getAttribute('href')).toBe('https://zalo.me/sobu');
-        expect(document.getElementById('zalo-sdk-script')).toBeNull();
-    });
-
-    it('renders the Zalo bubble when enabled', () => {
-        render(<ZaloChatDock/>);
-
-        expect(screen.getByLabelText('Thanh chat Zalo')).toBeTruthy();
-        expect(screen.getByRole('button', {name: 'Mo chat Zalo'})).toBeTruthy();
-    });
-
-    it('opens the panel and renders the configured Zalo widget attributes', () => {
-        const {container} = render(<ZaloChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        expect(screen.getByLabelText('Zalo chat')).toBeTruthy();
-        expect(screen.getByText('Dang tai Zalo...')).toBeTruthy();
-
-        const widget = container.querySelector('.zalo-chat-widget') as HTMLElement;
-        expect(widget).toBeTruthy();
-        expect(widget.dataset.oaid).toBe('123456789');
-        expect(widget.dataset.welcomeMessage).toBe('SOBU can help');
-        expect(widget.dataset.autopopup).toBe('1');
-        expect(widget.dataset.width).toBe('360');
-        expect(widget.dataset.height).toBe('460');
-    });
-
-    it('injects the Zalo SDK script only once', () => {
-        render(<ZaloChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-        fireEvent.click(screen.getByRole('button', {name: 'An chat Zalo'}));
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        expect(document.querySelectorAll('#zalo-sdk-script')).toHaveLength(1);
-        expect((document.getElementById('zalo-sdk-script') as HTMLScriptElement).src)
-            .toBe('https://sp.zalo.me/plugins/sdk.js');
-    });
-
-    it('shows the configured Zalo fallback link when the SDK fails', async () => {
-        render(<ZaloChatDock/>);
-
-        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
-
-        const script = document.getElementById('zalo-sdk-script');
-        expect(script).toBeTruthy();
-
-        act(() => {
-            script?.dispatchEvent(new Event('error'));
+        Object.entries({
+            Facebook: socialLinks.facebook,
+            Instagram: socialLinks.instagram,
+            Zalo: socialLinks.zalo,
+            Tiktok: socialLinks.tiktok,
+        }).forEach(([label, href]) => {
+            const link = screen.getByRole('link', {name: `Mo ${label}`}) as HTMLAnchorElement;
+            expect(link.getAttribute('href')).toBe(href);
+            expect(link.getAttribute('target')).toBe('_blank');
+            expect(link.getAttribute('rel')).toBe('noreferrer');
         });
+    });
 
-        await waitFor(() => {
-            expect(screen.getByText('Khong tai duoc Zalo chat')).toBeTruthy();
-        });
+    it('hides blank and missing social links', () => {
+        mockConfigMap = {
+            social_links: JSON.stringify({
+                facebook: 'https://facebook.com/sobu',
+                instagram: '   ',
+                zalo: '',
+            }),
+        };
 
-        const fallbackLink = screen.getByRole('link', {name: /Mo Zalo/i}) as HTMLAnchorElement;
-        expect(fallbackLink.getAttribute('href')).toBe('https://zalo.me/sobu');
+        render(<ZaloChatDock/>);
+
+        expect(screen.getByRole('link', {name: 'Mo Facebook'})).toBeTruthy();
+        expect(screen.queryByRole('link', {name: 'Mo Instagram'})).toBeNull();
+        expect(screen.queryByRole('link', {name: 'Mo Zalo'})).toBeNull();
+        expect(screen.queryByRole('link', {name: 'Mo Tiktok'})).toBeNull();
+    });
+
+    it('does not render when social_links has no supported URLs', () => {
+        mockConfigMap = {
+            social_links: JSON.stringify({
+                youtube: 'https://youtube.com/@sobu',
+            }),
+        };
+
+        render(<ZaloChatDock/>);
+
+        expect(screen.queryByLabelText('Thanh lien ket social')).toBeNull();
+    });
+
+    it('does not inject the Zalo SDK script', () => {
+        render(<ZaloChatDock/>);
+
+        expect(document.getElementById('zalo-sdk-script')).toBeNull();
     });
 });

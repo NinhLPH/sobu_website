@@ -207,6 +207,25 @@ public class NhanhOrderGateway {
                 .build();
     }
 
+    public NhanhOrderEditResult cancelOrder(Order order, String accessToken) {
+        if (order == null) {
+            throw new IllegalArgumentException("Order is required");
+        }
+        if (order.getNhanhOrderId() == null || order.getNhanhOrderId().isBlank()) {
+            throw new IllegalArgumentException("Nhanh order id is required for cancellation");
+        }
+
+        NhanhOrderEditRequest request = NhanhOrderEditRequest.builder()
+                .info(NhanhOrderEditRequest.Info.builder()
+                        .id(parseLong(order.getNhanhOrderId(), "Nhanh order id"))
+                        .description("Khach huy don - Huy tu website")
+                        .build())
+                .status("Cancelled")
+                .build();
+
+        return editOrder(request, accessToken);
+    }
+
     public NhanhOrderEditRequest buildEditRequest(Order order, OrderPayment payment) {
         if (order == null) {
             throw new IllegalArgumentException("Order is required");

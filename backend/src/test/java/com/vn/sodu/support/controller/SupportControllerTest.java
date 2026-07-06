@@ -2,15 +2,10 @@ package com.vn.sodu.support.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.dto.PageResponse;
-import com.vn.sodu.global.exception.NotFoundException;
 import com.vn.sodu.support.ConversationStatus;
-import com.vn.sodu.support.SupportConversation;
 import com.vn.sodu.support.dto.ConversationSummaryDTO;
 import com.vn.sodu.support.dto.MessageResponseDTO;
 import com.vn.sodu.support.service.SupportService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.AccountRepo;
-import com.vn.sodu.user.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,14 +21,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
-import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,27 +36,16 @@ class SupportControllerTest {
     @Mock
     private SupportService supportService;
 
-    @Mock
-    private AccountRepo accountRepo;
-
     private SupportController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new SupportController(supportService, accountRepo);
+        controller = new SupportController(supportService);
     }
 
     @Test
     void getOrCreateConversation_returnsConversationForCustomer() {
         Authentication auth = authentication("user@example.com", "ROLE_USER");
-        Account account = account(1L, "user@example.com", "USER");
-        SupportConversation conversation = SupportConversation.builder()
-                .id(10L)
-                .account(account)
-                .status(ConversationStatus.OPEN)
-                .lastMessageAt(LocalDateTime.now())
-                .createdAt(LocalDateTime.now())
-                .build();
         ConversationSummaryDTO dto = ConversationSummaryDTO.builder()
                 .id(10L)
                 .status(ConversationStatus.OPEN)
@@ -70,10 +53,7 @@ class SupportControllerTest {
                 .customerName("User")
                 .build();
 
-        when(accountRepo.findByEmail("user@example.com")).thenReturn(Optional.of(account));
-        when(supportService.isStaff(account)).thenReturn(false);
-        when(supportService.getOrCreateConversation(account)).thenReturn(conversation);
-        when(supportService.toSummary(conversation)).thenReturn(dto);
+        when(supportService.getOrCreateConversationSummary("user@example.com")).thenReturn(dto);
 
         ResponseEntity<?> response = controller.getOrCreateConversation(auth);
 
@@ -86,10 +66,9 @@ class SupportControllerTest {
     @Test
     void getOrCreateConversation_deniesStaff() {
         Authentication auth = authentication("staff@example.com", "ROLE_STAFF");
-        Account account = account(2L, "staff@example.com", "STAFF");
 
-        when(accountRepo.findByEmail("staff@example.com")).thenReturn(Optional.of(account));
-        when(supportService.isStaff(account)).thenReturn(true);
+        when(supportService.getOrCreateConversationSummary("staff@example.com"))
+                .thenThrow(new AccessDeniedException("Staff accounts do not have a personal support conversation"));
 
         assertThrows(AccessDeniedException.class, () -> controller.getOrCreateConversation(auth));
     }
@@ -97,7 +76,6 @@ class SupportControllerTest {
     @Test
     void getMyMessages_returnsOwnMessages() {
         Authentication auth = authentication("user@example.com", "ROLE_USER");
-        Account account = account(1L, "user@example.com", "USER");
         Page<MessageResponseDTO> messagePage = new PageImpl<>(List.of(
                 MessageResponseDTO.builder()
                         .id(100L)
@@ -108,8 +86,7 @@ class SupportControllerTest {
                         .build()
         ));
 
-        when(accountRepo.findByEmail("user@example.com")).thenReturn(Optional.of(account));
-        when(supportService.getMyMessages(any(), any(Pageable.class))).thenReturn(messagePage);
+        when(supportService.getMyMessages(eq("user@example.com"), any(Pageable.class))).thenReturn(messagePage);
 
         ResponseEntity<?> response = controller.getMyMessages(auth, 0, 20);
 
@@ -145,12 +122,4 @@ class SupportControllerTest {
         };
     }
 
-    private Account account(Long id, String email, String roleName) {
-        return Account.builder()
-                .id(id)
-                .email(email)
-                .fullName("User")
-                .role(Role.builder().name(roleName).build())
-                .build();
-    }
 }
