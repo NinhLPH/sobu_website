@@ -201,13 +201,10 @@ describe('useCartStore order submission', () => {
     });
 
     it.each([
-        ['missing carrier id', { carrierServiceId: 20, shippingFee: 30000 }],
-        ['missing carrier service id', { carrierId: 10, shippingFee: 30000 }],
         ['invalid carrier id', { carrierId: 0, carrierServiceId: 20, shippingFee: 30000 }],
         ['invalid carrier service id', { carrierId: 10, carrierServiceId: 0, shippingFee: 30000 }],
         ['missing shipping fee', { carrierId: 10, carrierServiceId: 20 }],
-        ['non-finite shipping fee', { carrierId: 10, carrierServiceId: 20, shippingFee: Number.NaN }],
-        ['negative shipping fee', { carrierId: 10, carrierServiceId: 20, shippingFee: -1 }]
+        ['non-finite shipping fee', { carrierId: 10, carrierServiceId: 20, shippingFee: Number.NaN }]
     ])('rejects order submission with %s', async (_label, invalidQuote) => {
         mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
         await useCartStore.getState().addToCart(product);

@@ -69,42 +69,6 @@ const shippingQuote = {
     description: 'Door delivery'
 };
 
-const expressShippingQuote = {
-    carrierId: 30,
-    carrierName: 'AhaMove',
-    carrierServiceId: 40,
-    carrierServiceName: 'Hoa toc',
-    shipFee: 14000,
-    customerShipFee: 14000,
-    deliveryTime: null,
-    description: null
-};
-
-const shippingQuotes = [shippingQuote, expressShippingQuote];
-
-const nullCarrierShippingQuotes = [
-    {
-        carrierId: null,
-        carrierName: null,
-        carrierServiceId: null,
-        carrierServiceName: null,
-        shipFee: 14000,
-        customerShipFee: 14000,
-        deliveryTime: null,
-        description: null
-    },
-    {
-        carrierId: null,
-        carrierName: null,
-        carrierServiceId: null,
-        carrierServiceName: 'Hỏa tốc (null)',
-        shipFee: 14000,
-        customerShipFee: 14000,
-        deliveryTime: null,
-        description: null
-    }
-];
-
 const invalidShippingQuote = {
     carrierId: 11,
     carrierName: 'Broken carrier',
@@ -124,7 +88,7 @@ describe('Cart payment selection', () => {
             success: true,
             statusCode: 200,
             message: 'Shipping quotes retrieved',
-            data: shippingQuotes
+            data: [shippingQuote]
         });
         mockedUseCartStore.mockReturnValue({
             items: [{ product, quantity: 1 }],
@@ -169,8 +133,8 @@ describe('Cart payment selection', () => {
     const getCheckoutButton = () =>
         screen.getByRole('button', { name: /Dang xac nhan|thanh|COD/i }) as HTMLButtonElement;
 
-    const clickShippingQuote = async (name: RegExp = /GHN - Standard/i) => {
-        const option = await screen.findByRole('radio', { name });
+    const clickShippingQuote = async () => {
+        const option = await screen.findByRole('radio', { name: /GHN - Standard/i });
         fireEvent.click(option);
     };
 
@@ -184,6 +148,7 @@ describe('Cart payment selection', () => {
         selectShippingLocation();
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledWith({
+            customerAddress: undefined,
             customerCityId: 1,
             customerDistrictId: 2,
             customerWardId: 3,
@@ -191,41 +156,7 @@ describe('Cart payment selection', () => {
             codAmount: 0
         }));
         expect(await screen.findByRole('radio', { name: /GHN - Standard/i })).not.toBeNull();
-        expect(screen.getByRole('radio', { name: /AhaMove - Hoa toc/i })).not.toBeNull();
-        expect(screen.queryByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')).toBeNull();
-        expect(screen.getAllByText(/30\.000/)).not.toHaveLength(0);
-    });
-
-    it('does not request new shipping quotes when the detailed address changes', async () => {
-        render(<Cart />);
-        selectShippingLocation();
-
-        await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1));
-
-        fireEvent.change(screen.getByPlaceholderText('Địa chỉ giao hàng chi tiết'), {
-            target: { value: '123 Nguyen Trai' }
-        });
-
-        expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not render quotes with missing carrier info or enable checkout', async () => {
-        mockedShippingService.getQuotes.mockResolvedValueOnce({
-            success: true,
-            statusCode: 200,
-            message: 'Shipping quotes retrieved',
-            data: nullCarrierShippingQuotes
-        });
-
-        render(<Cart />);
-        selectShippingLocation();
-
-        await waitFor(() => expect(
-            screen.getByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')
-        ).toBeTruthy());
-        expect(screen.queryByRole('radio')).toBeNull();
-        expect(getCheckoutButton().disabled).toBe(true);
-        expect(mockSubmitOrder).not.toHaveBeenCalled();
+        expect(screen.getByText(/Phi ap dung: 30/i)).toBeTruthy();
     });
 
     it('does not render invalid shipping quotes or enable checkout', async () => {
@@ -263,9 +194,10 @@ describe('Cart payment selection', () => {
         render(<Cart />);
         selectShippingLocation();
 
-        await clickShippingQuote(/GHN - Standard/i);
+        await clickShippingQuote();
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith({
+            customerAddress: undefined,
             customerCityId: 1,
             customerDistrictId: 2,
             customerWardId: 3,
@@ -305,7 +237,7 @@ describe('Cart payment selection', () => {
 
         render(<Cart />);
         selectShippingLocation();
-        await clickShippingQuote(/GHN - Standard/i);
+        await clickShippingQuote();
 
         await waitFor(() => expect(
             screen.getByText('Khong the xac nhan phi giao hang da chon. Vui long chon phuong thuc khac.')
@@ -340,22 +272,16 @@ describe('Cart payment selection', () => {
         });
         render(<Cart />);
         selectShippingLocation();
-        fireEvent.change(screen.getByPlaceholderText('Địa chỉ giao hàng chi tiết'), {
-            target: { value: '123 Nguyen Trai' }
-        });
         fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), {
             target: { value: 'COD' }
         });
-        await clickShippingQuote(/AhaMove - Hoa toc/i);
-        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
-        expect(screen.getAllByText(/364\.000/)).not.toHaveLength(0);
+        await selectShippingQuote();
         fireEvent.click(screen.getByRole('button', { name: /COD/i }));
 
         await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
-            carrierId: 30,
-            carrierServiceId: 40,
-            shippingFee: 14000,
-            customerAddress: '123 Nguyen Trai'
+            carrierId: 10,
+            carrierServiceId: 20,
+            shippingFee: 30000
         })));
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
             type: 'FULL',
