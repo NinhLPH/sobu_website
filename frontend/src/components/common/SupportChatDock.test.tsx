@@ -87,6 +87,11 @@ class MockWebSocket {
     triggerMessage(payload: unknown) {
         this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent);
     }
+
+    triggerClose() {
+        this.readyState = MockWebSocket.CLOSED;
+        this.onclose?.({ code: 1006 } as CloseEvent);
+    }
 }
 
 const conversationResponse = {
@@ -180,6 +185,7 @@ const openChatAndWaitForSocket = async () => {
 
 describe('SupportChatDock', () => {
     beforeEach(() => {
+        jest.useRealTimers();
         mockAuthState = {
             isAuthenticated: true,
             user: mockUser
@@ -193,7 +199,7 @@ describe('SupportChatDock', () => {
         mockGetMessages.mockReturnValue(pendingHistoryResponse);
     });
 
-    it('does not render for unauthenticated users', () => {
+    it('renders a login prompt for unauthenticated users without initializing chat', () => {
         mockAuthState = {
             isAuthenticated: false,
             user: null
@@ -201,13 +207,16 @@ describe('SupportChatDock', () => {
 
         render(<SupportChatDock/>);
 
-        expect(screen.queryByRole('button', { name: 'Mo chat ho tro' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Mo chat ho tro' })).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Mo chat ho tro' }));
+        expect(screen.getByText('Đăng nhập để chat với SOBU')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Đăng nhập' }).getAttribute('href')).toBe('/login');
         expect(SupportChatService.getConversation).not.toHaveBeenCalled();
         expect(SupportChatService.getMessages).not.toHaveBeenCalled();
         expect(MockWebSocket.instances).toHaveLength(0);
     });
 
-    it('does not render for non-user roles', () => {
+    it('renders an admin support prompt for staff roles without opening customer chat APIs', () => {
         mockAuthState = {
             isAuthenticated: true,
             user: {
@@ -221,10 +230,27 @@ describe('SupportChatDock', () => {
 
         render(<SupportChatDock/>);
 
-        expect(screen.queryByRole('button', { name: 'Mo chat ho tro' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Mo chat ho tro' })).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Mo chat ho tro' }));
+        expect(screen.getByText('Chat ho tro cho nhan vien')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo admin support' }).getAttribute('href')).toBe('/admin/support');
         expect(SupportChatService.getConversation).not.toHaveBeenCalled();
         expect(SupportChatService.getMessages).not.toHaveBeenCalled();
         expect(MockWebSocket.instances).toHaveLength(0);
+    });
+
+    it('supports string user roles when deciding customer chat access', () => {
+        mockAuthState = {
+            isAuthenticated: true,
+            user: {
+                ...mockUser,
+                role: 'ROLE_USER'
+            }
+        };
+
+        render(<SupportChatDock/>);
+
+        expect(screen.getByRole('button', { name: 'Mo chat ho tro' })).toBeTruthy();
     });
 
     it('does not initialize conversation, history, or websocket until opened', () => {
@@ -259,7 +285,9 @@ describe('SupportChatDock', () => {
         expect(mockGetConversation.mock.invocationCallOrder[0]).toBeLessThan(mockGetMessages.mock.invocationCallOrder[0]);
     });
 
-    it('sends the auth frame on websocket open without putting the token in the url', async () => {
+    it('sends the latest auth token on websocket open without putting the token in the url', async () => {
+        mockGetAccessToken.mockReturnValueOnce('old-token').mockReturnValue('fresh-token');
+
         render(<SupportChatDock/>);
         const socket = await openChatAndWaitForSocket();
 
@@ -268,10 +296,10 @@ describe('SupportChatDock', () => {
         });
 
         expect(socket.url).toBe('ws://localhost:8081/ws/support');
-        expect(socket.url).not.toContain('jwt-token');
+        expect(socket.url).not.toContain('fresh-token');
         expect(socket.send).toHaveBeenCalledWith(JSON.stringify({
             type: 'AUTH',
-            accessToken: 'jwt-token'
+            accessToken: 'fresh-token'
         }));
     });
 
@@ -301,6 +329,34 @@ describe('SupportChatDock', () => {
         await waitFor(() => {
             expect(input.disabled).toBe(false);
         });
+    });
+
+    it('shows reconnecting status and opens a new socket after close', async () => {
+        jest.useFakeTimers();
+        mockGetMessages.mockResolvedValue(emptyHistoryResponse);
+
+        render(<SupportChatDock/>);
+        const socket = await openChatAndWaitForSocket();
+
+        act(() => {
+            socket.triggerOpen();
+            socket.triggerMessage({ type: 'AUTH_SUCCESS' });
+            socket.triggerClose();
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Đang kết nối lại...')).toBeTruthy();
+        });
+
+        act(() => {
+            jest.advanceTimersByTime(1500);
+        });
+
+        await waitFor(() => {
+            expect(MockWebSocket.instances).toHaveLength(2);
+        });
+
+        jest.useRealTimers();
     });
 
     it('sends messages after websocket auth even when history is still loading', async () => {

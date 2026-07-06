@@ -1,16 +1,13 @@
 package com.vn.sodu.support.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vn.sodu.global.exception.NotFoundException;
 import com.vn.sodu.security.JwtService;
-import com.vn.sodu.support.SupportConversation;
-import com.vn.sodu.support.SupportMessage;
 import com.vn.sodu.support.dto.MessageResponseDTO;
+import com.vn.sodu.support.dto.SupportPrincipalDTO;
 import com.vn.sodu.support.dto.WebSocketEvent;
 import com.vn.sodu.support.dto.WebSocketMessage;
 import com.vn.sodu.support.service.SupportService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.AccountRepo;
-import com.vn.sodu.user.Account.AccountStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,7 +18,6 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -30,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SupportWebSocketHandler extends TextWebSocketHandler {
 
     private final JwtService jwtService;
-    private final AccountRepo accountRepo;
     private final SupportService supportService;
     private final ObjectMapper objectMapper;
 
@@ -77,25 +72,26 @@ public class SupportWebSocketHandler extends TextWebSocketHandler {
         }
 
         String email = jwtService.extractUsername(token);
-        Account account = accountRepo.findByEmail(email).orElse(null);
-        if (account == null) {
+        SupportPrincipalDTO principal;
+        try {
+            principal = supportService.getSupportPrincipal(email);
+        } catch (NotFoundException e) {
             sendErrorAndClose(session, "Account not found");
             return;
         }
-
-        if (account.getStatus() != AccountStatus.ACTIVE) {
+        if (!principal.active()) {
             sendErrorAndClose(session, "Account is not active");
             return;
         }
 
-        session.getAttributes().put("account", account);
+        session.getAttributes().put("supportPrincipal", principal);
 
-        if (supportService.isStaff(account)) {
+        if (principal.staff()) {
             staffSessions.put(session.getId(), session);
-            log.info("Staff authenticated: {} (session {})", account.getEmail(), session.getId());
+            log.info("Staff authenticated: {} (session {})", principal.email(), session.getId());
         } else {
-            customerSessions.put(account.getId(), session);
-            log.info("Customer authenticated: {} (session {})", account.getEmail(), session.getId());
+            customerSessions.put(principal.accountId(), session);
+            log.info("Customer authenticated: {} (session {})", principal.email(), session.getId());
         }
 
         sendEvent(session, WebSocketEvent.builder()
@@ -105,7 +101,7 @@ public class SupportWebSocketHandler extends TextWebSocketHandler {
 
     private void handleSendMessage(WebSocketSession session, WebSocketMessage message) throws IOException {
         Map<String, Object> attrs = session.getAttributes();
-        Account sender = (attrs != null) ? (Account) attrs.get("account") : null;
+        SupportPrincipalDTO sender = (attrs != null) ? (SupportPrincipalDTO) attrs.get("supportPrincipal") : null;
         if (sender == null) {
             sendError(session, "Authentication required. Send AUTH frame first.");
             return;
@@ -116,23 +112,22 @@ public class SupportWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        String role = supportService.isStaff(sender) ? getRoleName(sender) : "USER";
-
-        Long conversationId;
-        if (supportService.isStaff(sender)) {
-            if (message.getConversationId() == null) {
-                sendError(session, "conversationId is required for staff messages");
-                return;
-            }
-            conversationId = message.getConversationId();
-        } else {
-            SupportConversation conversation = supportService.getOrCreateConversation(sender);
-            conversationId = conversation.getId();
-        }
+        String role = sender.staff() ? sender.roleName() : "USER";
 
         try {
-            SupportMessage saved = supportService.sendMessage(sender, role, conversationId, message.getContent());
-            MessageResponseDTO dto = supportService.toMessageResponse(saved);
+            Long conversationId;
+            if (sender.staff()) {
+                if (message.getConversationId() == null) {
+                    sendError(session, "conversationId is required for staff messages");
+                    return;
+                }
+                conversationId = message.getConversationId();
+            } else {
+                conversationId = supportService.getOrCreateConversationSummary(sender.email()).getId();
+            }
+
+            MessageResponseDTO dto = supportService.sendMessage(
+                    sender.accountId(), role, conversationId, message.getContent());
             WebSocketEvent event = WebSocketEvent.builder()
                     .type("MESSAGE_CREATED")
                     .message(dto)
@@ -148,8 +143,7 @@ public class SupportWebSocketHandler extends TextWebSocketHandler {
     private void broadcastToConversation(Long conversationId, WebSocketEvent event) throws IOException {
         String payload = objectMapper.writeValueAsString(event);
 
-        SupportConversation conversation = supportService.getConversationById(conversationId);
-        Long customerId = conversation.getAccount().getId();
+        Long customerId = supportService.getConversationCustomerId(conversationId);
 
         WebSocketSession customerSession = customerSessions.get(customerId);
         if (customerSession != null && customerSession.isOpen()) {
@@ -185,14 +179,14 @@ public class SupportWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        Account account = (Account) session.getAttributes().get("account");
-        if (account != null) {
-            if (supportService.isStaff(account)) {
+        SupportPrincipalDTO principal = (SupportPrincipalDTO) session.getAttributes().get("supportPrincipal");
+        if (principal != null) {
+            if (principal.staff()) {
                 staffSessions.remove(session.getId());
-                log.info("Staff disconnected: {} (session {})", account.getEmail(), session.getId());
+                log.info("Staff disconnected: {} (session {})", principal.email(), session.getId());
             } else {
-                customerSessions.remove(account.getId());
-                log.info("Customer disconnected: {} (session {})", account.getEmail(), session.getId());
+                customerSessions.remove(principal.accountId());
+                log.info("Customer disconnected: {} (session {})", principal.email(), session.getId());
             }
         }
         session.getAttributes().clear();
@@ -203,10 +197,4 @@ public class SupportWebSocketHandler extends TextWebSocketHandler {
         log.error("WebSocket transport error on session {}: {}", session.getId(), exception.getMessage());
     }
 
-    private String getRoleName(Account account) {
-        if (account.getRole() == null || account.getRole().getName() == null) {
-            return "UNKNOWN";
-        }
-        return account.getRole().getName().toUpperCase();
-    }
 }

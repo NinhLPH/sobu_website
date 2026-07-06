@@ -21,6 +21,11 @@ interface ZaloChatConfig {
 
 type SocialLinks = Record<string, string>;
 
+interface ZaloChatDockProps {
+    isOpen?: boolean;
+    onOpenChange?: (isOpen: boolean) => void;
+}
+
 declare global {
     interface Window {
         ZaloSocialSDK?: {
@@ -90,9 +95,22 @@ function useZaloSdk(shouldLoad: boolean): SdkStatus {
     return status;
 }
 
-export default function ZaloChatDock() {
+export default function ZaloChatDock({
+    isOpen: controlledIsOpen,
+    onOpenChange
+}: ZaloChatDockProps = {}) {
     const configMap = usePublicUiStore((state) => state.configMap);
-    const [isOpen, setIsOpen] = useState(false);
+    const configsLoaded = usePublicUiStore((state) => state.configsLoaded);
+    const isConfigsLoading = usePublicUiStore((state) => state.isConfigsLoading);
+    const configsError = usePublicUiStore((state) => state.configsError);
+    const [internalIsOpen, setInternalIsOpen] = useState(false);
+    const isOpen = controlledIsOpen ?? internalIsOpen;
+    const setIsOpen = (nextIsOpen: boolean) => {
+        if (controlledIsOpen === undefined) {
+            setInternalIsOpen(nextIsOpen);
+        }
+        onOpenChange?.(nextIsOpen);
+    };
 
     const chatConfig = parseJsonConfig<ZaloChatConfig>(configMap, 'social_chat_config', {});
     const socialLinks = parseJsonConfig<SocialLinks>(configMap, 'social_links', {});
@@ -101,6 +119,10 @@ export default function ZaloChatDock() {
     const pageId = (chatConfig.pageId || chatConfig.oaid || '').trim();
     const zaloUrl = socialLinks.zalo?.trim();
     const hasPageId = Boolean(pageId);
+    const isConfigPending = !configsLoaded || isConfigsLoading;
+    const isWidgetEnabled = isEnabled(configMap?.social_chat_widget_enabled);
+    const shouldHideForConfig = configsLoaded && !isConfigsLoading && !configsError && !isWidgetEnabled;
+    const shouldHideForProvider = configsLoaded && !isConfigsLoading && !configsError && isWidgetEnabled && provider !== 'zalo';
 
     const widget = useMemo(() => ({
         greetingText: chatConfig.greetingText || chatConfig.welcomeMessage || 'SOBU co the ho tro gi cho ban?',
@@ -125,7 +147,7 @@ export default function ZaloChatDock() {
         </svg>
     );
 
-    const sdkStatus = useZaloSdk(isOpen && provider === 'zalo' && hasPageId);
+    const sdkStatus = useZaloSdk(isOpen && !isConfigPending && !configsError && provider === 'zalo' && hasPageId);
 
     useEffect(() => {
         if (isOpen && sdkStatus === 'loaded') {
@@ -133,7 +155,7 @@ export default function ZaloChatDock() {
         }
     }, [isOpen, pageId, sdkStatus]);
 
-    if (!isEnabled(configMap?.social_chat_widget_enabled) || provider !== 'zalo') {
+    if (shouldHideForConfig || shouldHideForProvider) {
         return null;
     }
 
@@ -163,7 +185,23 @@ export default function ZaloChatDock() {
                         className="relative bg-surface-container-lowest p-3"
                         style={{height: Math.min(widget.height + 24, 520)}}
                     >
-                        {!hasPageId ? (
+                        {isConfigPending ? (
+                            <div className="flex h-full flex-col items-center justify-center rounded-xl border border-outline-variant/30 bg-surface-container-low px-5 text-center">
+                                <Loader2 className="mb-3 h-8 w-8 animate-spin text-primary"/>
+                                <p className="text-sm font-black text-on-surface">Dang tai cau hinh Zalo</p>
+                                <p className="mt-2 max-w-[18rem] text-xs font-semibold leading-relaxed text-outline">
+                                    Chat Zalo se san sang sau khi cau hinh website duoc tai xong.
+                                </p>
+                            </div>
+                        ) : configsError ? (
+                            <div className="flex h-full flex-col items-center justify-center rounded-xl border border-outline-variant/30 bg-surface-container-low px-5 text-center">
+                                <MessageCircle className="mb-3 h-8 w-8 text-primary"/>
+                                <p className="text-sm font-black text-on-surface">Khong tai duoc cau hinh Zalo</p>
+                                <p className="mt-2 max-w-[18rem] text-xs font-semibold leading-relaxed text-outline">
+                                    Vui long thu lai sau hoac dung kenh ho tro khac.
+                                </p>
+                            </div>
+                        ) : !hasPageId ? (
                             <div className="flex h-full flex-col items-center justify-center rounded-xl border border-outline-variant/30 bg-surface-container-low px-5 text-center">
                                 <MessageCircle className="mb-3 h-8 w-8 text-primary"/>
                                 <p className="text-sm font-black text-on-surface">Chat Zalo chua san sang</p>
@@ -228,7 +266,7 @@ export default function ZaloChatDock() {
                 type="button"
                 aria-label={isOpen ? 'An chat Zalo' : 'Mo chat Zalo'}
                 aria-expanded={isOpen}
-                onClick={() => setIsOpen((current) => !current)}
+                onClick={() => setIsOpen(!isOpen)}
                 className="inline-flex h-14 cursor-pointer items-center gap-2 rounded-full bg-primary px-4 text-sm font-black text-on-primary shadow-[0_14px_35px_rgba(0,97,142,0.28)] transition-colors hover:bg-primary-container focus-visible:ring-2 focus-visible:ring-primary/40"
             >
                 <ZaloIcon className="h-5 w-5" />

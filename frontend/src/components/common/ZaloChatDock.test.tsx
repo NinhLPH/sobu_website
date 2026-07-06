@@ -3,9 +3,17 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import ZaloChatDock from './ZaloChatDock';
 
 let mockConfigMap: Record<string, string> = {};
+let mockConfigsLoaded = true;
+let mockIsConfigsLoading = false;
+let mockConfigsError: string | null = null;
 
 jest.mock('../../store/usePublicUiStore', () => ({
-    usePublicUiStore: (selector: any) => selector({configMap: mockConfigMap}),
+    usePublicUiStore: (selector: any) => selector({
+        configMap: mockConfigMap,
+        configsLoaded: mockConfigsLoaded,
+        isConfigsLoading: mockIsConfigsLoading,
+        configsError: mockConfigsError,
+    }),
 }));
 
 const enabledConfig = {
@@ -24,6 +32,9 @@ const enabledConfig = {
 describe('ZaloChatDock', () => {
     beforeEach(() => {
         mockConfigMap = {...enabledConfig};
+        mockConfigsLoaded = true;
+        mockIsConfigsLoading = false;
+        mockConfigsError = null;
         document.getElementById('zalo-sdk-script')?.remove();
         document.body.innerHTML = '';
         delete window.ZaloSocialSDK;
@@ -39,6 +50,32 @@ describe('ZaloChatDock', () => {
         render(<ZaloChatDock/>);
 
         expect(screen.queryByRole('button', {name: 'Mo chat Zalo'})).toBeNull();
+    });
+
+    it('keeps the Zalo bubble visible while configs are loading', () => {
+        mockConfigMap = {};
+        mockConfigsLoaded = false;
+        mockIsConfigsLoading = true;
+
+        render(<ZaloChatDock/>);
+
+        expect(screen.getByRole('button', {name: 'Mo chat Zalo'})).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
+        expect(screen.getByText('Dang tai cau hinh Zalo')).toBeTruthy();
+        expect(document.getElementById('zalo-sdk-script')).toBeNull();
+    });
+
+    it('keeps the Zalo bubble visible when config loading fails', () => {
+        mockConfigMap = {};
+        mockConfigsLoaded = true;
+        mockConfigsError = 'Config failed';
+
+        render(<ZaloChatDock/>);
+
+        expect(screen.getByRole('button', {name: 'Mo chat Zalo'})).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: 'Mo chat Zalo'}));
+        expect(screen.getByText('Khong tai duoc cau hinh Zalo')).toBeTruthy();
+        expect(document.getElementById('zalo-sdk-script')).toBeNull();
     });
 
     it('renders a fallback panel when enabled without the Zalo page id', () => {

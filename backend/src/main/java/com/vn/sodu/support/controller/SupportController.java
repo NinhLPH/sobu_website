@@ -2,12 +2,9 @@ package com.vn.sodu.support.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.dto.PageResponse;
-import com.vn.sodu.global.exception.NotFoundException;
 import com.vn.sodu.support.dto.ConversationSummaryDTO;
 import com.vn.sodu.support.dto.MessageResponseDTO;
 import com.vn.sodu.support.service.SupportService;
-import com.vn.sodu.user.Account;
-import com.vn.sodu.user.AccountRepo;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -37,7 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class SupportController {
 
     private final SupportService supportService;
-    private final AccountRepo accountRepo;
 
     @GetMapping("/conversation")
     @Operation(summary = "Get or create support conversation",
@@ -51,12 +47,7 @@ public class SupportController {
                             schema = @Schema(implementation = ApiResponseDTO.class)))
     })
     public ResponseEntity<?> getOrCreateConversation(Authentication authentication) {
-        Account account = resolveAccount(authentication);
-        if (supportService.isStaff(account)) {
-            throw new AccessDeniedException("Staff accounts do not have a personal support conversation");
-        }
-        ConversationSummaryDTO dto = supportService.toSummary(
-                supportService.getOrCreateConversation(account));
+        ConversationSummaryDTO dto = supportService.getOrCreateConversationSummary(resolveAuthenticatedEmail(authentication));
         return ResponseEntity.ok(ApiResponseDTO.success(dto, "Conversation retrieved", HttpStatus.OK.value()));
     }
 
@@ -76,19 +67,17 @@ public class SupportController {
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "20") int size
     ) {
-        Account account = resolveAccount(authentication);
         Pageable pageable = buildPageable(page, size);
         PageResponse<MessageResponseDTO> response = PageResponse.from(
-                supportService.getMyMessages(account, pageable));
+                supportService.getMyMessages(resolveAuthenticatedEmail(authentication), pageable));
         return ResponseEntity.ok(ApiResponseDTO.success(response, "Messages retrieved", HttpStatus.OK.value()));
     }
 
-    private Account resolveAccount(Authentication authentication) {
+    private String resolveAuthenticatedEmail(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) {
             throw new AccessDeniedException("Authentication is required");
         }
-        return accountRepo.findByEmail(authentication.getName())
-                .orElseThrow(() -> new NotFoundException("Authenticated account not found"));
+        return authentication.getName();
     }
 
     private Pageable buildPageable(int page, int size) {
