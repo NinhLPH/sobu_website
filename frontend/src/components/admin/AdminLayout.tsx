@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Package, ListTree, ShoppingCart, MessageSquare, Settings, Tag, Images, SlidersHorizontal, FileText, Star, Truck, Headphones } from 'lucide-react';
+import { Package, ListTree, ShoppingCart, MessageSquare, Settings, Tag, Images, SlidersHorizontal, FileText, Star, Headphones } from 'lucide-react';
 
 export default function AdminLayout() {
     const location = useLocation();
