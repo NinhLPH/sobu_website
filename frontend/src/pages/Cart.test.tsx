@@ -82,6 +82,17 @@ const expressShippingQuote = {
 
 const shippingQuotes = [shippingQuote, expressShippingQuote];
 
+const stringCarrierShippingQuote = {
+    carrierId: '50',
+    carrierName: 'Viettel Post',
+    carrierServiceId: '60',
+    carrierServiceName: 'Nhanh',
+    shipFee: '22000',
+    customerShipFee: '21000',
+    deliveryTime: null,
+    description: null
+};
+
 const nullCarrierShippingQuotes = [
     {
         carrierId: null,
@@ -245,6 +256,36 @@ describe('Cart payment selection', () => {
         expect(screen.queryByRole('radio', { name: /Broken carrier/i })).toBeNull();
         expect(getCheckoutButton().disabled).toBe(true);
         expect(mockSubmitOrder).not.toHaveBeenCalled();
+    });
+
+    it('renders carrier quotes when ids and fees are returned as numeric strings', async () => {
+        mockedShippingService.getQuotes
+            .mockResolvedValueOnce({
+                success: true,
+                statusCode: 200,
+                message: 'Shipping quotes retrieved',
+                data: [stringCarrierShippingQuote]
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                statusCode: 200,
+                message: 'Shipping quote confirmed',
+                data: [stringCarrierShippingQuote]
+            });
+
+        render(<Cart />);
+        selectShippingLocation();
+
+        await clickShippingQuote(/Viettel Post - Nhanh/i);
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
+
+        fireEvent.click(getCheckoutButton());
+
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
+            carrierId: 50,
+            carrierServiceId: 60,
+            shippingFee: 21000
+        })));
     });
 
     it('confirms the selected carrier quote before enabling checkout', async () => {

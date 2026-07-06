@@ -55,36 +55,79 @@ const initialCheckoutForm: CheckoutForm = {
 
 const MAX_CUSTOMER_ADDRESS_LENGTH = 500;
 
-const shippingQuoteFee = (quote: ShippingQuoteDto | null | undefined) => {
-    const fee = quote?.customerShipFee ?? quote?.shipFee;
-    return fee === null || fee === undefined ? Number.NaN : Number(fee);
-};
-
 type CompleteShippingQuote = ShippingQuoteDto & {
     carrierId: number;
     carrierName: string;
     carrierServiceId: number;
     carrierServiceName: string;
+    shipFee?: number | null;
+    customerShipFee?: number | null;
 };
 
-const isPositiveInteger = (value: unknown): value is number =>
-    typeof value === 'number' && Number.isInteger(value) && value > 0;
+const parseFiniteNumber = (value: unknown) => {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : Number.NaN;
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+        const numberValue = Number(value);
+        return Number.isFinite(numberValue) ? numberValue : Number.NaN;
+    }
+    return Number.NaN;
+};
+
+const parsePositiveInteger = (value: unknown) => {
+    const numberValue = parseFiniteNumber(value);
+    return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+};
 
 const hasText = (value: unknown): value is string =>
     typeof value === 'string' && value.trim().length > 0;
 
+const shippingQuoteFee = (quote: ShippingQuoteDto | null | undefined) => {
+    const fee = quote?.customerShipFee ?? quote?.shipFee;
+    return parseFiniteNumber(fee);
+};
+
+const normalizeShippingQuote = (
+    quote: ShippingQuoteDto | null | undefined
+): CompleteShippingQuote | null => {
+    if (!quote) {
+        return null;
+    }
+
+    const carrierId = parsePositiveInteger(quote.carrierId);
+    const carrierServiceId = parsePositiveInteger(quote.carrierServiceId);
+    const fee = shippingQuoteFee(quote);
+
+    if (
+        carrierId === null ||
+        carrierServiceId === null ||
+        !hasText(quote.carrierName) ||
+        !hasText(quote.carrierServiceName) ||
+        !Number.isFinite(fee) ||
+        fee < 0
+    ) {
+        return null;
+    }
+
+    return {
+        ...quote,
+        carrierId,
+        carrierName: quote.carrierName.trim(),
+        carrierServiceId,
+        carrierServiceName: quote.carrierServiceName.trim(),
+        shipFee: quote.shipFee === null || quote.shipFee === undefined
+            ? quote.shipFee
+            : parseFiniteNumber(quote.shipFee),
+        customerShipFee: quote.customerShipFee === null || quote.customerShipFee === undefined
+            ? quote.customerShipFee
+            : parseFiniteNumber(quote.customerShipFee)
+    };
+};
+
 const isUsableShippingQuote = (
     quote: ShippingQuoteDto | null | undefined
-): quote is CompleteShippingQuote => {
-    const fee = shippingQuoteFee(quote);
-    return Boolean(quote)
-        && isPositiveInteger(quote?.carrierId)
-        && hasText(quote?.carrierName)
-        && isPositiveInteger(quote?.carrierServiceId)
-        && hasText(quote?.carrierServiceName)
-        && Number.isFinite(fee)
-        && fee >= 0;
-};
+): quote is CompleteShippingQuote => normalizeShippingQuote(quote) !== null;
 
 const shippingQuoteLabel = (quote: CompleteShippingQuote) =>
     `${quote.carrierName.trim()} - ${quote.carrierServiceName.trim()}`;
@@ -312,7 +355,9 @@ export default function Cart() {
                     throw new Error(response.message || 'Could not load shipping quotes.');
                 }
                 const quotes = response.data ?? [];
-                const usableQuotes = quotes.filter(isUsableShippingQuote);
+                const usableQuotes = quotes
+                    .map(normalizeShippingQuote)
+                    .filter((quote): quote is CompleteShippingQuote => quote !== null);
                 setShippingQuotes(usableQuotes);
                 if (usableQuotes.length === 0) {
                     setShippingQuoteError(
@@ -373,9 +418,11 @@ export default function Cart() {
                 throw new Error(response.message || 'Could not confirm shipping quote.');
             }
 
-            const confirmedQuote = (response.data ?? []).find(
-                (item) => isUsableShippingQuote(item) && shippingQuoteKey(item, index) === key
-            );
+            const confirmedQuote = (response.data ?? [])
+                .map(normalizeShippingQuote)
+                .find((item): item is CompleteShippingQuote =>
+                    item !== null && shippingQuoteKey(item, index) === key
+                );
             if (!confirmedQuote) {
                 throw new Error('Khong the xac nhan phi giao hang da chon. Vui long chon phuong thuc khac.');
             }

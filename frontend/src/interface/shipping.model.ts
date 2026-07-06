@@ -11,12 +11,12 @@ export interface ShippingQuoteRequestDto {
 }
 
 export interface ShippingQuoteDto {
-    carrierId?: number | null;
+    carrierId?: number | string | null;
     carrierName?: string | null;
-    carrierServiceId?: number | null;
+    carrierServiceId?: number | string | null;
     carrierServiceName?: string | null;
-    shipFee?: number | null;
-    customerShipFee?: number | null;
+    shipFee?: number | string | null;
+    customerShipFee?: number | string | null;
     deliveryTime?: string | null;
     description?: string | null;
 }
