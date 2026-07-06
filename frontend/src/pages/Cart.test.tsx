@@ -180,8 +180,8 @@ describe('Cart payment selection', () => {
     const getCheckoutButton = () =>
         screen.getByRole('button', { name: /Dang xac nhan|thanh|COD/i }) as HTMLButtonElement;
 
-    const clickShippingQuote = async (name: RegExp = /GHN - Standard/i) => {
-        const option = await screen.findByRole('radio', { name });
+    const clickShippingQuote = async (name: RegExp = /Tiêu chuẩn/i) => {
+        const option = await screen.findByRole('button', { name });
         fireEvent.click(option);
     };
 
@@ -201,8 +201,8 @@ describe('Cart payment selection', () => {
             cartSubtotal: 350000,
             codAmount: 0
         }));
-        expect(await screen.findByRole('radio', { name: /GHN - Standard/i })).not.toBeNull();
-        expect(screen.getByRole('radio', { name: /AhaMove - Hoa toc/i })).not.toBeNull();
+        expect(await screen.findByRole('button', { name: /Tiêu chuẩn/i })).not.toBeNull();
+        expect(screen.getByRole('button', { name: /Hỏa tốc/i })).not.toBeNull();
         expect(screen.queryByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')).toBeNull();
         expect(screen.getAllByText(/30\.000/)).not.toHaveLength(0);
     });
@@ -220,7 +220,7 @@ describe('Cart payment selection', () => {
         expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1);
     });
 
-    it('does not render quotes with missing carrier info or enable checkout', async () => {
+    it('renders fee-backed quotes with missing carrier info and submits without carrier ids', async () => {
         mockedShippingService.getQuotes.mockResolvedValueOnce({
             success: true,
             statusCode: 200,
@@ -231,12 +231,22 @@ describe('Cart payment selection', () => {
         render(<Cart />);
         selectShippingLocation();
 
-        await waitFor(() => expect(
-            screen.getByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')
-        ).toBeTruthy());
-        expect(screen.queryByRole('radio')).toBeNull();
-        expect(getCheckoutButton().disabled).toBe(true);
-        expect(mockSubmitOrder).not.toHaveBeenCalled();
+        const standardOption = await screen.findByRole('button', { name: /Tiêu chuẩn/i });
+        expect(screen.getByRole('button', { name: /Hỏa tốc/i })).not.toBeNull();
+        expect(screen.queryByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')).toBeNull();
+
+        fireEvent.click(standardOption);
+
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
+        expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(getCheckoutButton());
+
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
+            shippingFee: 14000
+        })));
+        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('carrierId');
+        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('carrierServiceId');
     });
 
     it('does not render invalid shipping quotes or enable checkout', async () => {
@@ -253,7 +263,7 @@ describe('Cart payment selection', () => {
         await waitFor(() => expect(
             screen.getByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')
         ).toBeTruthy());
-        expect(screen.queryByRole('radio', { name: /Broken carrier/i })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Broken carrier/i })).toBeNull();
         expect(getCheckoutButton().disabled).toBe(true);
         expect(mockSubmitOrder).not.toHaveBeenCalled();
     });
@@ -276,7 +286,7 @@ describe('Cart payment selection', () => {
         render(<Cart />);
         selectShippingLocation();
 
-        await clickShippingQuote(/Viettel Post - Nhanh/i);
+        await clickShippingQuote(/Tiêu chuẩn/i);
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
 
         fireEvent.click(getCheckoutButton());
@@ -304,7 +314,7 @@ describe('Cart payment selection', () => {
         render(<Cart />);
         selectShippingLocation();
 
-        await clickShippingQuote(/GHN - Standard/i);
+        await clickShippingQuote(/Tiêu chuẩn/i);
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith({
             customerCityId: 1,
@@ -346,7 +356,7 @@ describe('Cart payment selection', () => {
 
         render(<Cart />);
         selectShippingLocation();
-        await clickShippingQuote(/GHN - Standard/i);
+        await clickShippingQuote(/Tiêu chuẩn/i);
 
         await waitFor(() => expect(
             screen.getByText('Khong the xac nhan phi giao hang da chon. Vui long chon phuong thuc khac.')
@@ -387,7 +397,7 @@ describe('Cart payment selection', () => {
         fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), {
             target: { value: 'COD' }
         });
-        await clickShippingQuote(/AhaMove - Hoa toc/i);
+        await clickShippingQuote(/Hỏa tốc/i);
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
         expect(screen.getAllByText(/364\.000/)).not.toHaveLength(0);
         fireEvent.click(screen.getByRole('button', { name: /COD/i }));

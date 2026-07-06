@@ -56,10 +56,10 @@ const initialCheckoutForm: CheckoutForm = {
 const MAX_CUSTOMER_ADDRESS_LENGTH = 500;
 
 type CompleteShippingQuote = ShippingQuoteDto & {
-    carrierId: number;
-    carrierName: string;
-    carrierServiceId: number;
-    carrierServiceName: string;
+    carrierId?: number | null;
+    carrierName?: string | null;
+    carrierServiceId?: number | null;
+    carrierServiceName?: string | null;
     shipFee?: number | null;
     customerShipFee?: number | null;
 };
@@ -84,8 +84,11 @@ const hasText = (value: unknown): value is string =>
     typeof value === 'string' && value.trim().length > 0;
 
 const shippingQuoteFee = (quote: ShippingQuoteDto | null | undefined) => {
-    const fee = quote?.customerShipFee ?? quote?.shipFee;
-    return parseFiniteNumber(fee);
+    const customerFee = parseFiniteNumber(quote?.customerShipFee);
+    if (Number.isFinite(customerFee)) {
+        return customerFee;
+    }
+    return parseFiniteNumber(quote?.shipFee);
 };
 
 const normalizeShippingQuote = (
@@ -95,27 +98,18 @@ const normalizeShippingQuote = (
         return null;
     }
 
-    const carrierId = parsePositiveInteger(quote.carrierId);
-    const carrierServiceId = parsePositiveInteger(quote.carrierServiceId);
     const fee = shippingQuoteFee(quote);
 
-    if (
-        carrierId === null ||
-        carrierServiceId === null ||
-        !hasText(quote.carrierName) ||
-        !hasText(quote.carrierServiceName) ||
-        !Number.isFinite(fee) ||
-        fee < 0
-    ) {
+    if (!Number.isFinite(fee) || fee < 0) {
         return null;
     }
 
     return {
         ...quote,
-        carrierId,
-        carrierName: quote.carrierName.trim(),
-        carrierServiceId,
-        carrierServiceName: quote.carrierServiceName.trim(),
+        carrierId: parsePositiveInteger(quote.carrierId),
+        carrierName: hasText(quote.carrierName) ? quote.carrierName.trim() : null,
+        carrierServiceId: parsePositiveInteger(quote.carrierServiceId),
+        carrierServiceName: hasText(quote.carrierServiceName) ? quote.carrierServiceName.trim() : null,
         shipFee: quote.shipFee === null || quote.shipFee === undefined
             ? quote.shipFee
             : parseFiniteNumber(quote.shipFee),
@@ -129,14 +123,23 @@ const isUsableShippingQuote = (
     quote: ShippingQuoteDto | null | undefined
 ): quote is CompleteShippingQuote => normalizeShippingQuote(quote) !== null;
 
-const shippingQuoteLabel = (quote: CompleteShippingQuote) =>
-    `${quote.carrierName.trim()} - ${quote.carrierServiceName.trim()}`;
+const normalizeSearchText = (value: unknown) =>
+    typeof value === 'string'
+        ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        : '';
+
+const shippingQuoteMode = (quote: CompleteShippingQuote, index: number) => {
+    const serviceName = normalizeSearchText(quote.carrierServiceName);
+    return serviceName.includes('hoa toc') || index === 1 ? 'express' : 'standard';
+};
+
+const shippingQuoteLabel = (quote: CompleteShippingQuote, index: number) =>
+    shippingQuoteMode(quote, index) === 'express' ? 'Hỏa tốc' : 'Tiêu chuẩn';
 
 const shippingQuoteKey = (quote: CompleteShippingQuote, index: number) =>
     [
         index,
-        quote.carrierId,
-        quote.carrierServiceId,
+        shippingQuoteMode(quote, index),
         shippingQuoteFee(quote)
     ].join('-');
 
@@ -309,20 +312,25 @@ export default function Cart() {
         !isUsableShippingQuote(confirmedShippingQuote);
 
     const buildShippingQuoteRequest = useCallback((
-        quote?: { carrierId: number; carrierServiceId: number }
-    ) => ({
-        customerCityId: form.customerCityId as number,
-        customerDistrictId: form.customerDistrictId as number,
-        customerWardId: form.customerWardId as number,
-        cartSubtotal: subtotal,
-        codAmount: paymentMethod === 'COD' ? subtotal : 0,
-        ...(quote
-            ? {
-                carrierId: quote.carrierId,
-                carrierServiceId: quote.carrierServiceId
-            }
-            : {})
-    }), [
+        quote?: { carrierId?: number | null; carrierServiceId?: number | null }
+    ) => {
+        const carrierId = parsePositiveInteger(quote?.carrierId);
+        const carrierServiceId = parsePositiveInteger(quote?.carrierServiceId);
+
+        return {
+            customerCityId: form.customerCityId as number,
+            customerDistrictId: form.customerDistrictId as number,
+            customerWardId: form.customerWardId as number,
+            cartSubtotal: subtotal,
+            codAmount: paymentMethod === 'COD' ? subtotal : 0,
+            ...(carrierId !== null && carrierServiceId !== null
+                ? {
+                    carrierId,
+                    carrierServiceId
+                }
+                : {})
+        };
+    }, [
         form.customerCityId,
         form.customerDistrictId,
         form.customerWardId,
@@ -406,6 +414,12 @@ export default function Cart() {
         setShippingQuoteError(null);
         setValidationError(null);
         clearCheckoutError();
+
+        if (parsePositiveInteger(quote.carrierId) === null || parsePositiveInteger(quote.carrierServiceId) === null) {
+            setConfirmedShippingQuote(quote);
+            setIsConfirmingShippingQuote(false);
+            return;
+        }
 
         setIsConfirmingShippingQuote(true);
 
@@ -526,6 +540,8 @@ export default function Cart() {
         }
 
         const shippingFee = shippingQuoteFee(confirmedShippingQuote);
+        const carrierId = parsePositiveInteger(confirmedShippingQuote.carrierId);
+        const carrierServiceId = parsePositiveInteger(confirmedShippingQuote.carrierServiceId);
 
         try {
             const order = await submitOrder({
@@ -539,9 +555,13 @@ export default function Cart() {
                 customerCityId: form.customerCityId,
                 customerDistrictId: form.customerDistrictId,
                 customerWardId: form.customerWardId,
-                carrierId: confirmedShippingQuote.carrierId,
-                carrierServiceId: confirmedShippingQuote.carrierServiceId,
                 shippingFee,
+                ...(carrierId !== null && carrierServiceId !== null
+                    ? {
+                        carrierId,
+                        carrierServiceId
+                    }
+                    : {}),
                 description: form.description.trim() || undefined
             });
 
@@ -823,37 +843,45 @@ export default function Cart() {
                                     {shippingQuotes.map((quote, index) => {
                                         const key = shippingQuoteKey(quote, index);
                                         const fee = shippingQuoteFee(quote);
-                                        const label = shippingQuoteLabel(quote);
+                                        const label = shippingQuoteLabel(quote, index);
                                         const isSelected = selectedShippingQuoteKey === key;
                                         const hasCustomerFee = quote.customerShipFee !== undefined && quote.customerShipFee !== null;
 
                                         return (
-                                            <label
+                                            <button
                                                 key={key}
+                                                type="button"
+                                                aria-pressed={isSelected}
+                                                onClick={() => {
+                                                    void handleShippingQuoteSelect(quote, index);
+                                                }}
+                                                disabled={isSubmitting || isCreatingPayment || isConfirmingShippingQuote}
                                                 className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 text-xs transition-colors duration-200 focus-within:ring-2 focus-within:ring-primary/30 ${
                                                     isSelected
                                                         ? 'border-primary bg-primary/10 text-on-surface shadow-sm'
                                                         : 'border-surface-container-high bg-surface-container-lowest text-on-surface-variant hover:border-primary/60 hover:bg-primary/5'
-                                                }`}
+                                                } disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary/40`}
                                             >
-                                                <input
-                                                    type="radio"
-                                                    name="shippingQuote"
-                                                    value={key}
-                                                    checked={isSelected}
-                                                    onChange={() => {
-                                                        void handleShippingQuoteSelect(quote, index);
-                                                    }}
-                                                    disabled={isSubmitting || isCreatingPayment || isConfirmingShippingQuote}
-                                                    className="mt-1 h-3.5 w-3.5 shrink-0 accent-primary"
-                                                />
+                                                <span
+                                                    aria-hidden="true"
+                                                    className={`mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
+                                                        isSelected ? 'border-primary' : 'border-outline'
+                                                    }`}
+                                                >
+                                                    {isSelected && (
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                                    )}
+                                                </span>
                                                 <span className="min-w-0 flex-1">
                                                     <span className="block text-sm font-black text-on-surface">
                                                         {label}
                                                     </span>
-                                                    <span className="mt-1 block font-medium">
-                                                        Carrier ID: {quote.carrierId} | Service ID: {quote.carrierServiceId}
-                                                    </span>
+                                                    {quote.carrierName && (
+                                                        <span className="mt-1 block font-medium">
+                                                            {quote.carrierName}
+                                                            {quote.carrierServiceName ? ` - ${quote.carrierServiceName}` : ''}
+                                                        </span>
+                                                    )}
                                                     {(quote.deliveryTime || quote.description) && (
                                                         <span className="mt-1 block font-medium">
                                                             {[quote.deliveryTime, quote.description].filter(Boolean).join(' - ')}
@@ -869,7 +897,7 @@ export default function Cart() {
                                                 <span className="shrink-0 font-black text-primary">
                                                     {formatCurrency(fee)}
                                                 </span>
-                                            </label>
+                                            </button>
                                         );
                                     })}
                                     {isConfirmingShippingQuote && (

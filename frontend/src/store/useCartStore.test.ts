@@ -186,6 +186,42 @@ describe('useCartStore order submission', () => {
         expect(useCartStore.getState().isSubmitting).toBe(false);
     });
 
+    it('allows order submission when only shipping fee is present', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
+        mockedCustomerService.createOrder.mockResolvedValue({
+            success: true,
+            statusCode: 201,
+            message: 'Order created',
+            data: {
+                id: 2,
+                orderCode: 'ORD-002',
+                status: 'NEW',
+                syncStatus: 'PENDING',
+                totalAmount: 380000,
+                items: []
+            }
+        });
+
+        await useCartStore.getState().addToCart(product);
+
+        await useCartStore.getState().submitOrder({
+            customerName: 'Nguyen Van A',
+            customerMobile: '0901234567',
+            ...shippingLocation,
+            shippingFee: 30000
+        });
+
+        expect(mockedCustomerService.createOrder).toHaveBeenCalledWith(
+            expect.objectContaining({
+                ...shippingLocation,
+                shippingFee: 30000
+            }),
+            expect.any(String)
+        );
+        expect(mockedCustomerService.createOrder.mock.calls[0][0]).not.toHaveProperty('carrierId');
+        expect(mockedCustomerService.createOrder.mock.calls[0][0]).not.toHaveProperty('carrierServiceId');
+    });
+
     it('rejects order submission when shipping quote fields are missing', async () => {
         mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
         await useCartStore.getState().addToCart(product);
@@ -201,10 +237,6 @@ describe('useCartStore order submission', () => {
     });
 
     it.each([
-        ['missing carrier id', { carrierServiceId: 20, shippingFee: 30000 }],
-        ['missing carrier service id', { carrierId: 10, shippingFee: 30000 }],
-        ['invalid carrier id', { carrierId: 0, carrierServiceId: 20, shippingFee: 30000 }],
-        ['invalid carrier service id', { carrierId: 10, carrierServiceId: 0, shippingFee: 30000 }],
         ['missing shipping fee', { carrierId: 10, carrierServiceId: 20 }],
         ['non-finite shipping fee', { carrierId: 10, carrierServiceId: 20, shippingFee: Number.NaN }],
         ['negative shipping fee', { carrierId: 10, carrierServiceId: 20, shippingFee: -1 }]

@@ -187,15 +187,11 @@ export const useCartStore = create<CartState>((set, get) => ({
             throw new Error(message);
         }
 
-        const hasValidShippingQuote = Number.isInteger(details.carrierId)
-            && Number(details.carrierId) > 0
-            && Number.isInteger(details.carrierServiceId)
-            && Number(details.carrierServiceId) > 0
-            && typeof details.shippingFee === 'number'
+        const hasValidShippingFee = typeof details.shippingFee === 'number'
             && Number.isFinite(details.shippingFee)
             && details.shippingFee >= 0;
 
-        if (!hasValidShippingQuote) {
+        if (!hasValidShippingFee) {
             const message = 'Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.';
             set({ checkoutError: message });
             throw new Error(message);
