@@ -24,7 +24,12 @@ const mockConfigMap = {
         provider: 'zalo',
         pageId: '123456789',
     }),
-    social_links: JSON.stringify({zalo: 'https://zalo.me/sobu'}),
+    social_links: JSON.stringify({
+        facebook: 'https://facebook.com/sobu',
+        instagram: 'https://instagram.com/sobu',
+        zalo: 'https://zalo.me/sobu',
+        tiktok: 'https://tiktok.com/@sobu',
+    }),
 };
 
 let mockAuthState: any = {
@@ -99,19 +104,19 @@ describe('ChatDock', () => {
         mockGetMessages.mockReturnValue(new Promise(() => undefined));
     });
 
-    it('renders support chat above Zalo chat inside the fixed wrapper', () => {
+    it('renders support chat above social links inside the fixed wrapper', () => {
         const { container } = render(<ChatDock/>);
 
         expect(screen.getByLabelText('Thanh chat ho tro')).toBeTruthy();
         expect(screen.getByLabelText('Thanh chat ho tro khach hang')).toBeTruthy();
-        expect(screen.getByLabelText('Thanh chat Zalo')).toBeTruthy();
+        expect(screen.getByLabelText('Thanh lien ket social')).toBeTruthy();
 
-        const dockOrder = Array.from(container.querySelectorAll('[aria-label="Thanh chat ho tro khach hang"], [aria-label="Thanh chat Zalo"]'))
+        const dockOrder = Array.from(container.querySelectorAll('[aria-label="Thanh chat ho tro khach hang"], [aria-label="Thanh lien ket social"]'))
             .map((element) => element.getAttribute('aria-label'));
-        expect(dockOrder).toEqual(['Thanh chat ho tro khach hang', 'Thanh chat Zalo']);
+        expect(dockOrder).toEqual(['Thanh chat ho tro khach hang', 'Thanh lien ket social']);
     });
 
-    it('renders both support and Zalo entries for guests', () => {
+    it('renders support and configured social links for guests', () => {
         mockAuthState = {
             isAuthenticated: false,
             user: null
@@ -120,10 +125,13 @@ describe('ChatDock', () => {
         render(<ChatDock/>);
 
         expect(screen.getByRole('button', { name: 'Mo chat ho tro' })).toBeTruthy();
-        expect(screen.getByRole('button', { name: 'Mo chat Zalo' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Facebook' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Instagram' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Zalo' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Tiktok' })).toBeTruthy();
     });
 
-    it('keeps only one chat panel open at a time', () => {
+    it('keeps social links visible when support chat is open', () => {
         mockAuthState = {
             isAuthenticated: false,
             user: null
@@ -133,9 +141,9 @@ describe('ChatDock', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Mo chat ho tro' }));
         expect(screen.getByLabelText('Support chat')).toBeTruthy();
-
-        fireEvent.click(screen.getByRole('button', { name: 'Mo chat Zalo' }));
-        expect(screen.queryByLabelText('Support chat')).toBeNull();
-        expect(screen.getByLabelText('Zalo chat')).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Facebook' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Instagram' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Zalo' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Tiktok' })).toBeTruthy();
     });
 });
