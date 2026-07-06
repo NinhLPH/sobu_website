@@ -55,6 +55,12 @@ const initialCheckoutForm: CheckoutForm = {
 
 const MAX_CUSTOMER_ADDRESS_LENGTH = 500;
 
+// Hardcoded carrier IDs for shipping methods
+const SHIPPING_CARRIER_MAP = {
+    standard: { carrierId: 29, carrierServiceId: 186 },
+    express: { carrierId: 18, carrierServiceId: 187 }
+} as const;
+
 type CompleteShippingQuote = ShippingQuoteDto & {
     carrierId?: number | null;
     carrierName?: string | null;
@@ -540,8 +546,11 @@ export default function Cart() {
         }
 
         const shippingFee = shippingQuoteFee(confirmedShippingQuote);
-        const carrierId = parsePositiveInteger(confirmedShippingQuote.carrierId);
-        const carrierServiceId = parsePositiveInteger(confirmedShippingQuote.carrierServiceId);
+        const confirmedQuoteIndex = shippingQuotes.findIndex(
+            (q, i) => shippingQuoteKey(q, i) === selectedShippingQuoteKey
+        );
+        const mode = shippingQuoteMode(confirmedShippingQuote, confirmedQuoteIndex >= 0 ? confirmedQuoteIndex : 0);
+        const hardcodedCarrier = SHIPPING_CARRIER_MAP[mode];
 
         try {
             const order = await submitOrder({
@@ -556,12 +565,8 @@ export default function Cart() {
                 customerDistrictId: form.customerDistrictId,
                 customerWardId: form.customerWardId,
                 shippingFee,
-                ...(carrierId !== null && carrierServiceId !== null
-                    ? {
-                        carrierId,
-                        carrierServiceId
-                    }
-                    : {}),
+                carrierId: hardcodedCarrier.carrierId,
+                carrierServiceId: hardcodedCarrier.carrierServiceId,
                 description: form.description.trim() || undefined
             });
 
