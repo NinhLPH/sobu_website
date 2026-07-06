@@ -69,6 +69,17 @@ const shippingQuote = {
     description: 'Door delivery'
 };
 
+const invalidShippingQuote = {
+    carrierId: 11,
+    carrierName: 'Broken carrier',
+    carrierServiceId: null,
+    carrierServiceName: 'Missing service',
+    shipFee: null,
+    customerShipFee: null,
+    deliveryTime: null,
+    description: null
+};
+
 describe('Cart payment selection', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -119,9 +130,17 @@ describe('Cart payment selection', () => {
         fireEvent.change(selects[2], { target: { value: '3' } });
     };
 
-    const selectShippingQuote = async () => {
+    const getCheckoutButton = () =>
+        screen.getByRole('button', { name: /Dang xac nhan|thanh|COD/i }) as HTMLButtonElement;
+
+    const clickShippingQuote = async () => {
         const option = await screen.findByRole('radio', { name: /GHN - Standard/i });
         fireEvent.click(option);
+    };
+
+    const selectShippingQuote = async () => {
+        await clickShippingQuote();
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
     };
 
     it('requests shipping quotes after the customer selects a full location', async () => {
@@ -137,15 +156,93 @@ describe('Cart payment selection', () => {
             codAmount: 0
         }));
         expect(await screen.findByRole('radio', { name: /GHN - Standard/i })).not.toBeNull();
+        expect(screen.getByText(/Phi ap dung: 30/i)).toBeTruthy();
     });
 
-    it('keeps checkout disabled until a shipping quote is selected', async () => {
+    it('does not render invalid shipping quotes or enable checkout', async () => {
+        mockedShippingService.getQuotes.mockResolvedValueOnce({
+            success: true,
+            statusCode: 200,
+            message: 'Shipping quotes retrieved',
+            data: [invalidShippingQuote]
+        });
+
         render(<Cart />);
         selectShippingLocation();
 
-        await screen.findByRole('radio', { name: /GHN - Standard/i });
+        await waitFor(() => expect(
+            screen.getByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')
+        ).toBeTruthy());
+        expect(screen.queryByRole('radio', { name: /Broken carrier/i })).toBeNull();
+        expect(getCheckoutButton().disabled).toBe(true);
+        expect(mockSubmitOrder).not.toHaveBeenCalled();
+    });
 
-        expect((screen.getByRole('button', { name: /thanh/i }) as HTMLButtonElement).disabled).toBe(true);
+    it('confirms the selected carrier quote before enabling checkout', async () => {
+        let resolveConfirmQuote: (value: any) => void = () => undefined;
+        mockedShippingService.getQuotes
+            .mockResolvedValueOnce({
+                success: true,
+                statusCode: 200,
+                message: 'Shipping quotes retrieved',
+                data: [shippingQuote]
+            })
+            .mockImplementationOnce(() => new Promise((resolve) => {
+                resolveConfirmQuote = resolve;
+            }));
+
+        render(<Cart />);
+        selectShippingLocation();
+
+        await clickShippingQuote();
+
+        await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith({
+            customerAddress: undefined,
+            customerCityId: 1,
+            customerDistrictId: 2,
+            customerWardId: 3,
+            cartSubtotal: 350000,
+            codAmount: 0,
+            carrierId: 10,
+            carrierServiceId: 20
+        }));
+
+        expect(getCheckoutButton().disabled).toBe(true);
+        expect(mockSubmitOrder).not.toHaveBeenCalled();
+
+        resolveConfirmQuote({
+            success: true,
+            statusCode: 200,
+            message: 'Shipping quote confirmed',
+            data: [shippingQuote]
+        });
+
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
+    });
+
+    it('keeps checkout disabled when quote confirmation no longer returns the selected option', async () => {
+        mockedShippingService.getQuotes
+            .mockResolvedValueOnce({
+                success: true,
+                statusCode: 200,
+                message: 'Shipping quotes retrieved',
+                data: [shippingQuote]
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                statusCode: 200,
+                message: 'Shipping quote confirmed',
+                data: []
+            });
+
+        render(<Cart />);
+        selectShippingLocation();
+        await clickShippingQuote();
+
+        await waitFor(() => expect(
+            screen.getByText('Khong the xac nhan phi giao hang da chon. Vui long chon phuong thuc khac.')
+        ).toBeTruthy());
+        expect(getCheckoutButton().disabled).toBe(true);
         expect(mockSubmitOrder).not.toHaveBeenCalled();
     });
 
@@ -154,11 +251,11 @@ describe('Cart payment selection', () => {
         selectShippingLocation();
         await selectShippingQuote();
 
-        expect((screen.getByRole('button', { name: /thanh/i }) as HTMLButtonElement).disabled).toBe(false);
+        expect(getCheckoutButton().disabled).toBe(false);
 
         fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '' } });
 
-        await waitFor(() => expect((screen.getByRole('button', { name: /thanh/i }) as HTMLButtonElement).disabled).toBe(true));
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(true));
     });
 
     it('creates COD payment immediately and navigates to tracking', async () => {

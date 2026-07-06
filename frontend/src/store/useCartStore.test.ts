@@ -33,6 +33,8 @@ const shippingQuote = {
     shippingFee: 30000
 };
 
+const shippingQuoteRequiredMessage = 'Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.';
+
 const emptyCartResponse = {
     success: true,
     statusCode: 200,
@@ -192,9 +194,29 @@ describe('useCartStore order submission', () => {
             customerName: 'Nguyen Van A',
             customerMobile: '0901234567',
             ...shippingLocation
-        })).rejects.toThrow('Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.');
+        })).rejects.toThrow(shippingQuoteRequiredMessage);
 
         expect(mockedCustomerService.createOrder).not.toHaveBeenCalled();
-        expect(useCartStore.getState().checkoutError).toBe('Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.');
+        expect(useCartStore.getState().checkoutError).toBe(shippingQuoteRequiredMessage);
+    });
+
+    it.each([
+        ['invalid carrier id', { carrierId: 0, carrierServiceId: 20, shippingFee: 30000 }],
+        ['invalid carrier service id', { carrierId: 10, carrierServiceId: 0, shippingFee: 30000 }],
+        ['missing shipping fee', { carrierId: 10, carrierServiceId: 20 }],
+        ['non-finite shipping fee', { carrierId: 10, carrierServiceId: 20, shippingFee: Number.NaN }]
+    ])('rejects order submission with %s', async (_label, invalidQuote) => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
+        await useCartStore.getState().addToCart(product);
+
+        await expect(useCartStore.getState().submitOrder({
+            customerName: 'Nguyen Van A',
+            customerMobile: '0901234567',
+            ...shippingLocation,
+            ...invalidQuote
+        })).rejects.toThrow(shippingQuoteRequiredMessage);
+
+        expect(mockedCustomerService.createOrder).not.toHaveBeenCalled();
+        expect(useCartStore.getState().checkoutError).toBe(shippingQuoteRequiredMessage);
     });
 });
