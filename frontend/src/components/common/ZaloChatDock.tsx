@@ -71,7 +71,7 @@ export default function ZaloChatDock() {
                     rel="noreferrer"
                     aria-label={`Mo ${label}`}
                     title={label}
-                    className={`inline-flex h-14 w-14 cursor-pointer items-center justify-center rounded-full text-xl transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest ${className}`}
+                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-lg transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest lg:h-14 lg:w-14 lg:text-xl ${className}`}
                 >
                     {createElement(Icon as any, {'aria-hidden': true})}
                 </a>

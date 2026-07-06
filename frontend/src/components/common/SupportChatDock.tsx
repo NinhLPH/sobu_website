@@ -427,7 +427,7 @@ export default function SupportChatDock({
                 aria-label={isOpen ? 'An chat ho tro' : 'Mo chat ho tro'}
                 aria-expanded={isOpen}
                 onClick={() => setIsOpen(!isOpen)}
-                className="inline-flex h-14 cursor-pointer items-center gap-2 rounded-full bg-primary px-4 text-sm font-black text-on-primary shadow-[0_14px_35px_rgba(0,97,142,0.28)] transition-colors hover:bg-primary-container focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-primary px-3 text-xs font-black text-on-primary shadow-[0_14px_35px_rgba(0,97,142,0.28)] transition-colors hover:bg-primary-container focus-visible:ring-2 focus-visible:ring-primary/40 lg:h-14 lg:px-4 lg:text-sm"
             >
                 <MessageCircle className="h-5 w-5"/>
                 <span>Hỗ trợ</span>
