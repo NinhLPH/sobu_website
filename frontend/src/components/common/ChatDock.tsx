@@ -33,11 +33,11 @@ export default function ChatDock() {
         >
             {/* Desktop: always show everything */}
             <div className="hidden lg:flex lg:flex-col lg:items-end lg:gap-3">
-                <ZaloChatDock/>
                 <SupportChatDock
                     isOpen={activeDock === 'support'}
                     onOpenChange={handleSupportOpenChange}
                 />
+                <ZaloChatDock/>
             </div>
 
             {/* Mobile: collapsible menu */}
@@ -45,11 +45,11 @@ export default function ChatDock() {
                 {/* Expanded content */}
                 {isMobileExpanded && (
                     <div className="flex animate-in fade-in slide-in-from-bottom-2 duration-200 flex-col items-end gap-3">
-                        <ZaloChatDock/>
                         <SupportChatDock
                             isOpen={activeDock === 'support'}
                             onOpenChange={handleSupportOpenChange}
                         />
+                        <ZaloChatDock/>
                     </div>
                 )}
 

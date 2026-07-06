@@ -1,4 +1,5 @@
-import {createElement} from 'react';
+import {createElement, useState} from 'react';
+import {Share2, X} from 'lucide-react';
 import {FaFacebookF, FaInstagram, FaTiktok, FaYoutube} from 'react-icons/fa';
 import {SiZalo} from 'react-icons/si';
 import {IconType} from 'react-icons';
@@ -48,6 +49,7 @@ const SOCIAL_CHANNELS: SocialChannel[] = [
 ];
 
 export default function ZaloChatDock() {
+    const [isMobileExpanded, setIsMobileExpanded] = useState(false);
     const configMap = usePublicUiStore((state) => state.configMap);
     const socialLinks = parseJsonConfig<SocialLinks>(configMap, 'social_links', {});
     const visibleChannels = SOCIAL_CHANNELS
@@ -61,21 +63,54 @@ export default function ZaloChatDock() {
         return null;
     }
 
+    const renderLinks = (sizeClassName: string) => visibleChannels.map(({key, label, Icon, href, className}) => (
+        <a
+            key={key}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Mo ${label}`}
+            title={label}
+            className={`inline-flex cursor-pointer items-center justify-center rounded-full text-lg transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest ${sizeClassName} ${className}`}
+        >
+            {createElement(Icon as any, {'aria-hidden': true})}
+        </a>
+    ));
+
     return (
         <div aria-label="Thanh lien ket social" className="flex flex-col items-end gap-3">
-            {visibleChannels.map(({key, label, Icon, href, className}) => (
-                <a
-                    key={key}
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`Mo ${label}`}
-                    title={label}
-                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-lg transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest lg:h-14 lg:w-14 lg:text-xl ${className}`}
+            <div className="hidden flex-col items-end gap-3 lg:flex">
+                {renderLinks('h-14 w-14 text-xl')}
+            </div>
+
+            <div className="flex flex-col items-end gap-2 lg:hidden">
+                {isMobileExpanded && (
+                    <div
+                        aria-label="Danh sach lien ket social"
+                        className="flex flex-col items-end gap-2"
+                    >
+                        {renderLinks('h-11 w-11')}
+                    </div>
+                )}
+
+                <button
+                    type="button"
+                    aria-label={isMobileExpanded ? 'Thu gon lien ket social' : 'Mo lien ket social'}
+                    aria-expanded={isMobileExpanded}
+                    onClick={() => setIsMobileExpanded((current) => !current)}
+                    className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-white shadow-[0_14px_35px_rgba(0,97,142,0.28)] transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest ${
+                        isMobileExpanded
+                            ? 'bg-on-surface/80 hover:bg-on-surface'
+                            : 'bg-primary hover:bg-primary-container'
+                    }`}
                 >
-                    {createElement(Icon as any, {'aria-hidden': true})}
-                </a>
-            ))}
+                    {isMobileExpanded ? (
+                        <X className="h-5 w-5" aria-hidden="true"/>
+                    ) : (
+                        <Share2 className="h-5 w-5" aria-hidden="true"/>
+                    )}
+                </button>
+            </div>
         </div>
     );
 }

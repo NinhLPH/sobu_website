@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {fireEvent, render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, it, jest} from '@jest/globals';
 import ZaloChatDock from './ZaloChatDock';
 
@@ -18,6 +18,7 @@ const socialLinks = {
     instagram: 'https://instagram.com/sobu',
     zalo: 'https://zalo.me/sobu',
     tiktok: 'https://tiktok.com/@sobu',
+    youtube: 'https://youtube.com/@sobu',
 };
 
 describe('ZaloChatDock', () => {
@@ -43,6 +44,7 @@ describe('ZaloChatDock', () => {
         expect(screen.getByRole('link', {name: 'Mo Instagram'})).toBeTruthy();
         expect(screen.getByRole('link', {name: 'Mo Zalo'})).toBeTruthy();
         expect(screen.getByRole('link', {name: 'Mo Tiktok'})).toBeTruthy();
+        expect(screen.getByRole('link', {name: 'Mo Youtube'})).toBeTruthy();
     });
 
     it('opens each configured social link in a new tab', () => {
@@ -53,6 +55,7 @@ describe('ZaloChatDock', () => {
             Instagram: socialLinks.instagram,
             Zalo: socialLinks.zalo,
             Tiktok: socialLinks.tiktok,
+            Youtube: socialLinks.youtube,
         }).forEach(([label, href]) => {
             const link = screen.getByRole('link', {name: `Mo ${label}`}) as HTMLAnchorElement;
             expect(link.getAttribute('href')).toBe(href);
@@ -76,18 +79,32 @@ describe('ZaloChatDock', () => {
         expect(screen.queryByRole('link', {name: 'Mo Instagram'})).toBeNull();
         expect(screen.queryByRole('link', {name: 'Mo Zalo'})).toBeNull();
         expect(screen.queryByRole('link', {name: 'Mo Tiktok'})).toBeNull();
+        expect(screen.queryByRole('link', {name: 'Mo Youtube'})).toBeNull();
     });
 
     it('does not render when social_links has no supported URLs', () => {
         mockConfigMap = {
             social_links: JSON.stringify({
-                youtube: 'https://youtube.com/@sobu',
+                linkedin: 'https://linkedin.com/company/sobu',
             }),
         };
 
         render(<ZaloChatDock/>);
 
         expect(screen.queryByLabelText('Thanh lien ket social')).toBeNull();
+    });
+
+    it('collapses social links behind a mobile toggle', () => {
+        render(<ZaloChatDock/>);
+
+        const toggle = screen.getByRole('button', {name: 'Mo lien ket social'});
+        expect(toggle.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByLabelText('Danh sach lien ket social')).toBeNull();
+
+        fireEvent.click(toggle);
+
+        expect(screen.getByRole('button', {name: 'Thu gon lien ket social'}).getAttribute('aria-expanded')).toBe('true');
+        expect(screen.getByLabelText('Danh sach lien ket social')).toBeTruthy();
     });
 
     it('does not inject the Zalo SDK script', () => {

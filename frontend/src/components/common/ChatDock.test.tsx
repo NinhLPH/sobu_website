@@ -140,10 +140,10 @@ describe('ChatDock', () => {
         render(<ChatDock/>);
 
         fireEvent.click(screen.getByRole('button', { name: 'Mo chat ho tro' }));
-        expect(screen.getByLabelText('Support chat')).toBeTruthy();
-        expect(screen.getByRole('link', { name: 'Mo Facebook' })).toBeTruthy();
-        expect(screen.getByRole('link', { name: 'Mo Instagram' })).toBeTruthy();
-        expect(screen.getByRole('link', { name: 'Mo Zalo' })).toBeTruthy();
-        expect(screen.getByRole('link', { name: 'Mo Tiktok' })).toBeTruthy();
+        expect(screen.getAllByLabelText('Support chat').length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('link', { name: 'Mo Facebook' }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('link', { name: 'Mo Instagram' }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('link', { name: 'Mo Zalo' }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('link', { name: 'Mo Tiktok' }).length).toBeGreaterThan(0);
     });
 });
