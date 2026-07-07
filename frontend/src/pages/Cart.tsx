@@ -540,9 +540,6 @@ export default function Cart() {
         }
 
         const shippingFee = shippingQuoteFee(confirmedShippingQuote);
-        const confirmedQuoteIndex = shippingQuotes.findIndex(
-            (q, i) => shippingQuoteKey(q, i) === selectedShippingQuoteKey
-        );
         const carrierId = parsePositiveInteger(confirmedShippingQuote.carrierId);
         const carrierServiceId = parsePositiveInteger(confirmedShippingQuote.carrierServiceId);
 
