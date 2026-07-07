@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -64,7 +65,7 @@ public class NhanhLocationSyncService {
                 snapshotStore,
                 rateLimiter,
                 sleeper,
-                Clock.systemUTC());
+                Clock.system(ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 
     NhanhLocationSyncService(

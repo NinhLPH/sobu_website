@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -10,6 +11,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class NhanhOrderAddRequest {
     private Info info;
     private Channel channel;
@@ -23,6 +25,7 @@ public class NhanhOrderAddRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Info {
         private Long depotId;
         private Integer type;
@@ -34,6 +37,7 @@ public class NhanhOrderAddRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Channel {
         private String appOrderId;
         private String sourceName;
@@ -44,6 +48,7 @@ public class NhanhOrderAddRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class ShippingAddress {
         private String name;
         private String mobile;
@@ -60,9 +65,9 @@ public class NhanhOrderAddRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Product {
         private Long id;
-        private String code;
         private BigDecimal price;
         private Integer quantity;
         private BigDecimal discount;
@@ -74,6 +79,7 @@ public class NhanhOrderAddRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Carrier {
         private Long id;
         private Long serviceId;
@@ -85,6 +91,7 @@ public class NhanhOrderAddRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Payment {
         private BigDecimal depositAmount;
         private Long depositAccountId;

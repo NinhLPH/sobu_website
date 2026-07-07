@@ -25,6 +25,7 @@ export interface CarrierConfigDto {
     carrierId?: number | null;
     standardService?: string | null;
     expressService?: string | null;
+    expressCarrierId?: number | null;
     expressFallbackId?: number | null;
 }
 

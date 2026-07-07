@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
@@ -22,7 +23,7 @@ public class NhanhLocationRateLimiter {
     public NhanhLocationRateLimiter(
             NhanhLocationSleeper sleeper,
             NhanhProperties nhanhProperties) {
-        this(Clock.systemUTC(), sleeper, nhanhProperties);
+        this(Clock.system(ZoneId.of("Asia/Ho_Chi_Minh")), sleeper, nhanhProperties);
     }
 
     NhanhLocationRateLimiter(

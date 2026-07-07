@@ -14,6 +14,7 @@ type CarrierConfigDraft = {
     carrierId: string;
     standardService: string;
     expressService: string;
+    expressCarrierId: string;
     expressFallbackId: string;
 };
 
@@ -21,6 +22,7 @@ const emptyDraft: CarrierConfigDraft = {
     carrierId: '',
     standardService: '',
     expressService: '',
+    expressCarrierId: '',
     expressFallbackId: ''
 };
 
@@ -50,6 +52,7 @@ const toDraft = (config?: CarrierConfigDto | null): CarrierConfigDraft => ({
     carrierId: config?.carrierId ? String(config.carrierId) : '',
     standardService: config?.standardService ?? '',
     expressService: config?.expressService ?? '',
+    expressCarrierId: config?.expressCarrierId ? String(config.expressCarrierId) : '',
     expressFallbackId: config?.expressFallbackId ? String(config.expressFallbackId) : ''
 });
 
@@ -143,6 +146,7 @@ const buildPayload = (draft: CarrierConfigDraft): CarrierConfigRequestDto => ({
     carrierId: parseOptionalPositiveInteger(draft.carrierId, 'Carrier ID'),
     standardService: draft.standardService.trim() || undefined,
     expressService: draft.expressService.trim() || undefined,
+    expressCarrierId: parseOptionalPositiveInteger(draft.expressCarrierId, 'Express carrier ID'),
     expressFallbackId: parseOptionalPositiveInteger(draft.expressFallbackId, 'Express fallback ID')
 });
 
@@ -415,7 +419,19 @@ export default function AdminShipping() {
                         </label>
 
                         <label className="block text-[10px] font-black uppercase tracking-wider text-outline">
-                            Express fallback carrier ID
+                            Express carrier ID
+                            <input
+                                aria-label="Express carrier ID"
+                                value={draft.expressCarrierId}
+                                onChange={(event) => updateDraft('expressCarrierId', event.target.value)}
+                                disabled={isLoadingConfig || isSaving}
+                                className="mt-2 w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-3 text-xs font-bold normal-case text-on-surface outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                                placeholder="18"
+                            />
+                        </label>
+
+                        <label className="block text-[10px] font-black uppercase tracking-wider text-outline">
+                            Express fallback carrier ID (khong dung)
                             <input
                                 aria-label="Express fallback ID"
                                 value={draft.expressFallbackId}

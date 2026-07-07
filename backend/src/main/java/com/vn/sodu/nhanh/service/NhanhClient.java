@@ -307,9 +307,7 @@ public class NhanhClient {
         }
         try {
             JsonNode root = objectMapper.readTree(rawBody);
-            JsonNode firstData = root.path("data").isArray() && root.path("data").size() > 0
-                    ? root.path("data").get(0)
-                    : null;
+            JsonNode firstData = root.path("data").isObject() ? root.path("data") : null;
             String rawDataOrderId = textValue(firstData == null ? null : firstData.get("orderId"));
             String rawDataId = textValue(firstData == null ? null : firstData.get("id"));
 

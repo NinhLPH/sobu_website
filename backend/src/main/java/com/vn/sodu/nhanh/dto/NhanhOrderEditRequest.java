@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -9,6 +10,7 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class NhanhOrderEditRequest {
     private Info info;
     private Carrier carrier;
@@ -20,6 +22,7 @@ public class NhanhOrderEditRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Info {
         private Long id;
         private String description;
@@ -30,6 +33,7 @@ public class NhanhOrderEditRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Carrier {
         private Long id;
         private Long serviceId;
@@ -41,6 +45,7 @@ public class NhanhOrderEditRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Payment {
         private BigDecimal transferAmount;
         private Long transferAccountId;

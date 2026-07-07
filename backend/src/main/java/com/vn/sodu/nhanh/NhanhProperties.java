@@ -87,7 +87,7 @@ public class NhanhProperties {
         private int retryAfterSeconds = 30;
         private long rollingWindowMs = 30_000;
         private int rollingWindowMaxRequests = 120;
-        private long interChunkSleepMs = 60_000;
+        private long interChunkSleepMs = 0;
         private int chunkSize = 5;
         private int maxAttemptsPerRequest = 5;
         private long extendedLockThresholdMs = 300_000;
@@ -110,6 +110,7 @@ public class NhanhProperties {
         private Long id;
         private String standardService;
         private String expressService;
+        private Long expressCarrierId;
         private Long expressFallbackId;
     }
 

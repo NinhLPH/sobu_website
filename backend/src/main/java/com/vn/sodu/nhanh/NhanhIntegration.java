@@ -35,6 +35,7 @@ public class NhanhIntegration {
     private Long carrierId;
     private String standardService;
     private String expressService;
+    private Long expressCarrierId;
     private Long expressFallbackId;
 
     private LocalDateTime createdAt;

@@ -23,6 +23,9 @@ public class CarrierConfigResponseDto {
     @Schema(description = "Express delivery service code", example = "VHT")
     private String expressService;
 
+    @Schema(description = "Express carrier ID", example = "22384")
+    private Long expressCarrierId;
+
     @Schema(description = "Fallback carrier ID for express delivery", example = "22384")
     private Long expressFallbackId;
 }

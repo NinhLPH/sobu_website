@@ -1,5 +1,7 @@
 package com.vn.sodu.nhanh.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhIntegration;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,18 +29,32 @@ public class NhanhShippingQuoteService {
     private final NhanhService nhanhService;
     private final NhanhProperties nhanhProperties;
     private final NhanhIntegrationRepo nhanhIntegrationRepo;
+    private final ObjectMapper objectMapper;
 
     public List<ShippingQuoteDto> quote(ShippingQuoteRequestDto request) {
         validateRequest(request);
         validateOrigin();
 
         String accessToken = nhanhService.getValidAccessToken();
+        if (isNhanhAccountShipping()) {
+            NhanhResponse<List<NhanhShippingFeeOption>> response = nhanhClient.post(
+                    nhanhProperties.getShipping().getFeePath(),
+                    accessToken,
+                    buildRequestBody(request, null, null),
+                    new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
+            );
+            List<ShippingQuoteDto> quotes = toQuotes(response);
+            if (quotes.isEmpty()) {
+                throw new ExternalServiceException("No shipping options available for the selected destination.");
+            }
+            return quotes;
+        }
 
         // Load config with database override
         Long standardCarrierId = nhanhProperties.getShipping().getCarrier().getId();
         String standardService = nhanhProperties.getShipping().getCarrier().getStandardService();
         String expressService = nhanhProperties.getShipping().getCarrier().getExpressService();
-        Long fallbackId = nhanhProperties.getShipping().getCarrier().getExpressFallbackId();
+        Long expressCarrierId = nhanhProperties.getShipping().getCarrier().getExpressCarrierId();
 
         java.util.Optional<com.vn.sodu.nhanh.NhanhIntegration> integrationOpt = nhanhService.getIntegration();
         if (integrationOpt.isPresent()) {
@@ -51,12 +68,30 @@ public class NhanhShippingQuoteService {
             if (integration.getExpressService() != null) {
                 expressService = integration.getExpressService();
             }
-            if (integration.getExpressFallbackId() != null) {
-                fallbackId = integration.getExpressFallbackId();
+            if (integration.getExpressCarrierId() != null) {
+                expressCarrierId = integration.getExpressCarrierId();
             }
         }
 
         List<ShippingQuoteDto> quotes = new java.util.ArrayList<>();
+        Long requestedCarrierId = request.getCarrierId();
+        String requestedService = request.getCarrierServiceId() != null
+                ? request.getCarrierServiceId().toString()
+                : null;
+
+        if (requestedCarrierId != null) {
+            NhanhResponse<List<NhanhShippingFeeOption>> selectedResp = nhanhClient.post(
+                    nhanhProperties.getShipping().getFeePath(),
+                    accessToken,
+                    buildRequestBody(request, requestedCarrierId, requestedService),
+                    new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
+            );
+            quotes.addAll(toQuotes(selectedResp));
+            if (quotes.isEmpty()) {
+                throw new ExternalServiceException("No shipping options available for the selected destination.");
+            }
+            return quotes;
+        }
 
         // 1. Get Standard Option
         try {
@@ -77,14 +112,13 @@ public class NhanhShippingQuoteService {
             log.error("Failed to fetch standard shipping quote", ex);
         }
 
-        // 2. Get Express Option
-        boolean hasExpress = false;
-        if (expressService != null && !expressService.isBlank()) {
+        // 2. Get Express Option - directly use expressCarrierId with expressService
+        if (expressCarrierId != null && expressService != null && !expressService.isBlank()) {
             try {
                 NhanhResponse<List<NhanhShippingFeeOption>> expResp = nhanhClient.post(
                         nhanhProperties.getShipping().getFeePath(),
                         accessToken,
-                        buildRequestBody(request, standardCarrierId, expressService),
+                        buildRequestBody(request, expressCarrierId, expressService),
                         new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
                 );
                 if (expResp != null && expResp.getData() != null && !expResp.getData().isEmpty()) {
@@ -96,36 +130,9 @@ public class NhanhShippingQuoteService {
                                 dto.setCarrierServiceName("Hỏa tốc (" + dto.getCarrierServiceName() + ")");
                                 quotes.add(dto);
                             });
-                    hasExpress = true;
                 }
             } catch (Exception ex) {
-                log.warn("Express service [{}] failed, will try fallback", expressService, ex);
-            }
-        }
-
-        // 3. Fallback to expressFallbackId (AhaMove) if no express found yet
-        if (!hasExpress) {
-            if (fallbackId != null && fallbackId > 0) {
-                try {
-                    NhanhResponse<List<NhanhShippingFeeOption>> fbResp = nhanhClient.post(
-                            nhanhProperties.getShipping().getFeePath(),
-                            accessToken,
-                            buildRequestBody(request, fallbackId, null),
-                            new ParameterizedTypeReference<NhanhResponse<List<NhanhShippingFeeOption>>>() {}
-                    );
-                    if (fbResp != null && fbResp.getData() != null && !fbResp.getData().isEmpty()) {
-                        fbResp.getData().stream()
-                                .filter(java.util.Objects::nonNull)
-                                .map(this::toDto)
-                                .findFirst()
-                                .ifPresent(dto -> {
-                                    dto.setCarrierServiceName("Hỏa tốc (" + dto.getCarrierName() + ")");
-                                    quotes.add(dto);
-                                });
-                    }
-                } catch (Exception ex) {
-                    log.error("Failed to fetch express fallback shipping quote", ex);
-                }
+                log.error("Failed to fetch express shipping quote", ex);
             }
         }
 
@@ -133,6 +140,23 @@ public class NhanhShippingQuoteService {
             throw new ExternalServiceException("No shipping options available for the selected destination.");
         }
 
+        return quotes;
+    }
+
+    private boolean isNhanhAccountShipping() {
+        Integer type = nhanhProperties.getShipping().getType();
+        return type == null || type == 1;
+    }
+
+    private List<ShippingQuoteDto> toQuotes(NhanhResponse<List<NhanhShippingFeeOption>> response) {
+        if (response == null || response.getData() == null) {
+            return List.of();
+        }
+        List<ShippingQuoteDto> quotes = new ArrayList<>();
+        response.getData().stream()
+                .filter(java.util.Objects::nonNull)
+                .map(this::toDto)
+                .forEach(quotes::add);
         return quotes;
     }
 
@@ -150,6 +174,7 @@ public class NhanhShippingQuoteService {
         Long standardCarrierId = nhanhProperties.getShipping().getCarrier().getId();
         String standardService = nhanhProperties.getShipping().getCarrier().getStandardService();
         String expressService = nhanhProperties.getShipping().getCarrier().getExpressService();
+        Long expressCarrierId = nhanhProperties.getShipping().getCarrier().getExpressCarrierId();
         Long fallbackId = nhanhProperties.getShipping().getCarrier().getExpressFallbackId();
 
         java.util.Optional<com.vn.sodu.nhanh.NhanhIntegration> integrationOpt = nhanhService.getIntegration();
@@ -164,6 +189,9 @@ public class NhanhShippingQuoteService {
             if (integration.getExpressService() != null) {
                 expressService = integration.getExpressService();
             }
+            if (integration.getExpressCarrierId() != null) {
+                expressCarrierId = integration.getExpressCarrierId();
+            }
             if (integration.getExpressFallbackId() != null) {
                 fallbackId = integration.getExpressFallbackId();
             }
@@ -173,6 +201,7 @@ public class NhanhShippingQuoteService {
                 .carrierId(standardCarrierId)
                 .standardService(standardService)
                 .expressService(expressService)
+                .expressCarrierId(expressCarrierId)
                 .expressFallbackId(fallbackId)
                 .build();
     }
@@ -184,6 +213,7 @@ public class NhanhShippingQuoteService {
         integration.setCarrierId(request.getCarrierId());
         integration.setStandardService(request.getStandardService());
         integration.setExpressService(request.getExpressService());
+        integration.setExpressCarrierId(request.getExpressCarrierId());
         integration.setExpressFallbackId(request.getExpressFallbackId());
 
         nhanhIntegrationRepo.save(integration);
@@ -196,10 +226,6 @@ public class NhanhShippingQuoteService {
         filters.put("price", money(request.getCartSubtotal()).intValue());
         filters.put("totalCod", money(request.getCodAmount()).intValue());
 
-        if (nhanhProperties.getDepotId() != null && nhanhProperties.getDepotId() > 0) {
-            filters.put("depotId", nhanhProperties.getDepotId().intValue());
-        }
-
         filters.put("shippingFrom", shippingFrom());
         filters.put("shippingTo", shippingTo(request));
 
@@ -209,10 +235,16 @@ public class NhanhShippingQuoteService {
             if (serviceCode != null && !serviceCode.isBlank()) {
                 carrierOpt.put("service", serviceCode);
             }
-            filters.put("carrier", List.of(carrierOpt));
+            filters.put("carrier", carrierOpt);
         }
 
-        return Map.of("filters", filters);
+        Map<String, Object> body = Map.of("filters", filters);
+        try {
+            log.info("Shipping fee request={}", objectMapper.writeValueAsString(body));
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize shipping fee request", e);
+        }
+        return body;
     }
 
     private Map<String, Object> shippingFrom() {
@@ -222,16 +254,19 @@ public class NhanhShippingQuoteService {
         value.put("cityId", origin.getCityId() != null ? origin.getCityId().intValue() : null);
         value.put("districtId", origin.getDistrictId() != null ? origin.getDistrictId().intValue() : null);
         value.put("wardId", origin.getWardId() != null ? origin.getWardId().intValue() : null);
-        value.put("locationVersion", "v1");
+        value.put("locationVersion", nhanhProperties.getLocation().getVersion());
         return value;
     }
 
     private Map<String, Object> shippingTo(ShippingQuoteRequestDto request) {
         Map<String, Object> value = new HashMap<>();
+        if (request.getCustomerAddress() != null && !request.getCustomerAddress().isBlank()) {
+            value.put("address", request.getCustomerAddress().trim());
+        }
         value.put("cityId", request.getCustomerCityId() != null ? request.getCustomerCityId().intValue() : null);
         value.put("districtId", request.getCustomerDistrictId() != null ? request.getCustomerDistrictId().intValue() : null);
         value.put("wardId", request.getCustomerWardId() != null ? request.getCustomerWardId().intValue() : null);
-        value.put("locationVersion", "v1");
+        value.put("locationVersion", nhanhProperties.getLocation().getVersion());
         return value;
     }
 

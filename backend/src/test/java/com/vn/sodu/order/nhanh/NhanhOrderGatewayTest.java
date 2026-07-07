@@ -13,6 +13,7 @@ import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.product.dto.NhanhResponse;
 import com.vn.sodu.request.OrderType;
+import com.vn.sodu.payment.PaymentMethod;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -65,6 +66,25 @@ class NhanhOrderGatewayTest {
     }
 
     @Test
+    void omitsTransferAmountForCodPendingPayment() {
+        NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
+
+        Order order = normalOrder();
+        OrderPayment codPayment = OrderPayment.builder()
+                .id(66L)
+                .paymentCode("SOBU-PAY-66")
+                .type(PaymentType.FULL)
+                .status(PaymentStatus.PENDING)
+                .paymentMethod(PaymentMethod.COD)
+                .amount(new BigDecimal("335000"))
+                .build();
+
+        NhanhOrderAddRequest request = gateway.buildAddRequest(order, codPayment);
+
+        assertThat(request.getPayment()).isNull();
+    }
+
+    @Test
     void invokesNhanhClientWithOrderAddEndpoint() {
         NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
         NhanhOrderAddResult data = new NhanhOrderAddResult();
@@ -74,7 +94,7 @@ class NhanhOrderGatewayTest {
                 eq("access-token"),
                 any(NhanhOrderAddRequest.class),
                 anyResponseType()
-        )).thenReturn(new NhanhResponse<>(1, List.of(data), null));
+        )).thenReturn(new NhanhResponse<>(1, data, null));
 
         NhanhOrderAddRequest request = gateway.buildAddRequest(normalOrder(), normalPayment());
         NhanhOrderAddResult result = gateway.createOrder(request, "access-token");
@@ -86,27 +106,25 @@ class NhanhOrderGatewayTest {
     }
 
     @Test
-    void parsesNhanhOrderAddDataArrayShape() throws Exception {
+    void parsesNhanhOrderAddDataObjectShape() throws Exception {
         String json = """
                 {
                   "code": 1,
-                  "data": [
-                    {
-                      "id": 987,
-                      "trackingUrl": "https://track.example/order/987"
-                    }
-                  ]
+                  "data": {
+                    "id": 987,
+                    "trackingUrl": "https://track.example/order/987"
+                  }
                 }
                 """;
 
-        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+        NhanhResponse<NhanhOrderAddResult> response = new ObjectMapper().readValue(
                 json,
-                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+                new TypeReference<NhanhResponse<NhanhOrderAddResult>>() {}
         );
 
-        assertThat(response.getData()).hasSize(1);
-        assertThat(response.getData().get(0).getId()).isEqualTo(987L);
-        assertThat(response.getData().get(0).getTrackingUrl()).isEqualTo("https://track.example/order/987");
+        assertThat(response.getData()).isNotNull();
+        assertThat(response.getData().getId()).isEqualTo(987L);
+        assertThat(response.getData().getTrackingUrl()).isEqualTo("https://track.example/order/987");
     }
 
     @Test
@@ -114,23 +132,21 @@ class NhanhOrderGatewayTest {
         String json = """
                 {
                   "code": 1,
-                  "data": [
-                    {
-                      "orderId": 654321,
-                      "trackingUrl": "https://track.example/order/654321"
-                    }
-                  ]
+                  "data": {
+                    "orderId": 654321,
+                    "trackingUrl": "https://track.example/order/654321"
+                  }
                 }
                 """;
 
-        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+        NhanhResponse<NhanhOrderAddResult> response = new ObjectMapper().readValue(
                 json,
-                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+                new TypeReference<NhanhResponse<NhanhOrderAddResult>>() {}
         );
 
-        assertThat(response.getData()).hasSize(1);
-        assertThat(response.getData().get(0).getOrderId()).isEqualTo(654321L);
-        assertThat(response.getData().get(0).resolveNhanhOrderId()).isEqualTo("654321");
+        assertThat(response.getData()).isNotNull();
+        assertThat(response.getData().getOrderId()).isEqualTo(654321L);
+        assertThat(response.getData().resolveNhanhOrderId()).isEqualTo("654321");
     }
 
     @Test
@@ -147,9 +163,9 @@ class NhanhOrderGatewayTest {
                 }
                 """;
 
-        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+        NhanhResponse<NhanhOrderAddResult> response = new ObjectMapper().readValue(
                 json,
-                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+                new TypeReference<NhanhResponse<NhanhOrderAddResult>>() {}
         );
 
         assertThat(response.getMessages()).containsExactly("duplicate: Duplicate appOrderId");
@@ -167,9 +183,9 @@ class NhanhOrderGatewayTest {
                 }
                 """;
 
-        NhanhResponse<List<NhanhOrderAddResult>> response = new ObjectMapper().readValue(
+        NhanhResponse<NhanhOrderAddResult> response = new ObjectMapper().readValue(
                 json,
-                new TypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+                new TypeReference<NhanhResponse<NhanhOrderAddResult>>() {}
         );
 
         assertThat(response.getMessages()).containsExactly("duplicate: Duplicate appOrderId");
@@ -178,7 +194,7 @@ class NhanhOrderGatewayTest {
     @Test
     void treatsDuplicateAppOrderIdResponseAsSuccessfulDuplicate() {
         NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
-        NhanhResponse<List<NhanhOrderAddResult>> response = new NhanhResponse<>(0, null, null);
+        NhanhResponse<NhanhOrderAddResult> response = new NhanhResponse<>(0, null, null);
         response.setMessages(List.of("Duplicate appOrderId"));
         when(nhanhClient.post(
                 eq("/v3.0/order/add"),
@@ -195,7 +211,7 @@ class NhanhOrderGatewayTest {
     @Test
     void treatsVietnameseExistingOrderResponseAsSuccessfulDuplicate() {
         NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
-        NhanhResponse<List<NhanhOrderAddResult>> response = new NhanhResponse<>(0, null, null);
+        NhanhResponse<NhanhOrderAddResult> response = new NhanhResponse<>(0, null, null);
         response.setMessages(List.of("Đơn hàng: SOBU-ORD-20260531223411-3213 đã tồn tại"));
         when(nhanhClient.post(
                 eq("/v3.0/order/add"),
@@ -310,28 +326,28 @@ class NhanhOrderGatewayTest {
     }
 
     @Test
-    void throwsExceptionWhenNhanhReturnsSuccessButEmptyDataList() {
+    void throwsExceptionWhenNhanhReturnsSuccessButDataIsNull() {
         NhanhOrderGateway gateway = new NhanhOrderGateway(nhanhClient, nhanhProperties());
         when(nhanhClient.post(
                 eq("/v3.0/order/add"),
                 eq("access-token"),
                 any(NhanhOrderAddRequest.class),
                 anyResponseType()
-        )).thenReturn(new NhanhResponse<>(1, List.of(), null));  // Empty data list
+        )).thenReturn(new NhanhResponse<>(1, null, null));
 
         NhanhOrderAddRequest request = gateway.buildAddRequest(normalOrder(), normalPayment());
 
         try {
             gateway.createOrder(request, "access-token");
-            assertThat(true).as("Should have thrown exception for empty data list").isFalse();
+            assertThat(true).as("Should have thrown exception for null data").isFalse();
         } catch (Exception ex) {
             assertThat(ex).isInstanceOf(Exception.class);
-            assertThat(ex.getMessage()).contains("empty", "data");
+            assertThat(ex.getMessage()).contains("null", "data");
         }
     }
 
     @SuppressWarnings("unchecked")
-    private ParameterizedTypeReference<NhanhResponse<List<NhanhOrderAddResult>>> anyResponseType() {
+    private ParameterizedTypeReference<NhanhResponse<NhanhOrderAddResult>> anyResponseType() {
         return any(ParameterizedTypeReference.class);
     }
 

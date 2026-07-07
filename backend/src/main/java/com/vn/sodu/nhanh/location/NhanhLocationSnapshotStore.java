@@ -12,6 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Optional;
 
 @Service
@@ -33,7 +34,7 @@ public class NhanhLocationSnapshotStore {
                 repository,
                 nhanhProperties,
                 objectMapper,
-                Clock.systemUTC(),
+                Clock.system(ZoneId.of("Asia/Ho_Chi_Minh")),
                 new TransactionTemplate(transactionManager));
     }
 

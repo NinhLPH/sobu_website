@@ -12,6 +12,7 @@ import com.vn.sodu.order.Order;
 import com.vn.sodu.order.OrderItem;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PaymentMethod;
+import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.RequiredArgsConstructor;
@@ -43,28 +44,27 @@ public class NhanhOrderGateway {
     private final NhanhProperties nhanhProperties;
 
     public NhanhOrderAddResult createOrder(NhanhOrderAddRequest request, String accessToken) {
-        NhanhResponse<List<NhanhOrderAddResult>> response = nhanhClient.post(
+        NhanhResponse<NhanhOrderAddResult> response = nhanhClient.post(
                 ORDER_ADD_PATH,
                 accessToken,
                 request,
-                new ParameterizedTypeReference<NhanhResponse<List<NhanhOrderAddResult>>>() {}
+                new ParameterizedTypeReference<NhanhResponse<NhanhOrderAddResult>>() {}
         );
 
         if (response == null) {
             throw new ExternalServiceException("Nhanh order add response is null");
         }
         if (response.getCode() == 1) {
-            List<NhanhOrderAddResult> data = response.getData();
-            if (data == null || data.isEmpty()) {
+            NhanhOrderAddResult data = response.getData();
+            if (data == null) {
                 throw new ExternalServiceException(
-                    "Nhanh order add returned success (code=1) but data list is empty; " +
+                    "Nhanh order add returned success (code=1) but data is null; " +
                     "server may not have created order; appOrderId=" + request.getChannel().getAppOrderId()
                 );
             }
-            NhanhOrderAddResult result = data.get(0);
             log.debug("Nhanh order add success: id={}, orderId={}, appOrderId={}",
-                result.getId(), result.getOrderId(), request.getChannel().getAppOrderId());
-            return result;
+                data.getId(), data.getOrderId(), request.getChannel().getAppOrderId());
+            return data;
         }
         if (isDuplicateResponse(response)) {
             log.warn("Nhanh order add returned duplicate: appOrderId={}", request.getChannel().getAppOrderId());
@@ -166,15 +166,20 @@ public class NhanhOrderGateway {
                 .map(this::toProduct)
                 .toList();
 
-        NhanhOrderAddRequest.Payment.PaymentBuilder paymentBuilder = NhanhOrderAddRequest.Payment.builder();
+        NhanhOrderAddRequest.Payment paymentData = null;
         if (order.getType() == com.vn.sodu.request.OrderType.PREORDER && payment.getType() == PaymentType.DEPOSIT) {
-            paymentBuilder
+            paymentData = NhanhOrderAddRequest.Payment.builder()
                     .depositAmount(defaultMoney(payment.getAmount()))
-                    .depositAccountId(accountId);
+                    .depositAccountId(accountId)
+                    .build();
+        } else if (payment.getPaymentMethod() == PaymentMethod.COD
+                && payment.getStatus() == PaymentStatus.PENDING) {
+            // COD — no money transferred yet, omit payment entirely
         } else {
-            paymentBuilder
+            paymentData = NhanhOrderAddRequest.Payment.builder()
                     .transferAmount(defaultMoney(payment.getAmount()))
-                    .transferAccountId(accountId);
+                    .transferAccountId(accountId)
+                    .build();
         }
 
         return NhanhOrderAddRequest.builder()
@@ -203,7 +208,7 @@ public class NhanhOrderGateway {
                         .serviceId(order.getCarrierServiceId())
                         .customerShipFee(defaultMoney(order.getShippingFee()))
                         .build())
-                .payment(paymentBuilder.build())
+                .payment(paymentData)
                 .build();
     }
 

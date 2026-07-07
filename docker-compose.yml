@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
 
     environment:
+      TZ: Asia/Ho_Chi_Minh
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -28,6 +29,9 @@ services:
     container_name: redis
     restart: unless-stopped
 
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+
     ports:
       - "6379:6379"
 
@@ -44,6 +48,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+
+    environment:
+      TZ: Asia/Ho_Chi_Minh
 
     env_file:
       - .env
