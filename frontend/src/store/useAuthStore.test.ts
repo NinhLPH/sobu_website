@@ -6,6 +6,7 @@ const mockAuthService = {
     register: jest.fn(),
     googleLogin: jest.fn(),
     refreshToken: jest.fn(),
+    updatePhone: jest.fn(),
     logout: jest.fn(),
 };
 
@@ -105,6 +106,32 @@ describe('useAuthStore', () => {
         expect(useAuthStore.getState().user).toEqual(account);
         expect(sessionStorage.getItem('accessToken')).toBe('access-token');
         expect(sessionStorage.getItem('refreshToken')).toBe('refresh-token');
+    });
+
+    it('updates the stored user after changing phone number', async () => {
+        const updatedAccount = {
+            ...account,
+            phone: '0987654321',
+        };
+        mockAuthService.updatePhone.mockResolvedValue({
+            success: true,
+            message: 'Phone number updated successfully',
+            data: updatedAccount,
+        } as never);
+        sessionStorage.setItem('accessToken', 'access-token');
+        sessionStorage.setItem('refreshToken', 'refresh-token');
+        sessionStorage.setItem('user', JSON.stringify(account));
+
+        const { useAuthStore } = await import('./useAuthStore');
+        const updatedUser = await useAuthStore.getState().updatePhoneAction('0987654321');
+
+        expect(mockAuthService.updatePhone).toHaveBeenCalledWith({ phone: '0987654321' });
+        expect(updatedUser).toEqual(updatedAccount);
+        expect(useAuthStore.getState().user).toEqual(updatedAccount);
+        expect(useAuthStore.getState().isAuthenticated).toBe(true);
+        expect(sessionStorage.getItem('accessToken')).toBe('access-token');
+        expect(sessionStorage.getItem('refreshToken')).toBe('refresh-token');
+        expect(JSON.parse(sessionStorage.getItem('user') || '{}')).toEqual(updatedAccount);
     });
 
     it('does not expose removed email activation actions', async () => {

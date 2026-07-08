@@ -3,11 +3,14 @@ package com.vn.sodu.user.service;
 import com.vn.sodu.customer.service.CustomerService;
 import com.vn.sodu.user.Account;
 import com.vn.sodu.user.AccountRepo;
+import com.vn.sodu.user.Role;
+import com.vn.sodu.user.RoleRepo;
 import com.vn.sodu.security.TokenBlacklistService;
 import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.mapper.AccountMapper;
 import com.vn.sodu.security.JwtService;
 import com.vn.sodu.utilites.PasswordEncrypt;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -58,10 +63,14 @@ class AuthServiceTest {
     @Mock
     private TokenBlacklistService tokenBlacklistService;
 
+    @Mock
+    private RoleRepo roleRepo;
+
     @InjectMocks
     private AuthService authService;
 
     private Account testAccount;
+    private Role userRole;
     private UserDetails testUserDetails;
     private LoginRequest loginRequest;
     private RegisterRequest registerRequest;
@@ -76,6 +85,11 @@ class AuthServiceTest {
         testAccount.setFullName("Test User");
         testAccount.setPhone("0123456789");
 
+        userRole = Role.builder()
+                .id(2)
+                .name("USER")
+                .build();
+
         testUserDetails = new User("test@example.com", "password", java.util.Collections.emptyList());
 
         loginRequest = new LoginRequest();
@@ -87,6 +101,20 @@ class AuthServiceTest {
         registerRequest.setPassword("newpassword123");
         registerRequest.setFullName("John Doe");
         registerRequest.setPhone("0123456789");
+
+        lenient().when(roleRepo.findByName("USER")).thenReturn(Optional.of(userRole));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateAs(String email) {
+        UserDetails userDetails = new User(email, "password", java.util.Collections.emptyList());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities())
+        );
     }
 
     // ─── Login Tests ────────────────────────────────────────────────
@@ -378,5 +406,73 @@ class AuthServiceTest {
         assertDoesNotThrow(() -> authService.logout(""));
         assertDoesNotThrow(() -> authService.logout(null));
         verify(tokenBlacklistService, never()).blacklist(eq("anyToken"), any(java.util.Date.class));
+    }
+
+    @Test
+    @DisplayName("Should update current account phone successfully")
+    void testUpdateCurrentAccountPhoneSuccess() {
+        authenticateAs("test@example.com");
+        UpdatePhoneRequest request = new UpdatePhoneRequest();
+        request.setPhone(" 0987654321 ");
+        AccountDTO accountDTO = new AccountDTO();
+        accountDTO.setPhone("0987654321");
+
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByPhone("0987654321")).thenReturn(Optional.empty());
+        when(accountRepo.save(testAccount)).thenReturn(testAccount);
+        when(accountMapper.toDTO(testAccount)).thenReturn(accountDTO);
+
+        AccountDTO response = authService.updateCurrentAccountPhone(request);
+
+        assertEquals("0987654321", testAccount.getPhone());
+        assertEquals("0987654321", response.getPhone());
+        verify(accountRepo).save(testAccount);
+    }
+
+    @Test
+    @DisplayName("Should reject duplicate current account phone")
+    void testUpdateCurrentAccountPhoneDuplicate() {
+        authenticateAs("test@example.com");
+        UpdatePhoneRequest request = new UpdatePhoneRequest();
+        request.setPhone("0987654321");
+        Account otherAccount = new Account();
+        otherAccount.setId(2L);
+        otherAccount.setPhone("0987654321");
+
+        when(accountRepo.findByEmail("test@example.com")).thenReturn(Optional.of(testAccount));
+        when(accountRepo.findByPhone("0987654321")).thenReturn(Optional.of(otherAccount));
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.updateCurrentAccountPhone(request));
+
+        assertEquals("Phone number is already in use", exception.getMessage());
+        verify(accountRepo, never()).save(any(Account.class));
+    }
+
+    @Test
+    @DisplayName("Should reject blank current account phone")
+    void testUpdateCurrentAccountPhoneBlank() {
+        authenticateAs("test@example.com");
+        UpdatePhoneRequest request = new UpdatePhoneRequest();
+        request.setPhone("   ");
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.updateCurrentAccountPhone(request));
+
+        assertEquals("Phone number is required", exception.getMessage());
+        verify(accountRepo, never()).findByEmail(anyString());
+    }
+
+    @Test
+    @DisplayName("Should reject current account phone update when user is missing")
+    void testUpdateCurrentAccountPhoneUserNotFound() {
+        authenticateAs("missing@example.com");
+        UpdatePhoneRequest request = new UpdatePhoneRequest();
+        request.setPhone("0987654321");
+
+        when(accountRepo.findByEmail("missing@example.com")).thenReturn(Optional.empty());
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.updateCurrentAccountPhone(request));
+
+        assertEquals("User not found", exception.getMessage());
+        verify(accountRepo, never()).save(any(Account.class));
     }
 }

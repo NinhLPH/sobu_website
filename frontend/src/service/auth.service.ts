@@ -6,12 +6,14 @@ import {
     RefreshTokenResponse,
     RegisterResponse
 } from '../interface/api-response';
+import { AccountDTO } from '../interface/account.model';
 import {
     GoogleLoginRequest,
     LoginRequest,
     LogoutRequest,
     RefreshTokenRequest,
-    RegisterRequest
+    RegisterRequest,
+    UpdatePhoneRequest
 } from '../interface/auth.model';
 import { authStorage } from '../utils/auth-storage';
 
@@ -52,5 +54,11 @@ export const AuthService = {
         return apiClient.post('/api/auth/logout', data, {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
+    },
+
+    updatePhone: (
+        data: UpdatePhoneRequest
+    ): Promise<ApiResponseDTO<AccountDTO>> => {
+        return apiClient.patch('/api/auth/me/phone', data);
     }
 };

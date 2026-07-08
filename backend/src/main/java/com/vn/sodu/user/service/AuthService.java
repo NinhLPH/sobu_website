@@ -19,6 +19,7 @@ import com.vn.sodu.utilites.PasswordEncrypt;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -216,11 +217,58 @@ public class AuthService {
         SecurityContextHolder.clearContext();
     }
 
+    @Transactional
+    public AccountDTO updateCurrentAccountPhone(UpdatePhoneRequest request) {
+        String email = getAuthenticatedEmail();
+        String phone = request != null ? request.getPhone() : null;
+        String normalizedPhone = phone != null ? phone.trim() : "";
+
+        if (normalizedPhone.isEmpty()) {
+            throw new BadRequestException("Phone number is required");
+        }
+
+        Account account = accountRepo.findByEmail(email)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        accountRepo.findByPhone(normalizedPhone)
+                .filter(existingAccount -> !existingAccount.getId().equals(account.getId()))
+                .ifPresent(existingAccount -> {
+                    throw new BadRequestException("Phone number is already in use");
+                });
+
+        if (!normalizedPhone.equals(account.getPhone())) {
+            account.setPhone(normalizedPhone);
+            account = accountRepo.save(account);
+        }
+
+        return accountMapper.toDTO(account);
+    }
+
     private void ensureAccountIsNotBanned(Account account, String email) {
         if (account.getStatus() == Account.AccountStatus.BANNED) {
             log.warn("Auth attempt for banned account: {}", email);
             throw new UnauthorizedException("Account is banned.");
         }
+    }
+
+    private String getAuthenticatedEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new UnauthorizedException("Authentication is required");
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof UserDetails userDetails) {
+            return userDetails.getUsername();
+        }
+
+        String name = authentication.getName();
+        if (name == null || name.isBlank() || "anonymousUser".equals(name)) {
+            throw new UnauthorizedException("Authentication is required");
+        }
+
+        return name;
     }
 
     private Role getDefaultUserRole() {
