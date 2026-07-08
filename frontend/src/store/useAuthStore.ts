@@ -49,6 +49,7 @@ interface AuthState {
     registerAction: (data: RegisterRequest) => Promise<LoginResponse>;
     googleLoginAction: (idToken: string) => Promise<LoginResponse>;
     refreshTokenAction: () => Promise<RefreshTokenResponse>;
+    updatePhoneAction: (phone: string) => Promise<AccountDTO>;
     logoutAction: () => Promise<void>;
     clearError: () => void;
 }
@@ -180,6 +181,33 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 isAuthenticated: false,
                 isLoading: false,
                 error: message
+            });
+            throw error;
+        }
+    },
+
+    updatePhoneAction: async (phone) => {
+        set({ isLoading: true, error: null });
+        try {
+            const response = await AuthService.updatePhone({ phone });
+            const user = assertSuccess(response, 'Không thể cập nhật số điện thoại.');
+
+            authStorage.setUser(user);
+            set({
+                user,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null
+            });
+            return user;
+        } catch (error) {
+            const message = getErrorMessage(
+                error,
+                'Không thể cập nhật số điện thoại. Vui lòng thử lại.'
+            );
+            set({
+                error: message,
+                isLoading: false
             });
             throw error;
         }

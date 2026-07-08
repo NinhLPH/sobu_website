@@ -21,3 +21,7 @@ export interface RefreshTokenRequest {
 export interface LogoutRequest {
     refreshToken?: string;
 }
+
+export interface UpdatePhoneRequest {
+    phone: string;
+}

@@ -77,6 +77,11 @@ export const authStorage = {
         getLocalStorage()?.removeItem(REFRESH_TOKEN_KEY);
     },
 
+    setUser: (user: AccountDTO) => {
+        getSessionStorage()?.setItem(USER_KEY, JSON.stringify(user));
+        getLocalStorage()?.removeItem(USER_KEY);
+    },
+
     clear: () => {
         const sessionStorage = getSessionStorage();
 

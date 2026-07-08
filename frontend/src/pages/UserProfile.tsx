@@ -1,29 +1,74 @@
+import {FormEvent, useEffect, useState} from 'react';
 import {Award, ChevronRight, Mail, Phone, UserRound} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {useAuthStore} from '../store/useAuthStore';
 
 const emptyValue = 'Chưa cập nhật';
 
+const getErrorMessage = (error: any, fallback: string) =>
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    fallback;
+
 export default function UserProfile() {
     const user = useAuthStore((state) => state.user);
+    const updatePhoneAction = useAuthStore((state) => state.updatePhoneAction);
+    const [phoneValue, setPhoneValue] = useState(user?.phone || '');
+    const [isSavingPhone, setIsSavingPhone] = useState(false);
+    const [phoneError, setPhoneError] = useState<string | null>(null);
+    const [phoneSuccess, setPhoneSuccess] = useState<string | null>(null);
+
+    useEffect(() => {
+        setPhoneValue(user?.phone || '');
+    }, [user?.phone]);
+
+    const currentPhone = user?.phone?.trim() || '';
+    const normalizedPhone = phoneValue.trim();
+    const canSavePhone = normalizedPhone.length > 0 && normalizedPhone !== currentPhone && !isSavingPhone;
+
+    const handlePhoneSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+
+        if (!canSavePhone) {
+            return;
+        }
+
+        setIsSavingPhone(true);
+        setPhoneError(null);
+        setPhoneSuccess(null);
+
+        try {
+            await updatePhoneAction(normalizedPhone);
+            setPhoneSuccess('Số điện thoại đã được cập nhật.');
+        } catch (error) {
+            setPhoneError(getErrorMessage(error, 'Không thể cập nhật số điện thoại. Vui lòng thử lại.'));
+        } finally {
+            setIsSavingPhone(false);
+        }
+    };
 
     const profileItems = [
         {
+            key: 'name',
             label: 'Tên',
             value: user?.fullName || emptyValue,
             icon: UserRound
         },
         {
+            key: 'email',
             label: 'Email',
             value: user?.email || emptyValue,
             icon: Mail
         },
         {
+            key: 'phone',
             label: 'Số điện thoại',
             value: user?.phone || emptyValue,
             icon: Phone
         },
         {
+            key: 'membership',
             label: 'Hạng thành viên',
             value: 'Triển khai trong tương lai',
             icon: Award
@@ -76,17 +121,52 @@ export default function UserProfile() {
                             const Icon = item.icon;
 
                             return (
-                                <div key={item.label} className="flex items-start gap-4 p-5">
+                                <div key={item.key} className="flex items-start gap-4 p-5">
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-container text-primary">
                                         <Icon className="h-5 w-5"/>
                                     </div>
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                         <p className="text-[10px] font-black uppercase tracking-widest text-outline">
                                             {item.label}
                                         </p>
                                         <p className="mt-1 break-words text-sm font-black text-on-surface">
                                             {item.value}
                                         </p>
+
+                                        {item.key === 'phone' && (
+                                            <form className="mt-4 space-y-3" onSubmit={handlePhoneSubmit}>
+                                                <label htmlFor="profile-phone" className="block text-[10px] font-black uppercase tracking-widest text-primary">
+                                                    Thay đổi số điện thoại
+                                                </label>
+                                                <div className="flex flex-col gap-2 sm:flex-row">
+                                                    <input
+                                                        id="profile-phone"
+                                                        type="tel"
+                                                        value={phoneValue}
+                                                        onChange={(event) => {
+                                                            setPhoneValue(event.target.value);
+                                                            setPhoneError(null);
+                                                            setPhoneSuccess(null);
+                                                        }}
+                                                        className="min-w-0 flex-1 rounded-xl border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-sm font-semibold text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                                        placeholder="Nhập số điện thoại mới"
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={!canSavePhone}
+                                                        className="rounded-xl bg-primary px-4 py-2 text-xs font-black uppercase tracking-widest text-on-primary transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-outline-variant disabled:text-outline"
+                                                    >
+                                                        {isSavingPhone ? 'Đang lưu...' : 'Lưu'}
+                                                    </button>
+                                                </div>
+                                                {phoneError && (
+                                                    <p className="text-xs font-bold text-error">{phoneError}</p>
+                                                )}
+                                                {phoneSuccess && (
+                                                    <p className="text-xs font-bold text-primary">{phoneSuccess}</p>
+                                                )}
+                                            </form>
+                                        )}
                                     </div>
                                 </div>
                             );

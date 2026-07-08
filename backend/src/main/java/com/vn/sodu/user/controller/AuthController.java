@@ -122,6 +122,28 @@ public class AuthController {
                 .body(ApiResponseDTO.success(response, "Registration successful", HttpStatus.CREATED.value()));
     }
 
+    @PatchMapping("/me/phone")
+    @Operation(
+        summary = "Update current account phone",
+        description = "Updates the phone number for the currently authenticated account"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Phone number updated successfully",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid or duplicate phone number",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class))),
+        @ApiResponse(responseCode = "401", description = "Authentication is required",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiResponseDTO.class)))
+    })
+    public ResponseEntity<?> updateCurrentAccountPhone(
+            @org.springframework.web.bind.annotation.RequestBody UpdatePhoneRequest request) {
+        log.info("Update current account phone request");
+        AccountDTO response = authService.updateCurrentAccountPhone(request);
+        return ResponseEntity.ok(
+                ApiResponseDTO.success(response, "Phone number updated successfully", HttpStatus.OK.value())
+        );
+    }
+
     @PostMapping("/logout")
     @Operation(
         summary = "User logout",

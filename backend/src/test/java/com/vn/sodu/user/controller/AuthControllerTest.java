@@ -2,9 +2,11 @@ package com.vn.sodu.user.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.user.dto.AccountDTO;
 import com.vn.sodu.user.dto.LoginRequest;
 import com.vn.sodu.user.dto.LoginResponse;
 import com.vn.sodu.user.dto.RefreshTokenRequest;
+import com.vn.sodu.user.dto.UpdatePhoneRequest;
 import com.vn.sodu.global.exception.UnauthorizedException;
 import com.vn.sodu.user.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
@@ -17,8 +19,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -166,5 +170,32 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.success").value(true));
 
         verify(authService).logout(eq("access-token"), eq("refresh-token"));
+    }
+
+    @Test
+    @DisplayName("PATCH /api/auth/me/phone - success")
+    void testUpdateCurrentAccountPhoneSuccess() throws Exception {
+        UpdatePhoneRequest req = new UpdatePhoneRequest();
+        req.setPhone("0987654321");
+
+        AccountDTO account = AccountDTO.builder()
+                .id(1L)
+                .email("test@example.com")
+                .fullName("Test User")
+                .phone("0987654321")
+                .status("ACTIVE")
+                .build();
+
+        Mockito.when(authService.updateCurrentAccountPhone(any(UpdatePhoneRequest.class))).thenReturn(account);
+
+        mockMvc.perform(patch("/api/auth/me/phone")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.phone").value("0987654321"));
+
+        verify(authService).updateCurrentAccountPhone(argThat(request -> "0987654321".equals(request.getPhone())));
     }
 }
