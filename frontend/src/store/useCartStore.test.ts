@@ -163,6 +163,51 @@ describe('useCartStore order submission', () => {
         expect(useCartStore.getState().checkoutError).toBeNull();
     });
 
+    it('keeps cart items on successful order when cart clearing is disabled', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
+        mockedCustomerService.createOrder.mockResolvedValue({
+            success: true,
+            statusCode: 201,
+            message: 'Order created',
+            data: {
+                id: 2,
+                orderCode: 'ORD-002',
+                status: 'NEW',
+                syncStatus: 'PENDING',
+                totalAmount: 350000,
+                items: []
+            }
+        });
+
+        await useCartStore.getState().addToCart(product);
+
+        const order = await useCartStore.getState().submitOrder({
+            customerName: 'Nguyen Van A',
+            customerMobile: '0901234567',
+            ...shippingLocation,
+            ...shippingQuote
+        }, {
+            clearCartOnSuccess: false
+        });
+
+        expect(order.id).toBe(2);
+        expect(mockedCustomerService.clearCart).not.toHaveBeenCalled();
+        expect(useCartStore.getState().items).toEqual([{
+            product: {
+                id: product.id,
+                nhanhProductId: product.nhanhProductId,
+                name: product.name,
+                price: product.price,
+                imageUrl: product.imageUrl,
+                brand: '',
+                description: '',
+                stock: 999
+            },
+            quantity: 1
+        }]);
+        expect(useCartStore.getState().checkoutError).toBeNull();
+    });
+
     it('keeps cart items and exposes the backend message when creation fails', async () => {
         mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
         mockedCustomerService.createOrder.mockRejectedValue({

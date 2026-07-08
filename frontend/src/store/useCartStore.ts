@@ -15,6 +15,10 @@ type CheckoutDetails =
     Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
     & OrderShippingLocationDto;
 
+interface SubmitOrderOptions {
+    clearCartOnSuccess?: boolean;
+}
+
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message ||
     error?.response?.data?.error ||
@@ -57,7 +61,7 @@ interface CartState {
     updateQuantity: (productId: string, quantity: number) => Promise<void>;
     clearCart: () => Promise<void>;
     clearCheckoutError: () => void;
-    submitOrder: (details: CheckoutDetails) => Promise<OrderResponseDto>;
+    submitOrder: (details: CheckoutDetails, options?: SubmitOrderOptions) => Promise<OrderResponseDto>;
     getTotals: () => { subtotal: number; tax: number; total: number; itemCount: number };
 }
 
@@ -163,7 +167,8 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     clearCheckoutError: () => set({ checkoutError: null }),
 
-    submitOrder: async (details) => {
+    submitOrder: async (details, options = {}) => {
+        const shouldClearCart = options.clearCartOnSuccess !== false;
         const items = get().items;
         if (items.length === 0) {
             const message = 'Giỏ hàng đang trống.';
@@ -227,10 +232,12 @@ export const useCartStore = create<CartState>((set, get) => ({
                 throw new Error(response.message || 'Không thể tạo đơn hàng.');
             }
 
-            await CustomerService.clearCart();
+            if (shouldClearCart) {
+                await CustomerService.clearCart();
+            }
 
             set({
-                items: [],
+                ...(shouldClearCart ? { items: [] } : {}),
                 isSubmitting: false,
                 checkoutError: null,
                 lastCreatedOrder: response.data,
