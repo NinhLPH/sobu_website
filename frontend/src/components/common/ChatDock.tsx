@@ -31,13 +31,13 @@ export default function ChatDock() {
             aria-label="Thanh chat ho tro"
             className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-4 z-[60] flex flex-col items-end gap-3 lg:bottom-6"
         >
-            {/* Desktop: always show everything */}
+            {/* Desktop: keep social links above the support chat entry. */}
             <div className="hidden lg:flex lg:flex-col lg:items-end lg:gap-3">
+                <ZaloChatDock/>
                 <SupportChatDock
                     isOpen={activeDock === 'support'}
                     onOpenChange={handleSupportOpenChange}
                 />
-                <ZaloChatDock/>
             </div>
 
             {/* Mobile: collapsible menu */}

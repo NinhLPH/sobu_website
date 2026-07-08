@@ -29,6 +29,7 @@ const mockConfigMap = {
         instagram: 'https://instagram.com/sobu',
         zalo: 'https://zalo.me/sobu',
         tiktok: 'https://tiktok.com/@sobu',
+        youtube: 'https://youtube.com/@sobu',
     }),
 };
 
@@ -104,7 +105,7 @@ describe('ChatDock', () => {
         mockGetMessages.mockReturnValue(new Promise(() => undefined));
     });
 
-    it('renders support chat above social links inside the fixed wrapper', () => {
+    it('renders social links above support chat inside the desktop wrapper', () => {
         const { container } = render(<ChatDock/>);
 
         expect(screen.getByLabelText('Thanh chat ho tro')).toBeTruthy();
@@ -113,7 +114,7 @@ describe('ChatDock', () => {
 
         const dockOrder = Array.from(container.querySelectorAll('[aria-label="Thanh chat ho tro khach hang"], [aria-label="Thanh lien ket social"]'))
             .map((element) => element.getAttribute('aria-label'));
-        expect(dockOrder).toEqual(['Thanh chat ho tro khach hang', 'Thanh lien ket social']);
+        expect(dockOrder).toEqual(['Thanh lien ket social', 'Thanh chat ho tro khach hang']);
     });
 
     it('renders support and configured social links for guests', () => {
@@ -129,6 +130,7 @@ describe('ChatDock', () => {
         expect(screen.getByRole('link', { name: 'Mo Instagram' })).toBeTruthy();
         expect(screen.getByRole('link', { name: 'Mo Zalo' })).toBeTruthy();
         expect(screen.getByRole('link', { name: 'Mo Tiktok' })).toBeTruthy();
+        expect(screen.getByRole('link', { name: 'Mo Youtube' })).toBeTruthy();
     });
 
     it('keeps social links visible when support chat is open', () => {
@@ -145,5 +147,6 @@ describe('ChatDock', () => {
         expect(screen.getAllByRole('link', { name: 'Mo Instagram' }).length).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', { name: 'Mo Zalo' }).length).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', { name: 'Mo Tiktok' }).length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('link', { name: 'Mo Youtube' }).length).toBeGreaterThan(0);
     });
 });
