@@ -549,6 +549,11 @@ public class PaymentService {
             return;
         }
 
+        if (snapshot.status() == PaymentStatus.PAID) {
+            markPaymentPaid(payment.getPaymentCode());
+            return;
+        }
+
         if (snapshot.status() == PaymentStatus.EXPIRED) {
             markPaymentExpired(payment.getPaymentCode(), "Payment session expired");
         }

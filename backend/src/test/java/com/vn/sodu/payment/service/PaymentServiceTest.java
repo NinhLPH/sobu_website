@@ -899,13 +899,15 @@ class PaymentServiceTest {
     }
 
     @Test
-    void reconcilePendingOnlinePaymentsWaitsForWebhookWhenProviderReportsPaid() {
+    void reconcilePendingOnlinePaymentsMarksPaymentPaidWhenProviderReportsPaid() {
         Order order = Order.builder()
                 .id(41L)
                 .orderCode("SOBU-ORD-41")
                 .type(OrderType.NORMAL)
+                .status(OrderStatus.NEW)
                 .syncStatus(OrderSyncStatus.PENDING)
                 .totalAmount(new BigDecimal("500"))
+                .paidAmount(BigDecimal.ZERO)
                 .remainingAmount(new BigDecimal("500"))
                 .paymentStatus(PaymentStatus.PENDING)
                 .build();
@@ -928,10 +930,25 @@ class PaymentServiceTest {
                 eq(PaymentMethod.ONLINE),
                 any()
         )).thenReturn(List.of(payment));
+        when(orderPaymentRepository.findByPaymentCodeForUpdate("SOBU-PAY-410")).thenReturn(Optional.of(payment));
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderRepository.findById(41L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(41L)).thenReturn(List.of(payment));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
         paymentService.reconcilePendingOnlinePayments();
 
-        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
-        verifyNoInteractions(eventPublisher);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(payment.getPaidAt()).isNotNull();
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(order.getPaidAmount()).isEqualByComparingTo("500.00");
+        assertThat(order.getRemainingAmount()).isEqualByComparingTo("0.00");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PROCESSING);
+
+        ArgumentCaptor<OrderReadyForSyncEvent> eventCaptor = ArgumentCaptor.forClass(OrderReadyForSyncEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().orderId()).isEqualTo(41L);
+        assertThat(eventCaptor.getValue().paymentCode()).isEqualTo("SOBU-PAY-410");
     }
 
     @Test

@@ -44,7 +44,7 @@ export default function AdminSupport() {
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const shouldReconnectRef = useRef(true);
     const selectedConversationIdRef = useRef<number | null>(null);
-    const bottomRef = useRef<HTMLDivElement | null>(null);
+    const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
     const selectedConversation = useMemo(
         () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
@@ -250,7 +250,10 @@ export default function AdminSupport() {
     }, []);
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        const messagesContainer = messagesContainerRef.current;
+        if (!messagesContainer) return;
+
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }, [messages, selectedConversationId]);
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -360,7 +363,11 @@ export default function AdminSupport() {
                         </p>
                     </div>
 
-                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface-container-lowest px-5 py-4">
+                    <div
+                        ref={messagesContainerRef}
+                        data-testid="admin-support-message-list"
+                        className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface-container-lowest px-5 py-4"
+                    >
                         {!selectedConversationId ? (
                             <div className="flex h-full flex-col items-center justify-center text-center">
                                 <MessageCircle className="mb-3 h-10 w-10 text-outline/40" />
@@ -400,7 +407,6 @@ export default function AdminSupport() {
                                 </article>
                             );
                         })}
-                        <div ref={bottomRef} />
                     </div>
 
                     <form

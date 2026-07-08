@@ -145,7 +145,7 @@ describe('Admin support chat', () => {
     it('adds the support menu entry in the admin layout', () => {
         render(<AdminLayout/>);
 
-        const link = screen.getByRole('link', { name: /Chat ho tro/i });
+        const link = screen.getByRole('link', { name: /Chat hỗ trợ/i });
         expect(link.getAttribute('href')).toBe('/admin/support');
     });
 
@@ -189,6 +189,13 @@ describe('Admin support chat', () => {
         render(<AdminSupport/>);
 
         await screen.findByText('Need support');
+        const messageList = screen.getByTestId('admin-support-message-list');
+        Object.defineProperty(messageList, 'scrollHeight', {
+            configurable: true,
+            value: 500
+        });
+        messageList.scrollTop = 24;
+
         const socket = MockWebSocket.instances[0];
 
         act(() => {
@@ -207,6 +214,10 @@ describe('Admin support chat', () => {
         });
 
         expect(screen.getByText('Live staff reply')).toBeTruthy();
+        await waitFor(() => {
+            expect(messageList.scrollTop).toBe(500);
+        });
+        expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
         await waitFor(() => {
             expect(SupportChatService.getAdminConversations).toHaveBeenCalledTimes(2);
         });
