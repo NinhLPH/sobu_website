@@ -149,7 +149,7 @@ export default function ServicesLandingPage() {
                 <div className="mx-auto w-full">
                     <div className="mx-auto mb-12 max-w-3xl text-center">
                         <p className="text-xs font-black uppercase tracking-[0.25em] text-primary">Dịch vụ của chúng tôi</p>
-                        <h2 className="mt-3 text-3xl font-black tracking-tight text-on-surface md:text-5xl">
+                        <h2 className="mt-3 whitespace-nowrap text-base font-black tracking-tight text-on-surface min-[360px]:text-lg sm:text-3xl md:text-5xl">
                             Chọn giải pháp phù hợp với bạn
                         </h2>
                         <p className="mt-4 font-medium leading-7 text-on-surface-variant">
