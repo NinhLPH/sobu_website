@@ -253,7 +253,9 @@ describe('Cart payment selection', () => {
 
         await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
             shippingFee: 14000
-        })));
+        }), {
+            clearCartOnSuccess: false
+        }));
         expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('carrierId');
         expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('carrierServiceId');
     });
@@ -304,7 +306,9 @@ describe('Cart payment selection', () => {
             carrierId: 50,
             carrierServiceId: 60,
             shippingFee: 21000
-        })));
+        }), {
+            clearCartOnSuccess: false
+        }));
     });
 
     it('confirms the selected carrier quote before enabling checkout', async () => {
@@ -416,7 +420,9 @@ describe('Cart payment selection', () => {
             carrierServiceId: 40,
             shippingFee: 14000,
             customerAddress: '123 Nguyen Trai'
-        })));
+        }), {
+            clearCartOnSuccess: true
+        }));
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
             type: 'FULL',
             paymentMethod: 'COD'
@@ -450,6 +456,9 @@ describe('Cart payment selection', () => {
         await selectShippingQuote();
         fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng và thanh toán' }));
 
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.any(Object), {
+            clearCartOnSuccess: false
+        }));
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
             type: 'FULL',
             paymentMethod: 'ONLINE'

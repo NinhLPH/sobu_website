@@ -564,6 +564,8 @@ export default function Cart() {
                     }
                     : {}),
                 description: form.description.trim() || undefined
+            }, {
+                clearCartOnSuccess: paymentMethod !== 'ONLINE'
             });
 
             try {
