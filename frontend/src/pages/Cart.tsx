@@ -1,10 +1,11 @@
 import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronDown, Loader2, Minus, Plus, Search, ShoppingBag, Trash2 } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Loader2, Minus, PhoneCall, Plus, Search, ShoppingBag, Trash2, ChevronDown } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { usePaymentStore } from '../store/usePaymentStore';
+import { usePublicUiStore } from '../store/usePublicUiStore';
 import { ToastService } from '../service/toast.service';
 import { formatCurrency } from '../utils/format';
 import { PaymentMethod } from '../enum/union-types';
@@ -13,6 +14,7 @@ import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 import { ShippingQuoteDto } from '../interface/shipping.model';
 import { LocationCity, LocationDistrict, LocationWard } from '../interface/location.model';
+import { parseJsonConfig } from '../utils/website-config';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -40,6 +42,8 @@ type CheckoutTextField = Exclude<
     keyof CheckoutForm,
     'customerCityId' | 'customerDistrictId' | 'customerWardId'
 >;
+
+type SocialLinks = Record<string, string>;
 
 const initialCheckoutForm: CheckoutForm = {
     customerName: '',
@@ -413,6 +417,7 @@ export default function Cart() {
         createPayment,
         isCreatingPayment
     } = usePaymentStore();
+    const configMap = usePublicUiStore((state) => state.configMap);
     const {
         locationTree,
         locationsLoaded,
@@ -434,6 +439,11 @@ export default function Cart() {
     const [isConfirmingShippingQuote, setIsConfirmingShippingQuote] = useState(false);
     const [shippingQuoteError, setShippingQuoteError] = useState<string | null>(null);
     const confirmShippingQuoteRequestRef = useRef(0);
+    const socialLinks = useMemo(
+        () => parseJsonConfig<SocialLinks>(configMap, 'social_links', {}),
+        [configMap]
+    );
+    const facebookSupportUrl = socialLinks.facebook?.trim() || '';
 
     useEffect(() => {
         void fetchLocations(true);
@@ -1140,6 +1150,46 @@ export default function Cart() {
                                             Dang xac nhan phi giao hang...
                                         </div>
                                     )}
+                                    <div
+                                        aria-live="polite"
+                                        className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950 shadow-sm"
+                                    >
+                                        <div className="flex items-start gap-2.5">
+                                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                            <div className="min-w-0 flex-1 space-y-2">
+                                                <p className="font-semibold leading-relaxed">
+                                                    Trường hợp khách cần gấp có thể bấm vào nút Facebook hoặc liên hệ với nhân viên bằng số điện thoại <a className="whitespace-nowrap font-black text-amber-900 underline decoration-amber-400 decoration-2 underline-offset-2 transition-colors hover:text-primary" href="tel:0963340529">0963340529</a> để hỗ trợ đặt giao hàng thông qua các đơn vị vận chuyển giao hàng nhanh trong vòng 4 giờ. Chỉ áp dụng trên địa bàn Hà Nội.
+                                                </p>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {facebookSupportUrl ? (
+                                                        <a
+                                                            href={facebookSupportUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="inline-flex min-h-[34px] cursor-pointer items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[11px] font-black uppercase tracking-wider text-on-primary shadow-sm transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                        >
+                                                            Facebook hỗ trợ
+                                                            <ExternalLink className="h-3.5 w-3.5" />
+                                                        </a>
+                                                    ) : (
+                                                        <span
+                                                            aria-disabled="true"
+                                                            className="inline-flex min-h-[34px] items-center gap-1.5 rounded-lg bg-surface-container px-3 py-2 text-[11px] font-black uppercase tracking-wider text-outline"
+                                                        >
+                                                            Facebook chưa cấu hình
+                                                        </span>
+                                                    )}
+                                                    <a
+                                                        href="tel:0963340529"
+                                                        className="inline-flex min-h-[34px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wider text-amber-900 transition-colors hover:border-primary/50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-amber-300/50"
+                                                    >
+                                                        <PhoneCall className="h-3.5 w-3.5" />
+                                                        0963340529
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </fieldset>

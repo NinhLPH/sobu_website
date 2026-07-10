@@ -5,6 +5,7 @@ import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { usePaymentStore } from '../store/usePaymentStore';
+import { usePublicUiStore } from '../store/usePublicUiStore';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
@@ -177,6 +178,14 @@ describe('Cart payment selection', () => {
             createPayment: mockCreatePayment,
             isCreatingPayment: false
         } as ReturnType<typeof usePaymentStore>);
+        usePublicUiStore.setState({
+            configMap: {
+                social_links: JSON.stringify({
+                    facebook: 'https://facebook.com/sobu'
+                })
+            },
+            configsLoaded: true
+        });
     });
 
     const selectLocationOption = (label: string, name: string) => {
@@ -185,9 +194,9 @@ describe('Cart payment selection', () => {
     };
 
     const selectShippingLocation = () => {
-        selectLocationOption('Tinh / Thanh pho', locationTree.cities[0].cityName);
-        selectLocationOption('Quan / Huyen', locationTree.cities[0].districts[0].districtName);
-        selectLocationOption('Phuong / Xa', locationTree.cities[0].districts[0].wards[0].wardName);
+        selectLocationOption('Tỉnh/Thành phố', locationTree.cities[0].cityName);
+        selectLocationOption('Quận/Huyện', locationTree.cities[0].districts[0].districtName);
+        selectLocationOption('Phường/Xã', locationTree.cities[0].districts[0].wards[0].wardName);
     };
 
     const getCheckoutButton = () =>
@@ -216,6 +225,9 @@ describe('Cart payment selection', () => {
         }));
         expect(await screen.findByRole('button', { name: /Tiêu chuẩn/i })).not.toBeNull();
         expect(screen.getByRole('button', { name: /Hỏa tốc/i })).not.toBeNull();
+        const facebookSupportLink = screen.getByRole('link', { name: /Facebook hỗ trợ/i }) as HTMLAnchorElement;
+        expect(facebookSupportLink.getAttribute('href')).toBe('https://facebook.com/sobu');
+        expect(screen.getByText(/giao hàng nhanh trong vòng 4 giờ/i)).toBeTruthy();
         expect(screen.queryByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')).toBeNull();
         expect(screen.getAllByText(/30\.000/)).not.toHaveLength(0);
     });
@@ -389,7 +401,7 @@ describe('Cart payment selection', () => {
 
         expect(getCheckoutButton().disabled).toBe(false);
 
-        selectLocationOption('Tinh / Thanh pho', 'Tinh / Thanh pho');
+        selectLocationOption('Tỉnh/Thành phố', 'Tỉnh/Thành phố');
 
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(true));
     });
