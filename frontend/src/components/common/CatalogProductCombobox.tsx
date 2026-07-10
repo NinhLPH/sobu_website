@@ -19,8 +19,17 @@ interface CatalogProductComboboxProps {
 
 const MAX_VISIBLE_PRODUCTS = 5;
 
-const normalizeSearchText = (value: string) =>
-    value.trim().toLocaleLowerCase('vi-VN');
+const normalizeSearchText = (value: unknown) =>
+    String(value ?? '').trim().toLocaleLowerCase('vi-VN');
+
+const getProductCode = (product: ProductListItemDTO) =>
+    String(product.code ?? product.nhanhProductId ?? product.externalId ?? product.id);
+
+const getProductName = (product: ProductListItemDTO) =>
+    String(product.name ?? '').trim() || `Product #${product.id}`;
+
+const getProductPriceLabel = (product: ProductListItemDTO) =>
+    product.price == null ? 'Chưa có giá' : `${product.price.toLocaleString('vi-VN')}đ`;
 
 export default function CatalogProductCombobox({
     products,
@@ -61,12 +70,13 @@ export default function CatalogProductCombobox({
     const optionCount = matchingProducts.length + (canCreateNewProduct ? 1 : 0);
 
     const selectProduct = (product: ProductListItemDTO) => {
+        const productName = getProductName(product);
         onChange({
-            nhanhProductId: product.code,
-            name: product.name,
-            price: product.price
+            nhanhProductId: getProductCode(product),
+            name: productName,
+            price: product.price ?? undefined
         });
-        setQuery(product.name);
+        setQuery(productName);
         setIsOpen(false);
     };
 
@@ -173,34 +183,39 @@ export default function CatalogProductCombobox({
                         </div>
                     ) : (
                         <>
-                            {matchingProducts.map((product, index) => (
-                                <button
-                                    key={product.id}
-                                    type="button"
-                                    role="option"
-                                    aria-selected={value.nhanhProductId === product.code}
-                                    onMouseDown={event => event.preventDefault()}
-                                    onMouseEnter={() => setActiveIndex(index)}
-                                    onClick={() => selectProduct(product)}
-                                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                                        activeIndex === index
-                                            ? 'bg-primary/10 text-primary'
-                                            : 'text-on-surface hover:bg-surface-container'
-                                    }`}
-                                >
-                                    <span className="min-w-0">
-                                        <span className="block truncate text-xs font-bold">
-                                            {product.name}
+                            {matchingProducts.map((product, index) => {
+                                const productCode = getProductCode(product);
+                                const productName = getProductName(product);
+
+                                return (
+                                    <button
+                                        key={product.id}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={value.nhanhProductId === productCode}
+                                        onMouseDown={event => event.preventDefault()}
+                                        onMouseEnter={() => setActiveIndex(index)}
+                                        onClick={() => selectProduct(product)}
+                                        className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                                            activeIndex === index
+                                                ? 'bg-primary/10 text-primary'
+                                                : 'text-on-surface hover:bg-surface-container'
+                                        }`}
+                                    >
+                                        <span className="min-w-0">
+                                            <span className="block truncate text-xs font-bold">
+                                                {productName}
+                                            </span>
+                                            <span className="block truncate text-[10px] font-semibold text-outline">
+                                                {productCode} - {getProductPriceLabel(product)}
+                                            </span>
                                         </span>
-                                        <span className="block truncate text-[10px] font-semibold text-outline">
-                                            {product.code} · {product.price.toLocaleString('vi-VN')}đ
-                                        </span>
-                                    </span>
-                                    {value.nhanhProductId === product.code && (
-                                        <Check className="h-3.5 w-3.5 shrink-0" />
-                                    )}
-                                </button>
-                            ))}
+                                        {value.nhanhProductId === productCode && (
+                                            <Check className="h-3.5 w-3.5 shrink-0" />
+                                        )}
+                                    </button>
+                                );
+                            })}
 
                             {canCreateNewProduct && (
                                 <button

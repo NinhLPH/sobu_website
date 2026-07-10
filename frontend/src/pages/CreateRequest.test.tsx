@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import CreateRequest from './CreateRequest';
 import { useRequestStore } from '../store/useRequestStore';
 import { useProductStore } from '../store/useProductStore';
+import { useAuthStore } from '../store/useAuthStore';
 
 jest.mock('react-router-dom', () => ({
     Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
@@ -11,6 +12,7 @@ jest.mock('react-router-dom', () => ({
 }), { virtual: true });
 jest.mock('../store/useRequestStore');
 jest.mock('../store/useProductStore');
+jest.mock('../store/useAuthStore');
 jest.mock('../service/toast.service');
 jest.mock('../components/common/ImageUploader', () => ({
     __esModule: true,
@@ -19,12 +21,29 @@ jest.mock('../components/common/ImageUploader', () => ({
 
 const mockedUseRequestStore = jest.mocked(useRequestStore);
 const mockedUseProductStore = jest.mocked(useProductStore);
+const mockedUseAuthStore = jest.mocked(useAuthStore);
 const createRequestAction = jest.fn(async () => undefined);
 const clearError = jest.fn();
 const fetchAllProducts = jest.fn(async () => undefined);
 
+const mockAuthPhone = (phone?: string) => {
+    mockedUseAuthStore.mockImplementation(((selector: any) => {
+        const state = {
+            user: phone ? { phone } : null
+        };
+        return typeof selector === 'function' ? selector(state) : state;
+    }) as typeof useAuthStore);
+};
+
+const getRequestTypeSelect = () => screen.getAllByRole('combobox')[0];
+const getProductInput = () => screen.getAllByRole('combobox')[1];
+const getSubmitButton = () => screen.getByRole('button', { name: /SOBU Workshop/i });
+const getRequirementsTextarea = () =>
+    screen.getAllByRole('textbox').find(element => element.tagName.toLowerCase() === 'textarea') as HTMLElement;
+
 beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthPhone();
     mockedUseRequestStore.mockReturnValue({
         createRequestAction,
         isSubmitting: false,
@@ -50,19 +69,17 @@ describe('CreateRequest', () => {
     it('offers only workflow request types and sends the product code for catalog items', async () => {
         render(<CreateRequest />);
 
-        const selects = screen.getAllByRole('combobox');
-        expect(selects[0].querySelector('option[value="NORMAL"]')).toBeNull();
-        expect(selects[0].querySelectorAll('option')).toHaveLength(3);
+        const requestTypeSelect = getRequestTypeSelect();
+        expect(requestTypeSelect.querySelector('option[value="NORMAL"]')).toBeNull();
+        expect(requestTypeSelect.querySelectorAll('option')).toHaveLength(3);
         expect(fetchAllProducts).toHaveBeenCalledTimes(1);
 
         fireEvent.change(screen.getByPlaceholderText('0912345678'), {
             target: { value: '0901234567' }
         });
-        fireEvent.focus(screen.getByLabelText('Sản phẩm yêu cầu 1'));
+        fireEvent.focus(getProductInput());
         fireEvent.click(screen.getByRole('option', { name: /Gundam Catalog/i }));
-        fireEvent.click(screen.getByRole('button', {
-            name: /Gửi Yêu Cầu Cho SOBU Workshop/i
-        }));
+        fireEvent.click(getSubmitButton());
 
         await waitFor(() => {
             expect(createRequestAction).toHaveBeenCalledWith({
@@ -86,26 +103,22 @@ describe('CreateRequest', () => {
     it('lets CUSTOM requests create an item that is not in the catalog', async () => {
         render(<CreateRequest />);
 
-        fireEvent.change(screen.getAllByRole('combobox')[0], {
+        fireEvent.change(getRequestTypeSelect(), {
             target: { value: 'CUSTOM' }
         });
         fireEvent.change(screen.getByPlaceholderText('0912345678'), {
             target: { value: '0901234567' }
         });
-        fireEvent.change(screen.getByLabelText('Sản phẩm yêu cầu 1'), {
-            target: { value: 'Mô hình hoàn toàn mới' }
+        fireEvent.change(getProductInput(), {
+            target: { value: 'Completely custom model' }
         });
         fireEvent.click(screen.getByRole('option', {
-            name: /Tạo sản phẩm mới: “Mô hình hoàn toàn mới”/i
+            name: /Tạo sản phẩm mới: “Completely custom model”/i
         }));
-        fireEvent.change(screen.getByRole('textbox', {
-            name: /Yêu cầu chi tiết/i
-        }), {
-            target: { value: 'Sơn theo ảnh đính kèm' }
+        fireEvent.change(getRequirementsTextarea(), {
+            target: { value: 'Paint from attached reference' }
         });
-        fireEvent.click(screen.getByRole('button', {
-            name: /Gửi Yêu Cầu Cho SOBU Workshop/i
-        }));
+        fireEvent.click(getSubmitButton());
 
         await waitFor(() => {
             expect(createRequestAction).toHaveBeenCalledWith(
@@ -114,11 +127,39 @@ describe('CreateRequest', () => {
                     items: [
                         expect.objectContaining({
                             nhanhProductId: undefined,
-                            name: 'Mô hình hoàn toàn mới'
+                            name: 'Completely custom model'
                         })
                     ]
                 })
             );
+        });
+    });
+
+    it('prefills the request phone when the authenticated user has one', () => {
+        mockAuthPhone(' 0987654321 ');
+
+        render(<CreateRequest />);
+
+        expect((screen.getByPlaceholderText('0912345678') as HTMLInputElement).value).toBe('0987654321');
+    });
+
+    it('keeps the phone field empty and blocks submit when the user has no phone', async () => {
+        render(<CreateRequest />);
+
+        const phoneInput = screen.getByPlaceholderText('0912345678');
+        expect((phoneInput as HTMLInputElement).value).toBe('');
+
+        fireEvent.change(getProductInput(), {
+            target: { value: 'Manual product' }
+        });
+        fireEvent.click(screen.getByRole('option', {
+            name: /Tạo sản phẩm mới: “Manual product”/i
+        }));
+
+        fireEvent.submit(getSubmitButton().closest('form') as HTMLFormElement);
+
+        await waitFor(() => {
+            expect(createRequestAction).not.toHaveBeenCalled();
         });
     });
 });

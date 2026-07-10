@@ -9,6 +9,7 @@ import { useProductStore } from '../store/useProductStore';
 import CatalogProductCombobox, {
     CatalogProductSelection
 } from '../components/common/CatalogProductCombobox';
+import { useAuthStore } from '../store/useAuthStore';
 
 interface RequestFormItem {
     nhanhProductId?: string;
@@ -26,6 +27,7 @@ const emptyItem = (): RequestFormItem => ({
 
 export default function CreateRequest() {
     const { createRequestAction, isSubmitting, error, clearError } = useRequestStore();
+    const userPhone = useAuthStore((state) => state.user?.phone?.trim() || '');
     const {
         allProducts,
         fetchAllProducts,
@@ -33,7 +35,7 @@ export default function CreateRequest() {
     } = useProductStore();
 
     // Form fields
-    const [phone, setPhone] = useState('');
+    const [phone, setPhone] = useState(userPhone);
     const [type, setType] = useState<RequestWorkflowType>('PREORDER');
     const [requirements, setRequirements] = useState('');
     
@@ -49,6 +51,12 @@ export default function CreateRequest() {
     useEffect(() => {
         void fetchAllProducts();
     }, [fetchAllProducts]);
+
+    useEffect(() => {
+        if (userPhone) {
+            setPhone(currentPhone => currentPhone.trim() ? currentPhone : userPhone);
+        }
+    }, [userPhone]);
 
     const handleAddItem = () => {
         setItems(prev => [...prev, emptyItem()]);
@@ -153,7 +161,7 @@ export default function CreateRequest() {
                         <button 
                             onClick={() => {
                                 setSuccessCreated(false);
-                                setPhone('');
+                                setPhone(userPhone);
                                 setRequirements('');
                                 setItems([emptyItem()]);
                                 setUploadedImages([]);

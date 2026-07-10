@@ -43,9 +43,9 @@ export interface ProductListItemDTO {
     externalId?: string | number;
     nhanhProductId?: string | number;
     name: string;
-    code: string;
-    price: number;
-    oldPrice?: number;
+    code?: string | null;
+    price?: number | null;
+    oldPrice?: number | null;
     avatarImage?: string;
     brandName?: string;
     categoryName?: string;
@@ -84,8 +84,8 @@ export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel
         externalId: dto.externalId === undefined ? undefined : String(dto.externalId),
         nhanhProductId: String(dto.nhanhProductId ?? dto.externalId ?? dto.id),
         name: dto.name,
-        price: dto.price,
-        originalPrice: dto.oldPrice,
+        price: dto.price ?? 0,
+        originalPrice: dto.oldPrice ?? undefined,
         category: dto.categoryName || '',
         brand: dto.brandName || '',
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',

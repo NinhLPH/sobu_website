@@ -898,8 +898,8 @@ export default function Cart() {
                             />
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 <LocationCombobox
-                                    label="Tinh / Thanh pho"
-                                    placeholder="Tinh / Thanh pho *"
+                                    label="Tỉnh/Thành phố"
+                                    placeholder="Tỉnh/Thành phố *"
                                     options={cityOptions}
                                     value={form.customerCityId}
                                     onSelect={handleCityChange}
@@ -912,8 +912,8 @@ export default function Cart() {
                                     loading={isLocationsLoading}
                                 />
                                 <LocationCombobox
-                                    label="Quan / Huyen"
-                                    placeholder="Quan / Huyen *"
+                                    label="Quận/Huyện"
+                                    placeholder="Quận/Huyện *"
                                     options={districtOptions}
                                     value={form.customerDistrictId}
                                     onSelect={handleDistrictChange}
@@ -924,8 +924,8 @@ export default function Cart() {
                                     }
                                 />
                                 <LocationCombobox
-                                    label="Phuong / Xa"
-                                    placeholder="Phuong / Xa *"
+                                    label="Phường/Xã"
+                                    placeholder="Phường/Xã *"
                                     options={wardOptions}
                                     value={form.customerWardId}
                                     onSelect={handleWardChange}
@@ -969,7 +969,7 @@ export default function Cart() {
                                     className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                                     required
                                 >
-                                    <option value="">Quận / Huyện *</option>
+                                    <option value="">Quận/Huyện *</option>
                                     {districts.map((district) => (
                                         <option key={district.districtId} value={district.districtId}>
                                             {district.districtName}
@@ -987,7 +987,7 @@ export default function Cart() {
                                     className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                                     required
                                 >
-                                    <option value="">Phường / Xã *</option>
+                                    <option value="">Phường/Xã *</option>
                                     {wards.map((ward) => (
                                         <option key={ward.wardId} value={ward.wardId}>
                                             {ward.wardName}

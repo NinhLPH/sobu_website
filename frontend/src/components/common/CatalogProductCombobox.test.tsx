@@ -54,4 +54,44 @@ describe('CatalogProductCombobox', () => {
             price: undefined
         });
     });
+
+    it('handles catalog products with missing code and price', () => {
+        const onChange = jest.fn();
+        render(
+            <CatalogProductCombobox
+                products={[
+                    {
+                        id: 25,
+                        externalId: 25,
+                        name: 'Test 2k',
+                        code: null,
+                        price: null
+                    },
+                    {
+                        id: 26,
+                        name: 'No price product',
+                        code: 'NO-PRICE',
+                        price: undefined
+                    }
+                ]}
+                value={{ name: '' }}
+                onChange={onChange}
+                ariaLabel="Catalog product"
+            />
+        );
+
+        const input = screen.getByRole('combobox', { name: 'Catalog product' });
+        fireEvent.focus(input);
+
+        expect(screen.getByRole('option', { name: /Test 2k/i })).toBeTruthy();
+        expect(screen.getAllByText(/Chưa có giá/i)).toHaveLength(2);
+
+        fireEvent.click(screen.getByRole('option', { name: /Test 2k/i }));
+
+        expect(onChange).toHaveBeenLastCalledWith({
+            nhanhProductId: '25',
+            name: 'Test 2k',
+            price: undefined
+        });
+    });
 });

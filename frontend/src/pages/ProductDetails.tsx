@@ -194,7 +194,7 @@ export default function ProductDetail() {
                             }`}
                         >
                             <MessageCircle className="h-4 w-4 transition-transform duration-200 group-hover:scale-110"/>
-                            {'T\u01b0 v\u1ea5n Messenger'}
+                            {'Tư vấn Messenger'}
                         </a>
                         <a
                             href={zaloConsultationUrl || undefined}
@@ -211,14 +211,14 @@ export default function ProductDetail() {
                             <span className="flex h-4 w-4 items-center justify-center text-base leading-none transition-transform duration-200 group-hover:scale-110">
                                 {createElement(SiZalo as any, {'aria-hidden': true})}
                             </span>
-                            {'T\u01b0 v\u1ea5n Zalo'}
+                            {'Tư vấn Zalo'}
                         </a>
                     </div>
                     <ul className="flex flex-col gap-3 border-t border-outline-variant/20 pt-5 text-sm font-bold text-on-surface">
                         {[
-                            'B\u1ea3o h\u00e0nh ch\u00ednh h\u00e3ng 24 th\u00e1ng.',
-                            'H\u1ed7 tr\u1ee3 \u0111\u1ed5i m\u1edbi trong 7 ng\u00e0y.',
-                            'Mi\u1ec5n ph\u00ed giao h\u00e0ng to\u00e0n qu\u1ed1c.',
+                            'Bảo hành chính hãng.',
+                            'Hoàn trả đổi mới trong vòng 7 ngày.',
+                            'Miễn phí giao hàng toàn quốc.',
                         ].map((item) => (
                             <li key={item} className="flex items-start gap-2.5">
                                 <Check className="mt-0.5 h-4 w-4 flex-none stroke-[3] text-on-surface"/>
