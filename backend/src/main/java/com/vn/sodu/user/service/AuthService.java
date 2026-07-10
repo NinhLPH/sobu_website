@@ -229,9 +229,10 @@ public class AuthService {
 
         Account account = accountRepo.findByEmail(email)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+        Long currentAccountId = account.getId();
 
         accountRepo.findByPhone(normalizedPhone)
-                .filter(existingAccount -> !existingAccount.getId().equals(account.getId()))
+                .filter(existingAccount -> !Objects.equals(existingAccount.getId(), currentAccountId))
                 .ifPresent(existingAccount -> {
                     throw new BadRequestException("Phone number is already in use");
                 });

@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 
 const mockNavigate = jest.fn();
@@ -24,12 +25,20 @@ jest.mock('../service/shipping.service');
 jest.mock('../utils/payment-session', () => ({
     redirectToPaymentCheckout: require('@jest/globals').jest.fn()
 }));
+jest.mock('../utils/online-cart-recovery', () => ({
+    onlineCartRecovery: {
+        save: require('@jest/globals').jest.fn(),
+        get: require('@jest/globals').jest.fn(),
+        clear: require('@jest/globals').jest.fn()
+    }
+}));
 
 const mockedUseCartStore = jest.mocked(useCartStore);
 const mockedUseAuthStore = jest.mocked(useAuthStore);
 const mockedUseLocationStore = jest.mocked(useLocationStore);
 const mockedUsePaymentStore = jest.mocked(usePaymentStore);
 const mockedRedirectToPaymentCheckout = jest.mocked(redirectToPaymentCheckout);
+const mockedOnlineCartRecovery = jest.mocked(onlineCartRecovery);
 const mockedShippingService = jest.mocked(ShippingService);
 const mockSubmitOrder = jest.fn<Promise<any>, any[]>();
 const mockCreatePayment = jest.fn<Promise<any>, any[]>();
@@ -170,15 +179,19 @@ describe('Cart payment selection', () => {
         } as ReturnType<typeof usePaymentStore>);
     });
 
+    const selectLocationOption = (label: string, name: string) => {
+        fireEvent.click(screen.getByRole('button', { name: label }));
+        fireEvent.click(screen.getByRole('option', { name: new RegExp(name) }));
+    };
+
     const selectShippingLocation = () => {
-        const selects = screen.getAllByRole('combobox');
-        fireEvent.change(selects[0], { target: { value: '1' } });
-        fireEvent.change(selects[1], { target: { value: '2' } });
-        fireEvent.change(selects[2], { target: { value: '3' } });
+        selectLocationOption('Tinh / Thanh pho', locationTree.cities[0].cityName);
+        selectLocationOption('Quan / Huyen', locationTree.cities[0].districts[0].districtName);
+        selectLocationOption('Phuong / Xa', locationTree.cities[0].districts[0].wards[0].wardName);
     };
 
     const getCheckoutButton = () =>
-        screen.getByRole('button', { name: /Dang xac nhan|thanh|COD/i }) as HTMLButtonElement;
+        screen.getByRole('button', { name: /Đặt hàng|thanh toán|COD|Dang xac nhan/i }) as HTMLButtonElement;
 
     const clickShippingQuote = async (name: RegExp = /Tiêu chuẩn/i) => {
         const option = await screen.findByRole('button', { name });
@@ -213,7 +226,7 @@ describe('Cart payment selection', () => {
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1));
 
-        fireEvent.change(screen.getByPlaceholderText('Địa chỉ giao hàng chi tiết'), {
+        fireEvent.change(screen.getByPlaceholderText(/Địa chỉ giao hàng chi tiết/), {
             target: { value: '123 Nguyen Trai' }
         });
 
@@ -376,7 +389,7 @@ describe('Cart payment selection', () => {
 
         expect(getCheckoutButton().disabled).toBe(false);
 
-        fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '' } });
+        selectLocationOption('Tinh / Thanh pho', 'Tinh / Thanh pho');
 
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(true));
     });
@@ -395,7 +408,7 @@ describe('Cart payment selection', () => {
         });
         render(<Cart />);
         selectShippingLocation();
-        fireEvent.change(screen.getByPlaceholderText('Địa chỉ giao hàng chi tiết'), {
+        fireEvent.change(screen.getByPlaceholderText(/Địa chỉ giao hàng chi tiết/), {
             target: { value: '123 Nguyen Trai' }
         });
         fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), {
@@ -421,6 +434,7 @@ describe('Cart payment selection', () => {
         expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith(expect.objectContaining({
             codAmount: 350000
         }));
+        expect(mockedOnlineCartRecovery.save).not.toHaveBeenCalled();
         expect(mockNavigate).toHaveBeenCalledWith(
             '/tracking?orderId=12&paymentSetup=cod',
             { replace: true }
@@ -453,6 +467,10 @@ describe('Cart payment selection', () => {
             type: 'FULL',
             paymentMethod: 'ONLINE'
         }));
+        expect(mockedOnlineCartRecovery.save).toHaveBeenCalledWith(onlinePayment, [{
+            product,
+            quantity: 1
+        }]);
         expect(mockedRedirectToPaymentCheckout).toHaveBeenCalledWith(onlinePayment);
     });
 

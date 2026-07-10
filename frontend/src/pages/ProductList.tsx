@@ -336,12 +336,16 @@ export default function ProductList() {
                         </div>
                         <div className="flex items-center justify-between gap-3 sm:justify-start sm:gap-4">
                             <span className="text-xs font-bold uppercase tracking-widest text-outline">Sắp xếp:</span>
-                            <select
-                                className="min-w-[10rem] cursor-pointer rounded-full bg-surface-container px-4 pr-8 py-2 text-xs font-bold text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 sm:min-w-[12rem] sm:px-5 sm:pr-10 sm:text-sm">
-                                <option>Hàng Mới Nhất</option>
-                                <option>Giá tăng dần</option>
-                                <option>Giá giảm dần</option>
-                            </select>
+                            <div className="relative inline-flex">
+                                <select
+                                    aria-label="Sắp xếp sản phẩm cửa hàng"
+                                    className="w-[10.75rem] cursor-pointer appearance-none rounded-full bg-surface-container px-4 py-2 pr-9 text-xs font-bold text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 sm:w-[11.75rem] sm:px-5 sm:pr-10 sm:text-sm">
+                                    <option>Hàng Mới Nhất</option>
+                                    <option>Giá tăng dần</option>
+                                    <option>Giá giảm dần</option>
+                                </select>
+                                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface sm:right-4" aria-hidden="true"/>
+                            </div>
                         </div>
                     </div>
                     {filteredProducts.length > 0 ? (

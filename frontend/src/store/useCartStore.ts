@@ -10,6 +10,7 @@ import {ToastService} from "../service/toast.service";
 import { createIdempotencyKey } from '../utils/idempotency';
 import { CartItemDto } from '../interface/cart.dto';
 import { authStorage } from '../utils/auth-storage';
+import { onlineCartRecovery } from '../utils/online-cart-recovery';
 
 type CheckoutDetails =
     Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
@@ -62,6 +63,7 @@ interface CartState {
     clearCart: () => Promise<void>;
     clearCheckoutError: () => void;
     submitOrder: (details: CheckoutDetails, options?: SubmitOrderOptions) => Promise<OrderResponseDto>;
+    restorePendingOnlineCart: () => boolean;
     getTotals: () => { subtotal: number; tax: number; total: number; itemCount: number };
 }
 
@@ -84,7 +86,11 @@ export const useCartStore = create<CartState>((set, get) => ({
         try {
             const response = await CustomerService.getCart();
             if (response.success) {
-                const items = (response.data?.items || []).map(mapCartItemDto);
+                const serverItems = (response.data?.items || []).map(mapCartItemDto);
+                const pendingOnlineCart = onlineCartRecovery.get();
+                const items = serverItems.length > 0
+                    ? serverItems
+                    : pendingOnlineCart?.items ?? [];
                 set({ items, isLoading: false });
                 return;
             }
@@ -105,6 +111,7 @@ export const useCartStore = create<CartState>((set, get) => ({
                 quantity
             });
             if (response.success) {
+                onlineCartRecovery.clear();
                 const items = (response.data?.items || []).map(mapCartItemDto);
                 set({ items });
             }
@@ -122,6 +129,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         try {
             const response = await CustomerService.removeCartItem(productId);
             if (response.success) {
+                onlineCartRecovery.clear();
                 ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
             }
         } catch (error: any) {
@@ -144,6 +152,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         });
         try {
             await CustomerService.updateCartItem(productId, safeQuantity);
+            onlineCartRecovery.clear();
         } catch (error: any) {
             set({ items: previousItems });
             if (!handleAuthError(error)) {
@@ -157,6 +166,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         set({ items: [] });
         try {
             await CustomerService.clearCart();
+            onlineCartRecovery.clear();
         } catch (error: any) {
             set({ items: previousItems });
             if (!handleAuthError(error)) {
@@ -234,6 +244,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 
             if (shouldClearCart) {
                 await CustomerService.clearCart();
+                onlineCartRecovery.clear();
             }
 
             set({
@@ -250,6 +261,15 @@ export const useCartStore = create<CartState>((set, get) => ({
             set({ isSubmitting: false, checkoutError: message });
             throw error;
         }
+    },
+
+    restorePendingOnlineCart: () => {
+        const pendingOnlineCart = onlineCartRecovery.get();
+        if (!pendingOnlineCart) {
+            return false;
+        }
+        set({ items: pendingOnlineCart.items });
+        return true;
     },
 
     getTotals: () => {

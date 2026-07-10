@@ -1,6 +1,6 @@
-import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
+import { ChevronDown, Loader2, Minus, Plus, Search, ShoppingBag, Trash2 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
@@ -9,8 +9,10 @@ import { ToastService } from '../service/toast.service';
 import { formatCurrency } from '../utils/format';
 import { PaymentMethod } from '../enum/union-types';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 import { ShippingQuoteDto } from '../interface/shipping.model';
+import { LocationCity, LocationDistrict, LocationWard } from '../interface/location.model';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -149,6 +151,188 @@ const getErrorMessage = (error: any, fallback: string) =>
     error?.message ||
     fallback;
 
+interface LocationComboboxOption {
+    id: number;
+    name: string;
+    otherName?: string | null;
+}
+
+interface LocationComboboxProps {
+    label: string;
+    placeholder: string;
+    searchPlaceholder?: string;
+    options: LocationComboboxOption[];
+    value: number | null;
+    disabled?: boolean;
+    loading?: boolean;
+    onSelect: (value: number | null) => void;
+}
+
+const toLocationSearchHaystack = (option: LocationComboboxOption) =>
+    normalizeSearchText([option.name, option.otherName].filter(Boolean).join(' '));
+
+function LocationCombobox({
+                              label,
+                              placeholder,
+                              searchPlaceholder = 'Nhập từ khóa',
+                              options,
+                              value,
+                              disabled,
+                              loading,
+                              onSelect
+                          }: LocationComboboxProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const rootRef = useRef<HTMLDivElement | null>(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+    const selectedOption = options.find((option) => option.id === value) ?? null;
+    const filteredOptions = useMemo(() => {
+        const normalizedQuery = normalizeSearchText(query.trim());
+        if (!normalizedQuery) {
+            return options;
+        }
+        return options.filter((option) => toLocationSearchHaystack(option).includes(normalizedQuery));
+    }, [options, query]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+        const handlePointerDown = (event: MouseEvent) => {
+            if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => document.removeEventListener('mousedown', handlePointerDown);
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (isOpen) {
+            window.setTimeout(() => searchInputRef.current?.focus(), 0);
+        } else {
+            setQuery('');
+        }
+    }, [isOpen]);
+
+    const openDropdown = () => {
+        if (!disabled) {
+            setIsOpen((current) => !current);
+        }
+    };
+
+    const selectOption = (optionValue: number | null) => {
+        onSelect(optionValue);
+        setIsOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            if (!disabled) {
+                setIsOpen(true);
+            }
+        }
+    };
+
+    return (
+        <div ref={rootRef} className="relative">
+            <button
+                type="button"
+                aria-label={label}
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+                onClick={openDropdown}
+                onKeyDown={handleKeyDown}
+                disabled={disabled}
+                className={`flex min-h-[40px] w-full cursor-pointer items-center justify-between gap-2 rounded-xl border bg-surface-container-lowest px-4 py-2.5 text-left text-xs font-medium text-on-surface outline-none transition-colors focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isOpen ? 'border-primary/50' : 'border-surface-container'
+                }`}
+            >
+                <span className={`min-w-0 truncate ${selectedOption ? '' : 'text-outline'}`}>
+                    {loading ? 'Đang tải...' : selectedOption?.name ?? placeholder}
+                </span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-outline transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-surface-container bg-surface-container-lowest p-2 shadow-xl shadow-black/10">
+                    <div className="relative mb-2">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-outline" />
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder={searchPlaceholder}
+                            className="h-9 w-full rounded-lg border border-surface-container bg-white pl-9 pr-3 text-xs font-medium text-on-surface outline-none transition-colors placeholder:text-outline/60 focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
+                        />
+                    </div>
+                    <div role="listbox" aria-label={label} className="max-h-[220px] overflow-y-auto pr-1">
+                        <button
+                            type="button"
+                            role="option"
+                            aria-selected={value === null}
+                            onClick={() => selectOption(null)}
+                            className="flex w-full cursor-pointer flex-col rounded-lg px-3 py-2 text-left text-xs font-semibold text-outline transition-colors hover:bg-surface-container"
+                        >
+                            {placeholder}
+                        </button>
+                        {filteredOptions.map((option) => (
+                            <button
+                                key={option.id}
+                                type="button"
+                                role="option"
+                                aria-selected={option.id === value}
+                                onClick={() => selectOption(option.id)}
+                                className={`flex w-full cursor-pointer flex-col rounded-lg px-3 py-2 text-left transition-colors hover:bg-surface-container ${
+                                    option.id === value ? 'bg-primary/10 text-primary' : 'text-on-surface'
+                                }`}
+                            >
+                                <span className="truncate text-xs font-bold">{option.name}</span>
+                                {option.otherName && (
+                                    <span className="mt-0.5 w-full truncate text-[11px] font-medium text-outline">
+                                        {option.otherName}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                        {filteredOptions.length === 0 && (
+                            <p className="px-3 py-3 text-xs font-semibold text-outline">
+                                Không tìm thấy địa điểm phù hợp.
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+const cityToComboboxOption = (city: LocationCity): LocationComboboxOption => ({
+    id: city.cityId,
+    name: city.cityName,
+    otherName: city.otherName
+});
+
+const districtToComboboxOption = (district: LocationDistrict): LocationComboboxOption => ({
+    id: district.districtId,
+    name: district.districtName,
+    otherName: district.otherName
+});
+
+const wardToComboboxOption = (ward: LocationWard): LocationComboboxOption => ({
+    id: ward.wardId,
+    name: ward.wardName,
+    otherName: ward.otherName
+});
+
+const locationSelectValue = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
+    if (value === null || typeof value === 'number') {
+        return value;
+    }
+    return value.target.value ? Number(value.target.value) : null;
+};
+
 function QuantityController({
                                 quantity,
                                 disabled,
@@ -280,13 +464,20 @@ export default function Cart() {
         clearCheckoutError();
     };
 
-    const cities = locationTree?.cities ?? [];
-    const selectedCity = cities.find((city) => city.cityId === form.customerCityId);
-    const districts = selectedCity?.districts ?? [];
-    const selectedDistrict = districts.find(
-        (district) => district.districtId === form.customerDistrictId
+    const cities = useMemo(() => locationTree?.cities ?? [], [locationTree]);
+    const selectedCity = useMemo(
+        () => cities.find((city) => city.cityId === form.customerCityId),
+        [cities, form.customerCityId]
     );
-    const wards = selectedDistrict?.wards ?? [];
+    const districts = useMemo(() => selectedCity?.districts ?? [], [selectedCity]);
+    const selectedDistrict = useMemo(
+        () => districts.find((district) => district.districtId === form.customerDistrictId),
+        [districts, form.customerDistrictId]
+    );
+    const wards = useMemo(() => selectedDistrict?.wards ?? [], [selectedDistrict]);
+    const cityOptions = useMemo(() => cities.map(cityToComboboxOption), [cities]);
+    const districtOptions = useMemo(() => districts.map(districtToComboboxOption), [districts]);
+    const wardOptions = useMemo(() => wards.map(wardToComboboxOption), [wards]);
     const hasSelectedShippingLocation =
         form.customerCityId !== null &&
         form.customerDistrictId !== null &&
@@ -455,8 +646,8 @@ export default function Cart() {
         }
     };
 
-    const handleCityChange = (event: ChangeEvent<HTMLSelectElement>) => {
-        const cityId = event.target.value ? Number(event.target.value) : null;
+    const handleCityChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
+        const cityId = locationSelectValue(value);
         const city = cities.find((item) => item.cityId === cityId);
 
         setForm((current) => ({
@@ -472,8 +663,8 @@ export default function Cart() {
         clearCheckoutError();
     };
 
-    const handleDistrictChange = (event: ChangeEvent<HTMLSelectElement>) => {
-        const districtId = event.target.value ? Number(event.target.value) : null;
+    const handleDistrictChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
+        const districtId = locationSelectValue(value);
         const district = districts.find((item) => item.districtId === districtId);
 
         setForm((current) => ({
@@ -487,8 +678,8 @@ export default function Cart() {
         clearCheckoutError();
     };
 
-    const handleWardChange = (event: ChangeEvent<HTMLSelectElement>) => {
-        const wardId = event.target.value ? Number(event.target.value) : null;
+    const handleWardChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
+        const wardId = locationSelectValue(value);
         const ward = wards.find((item) => item.wardId === wardId);
 
         setForm((current) => ({
@@ -573,6 +764,7 @@ export default function Cart() {
                     paymentMethod
                 });
                 if (paymentMethod === 'ONLINE') {
+                    onlineCartRecovery.save(payment, items);
                     redirectToPaymentCheckout(payment);
                     return;
                 }
@@ -701,10 +893,50 @@ export default function Cart() {
                                 onChange={(event) => updateField('customerAddress', event.target.value)}
                                 disabled={isSubmitting || isCreatingPayment}
                                 maxLength={MAX_CUSTOMER_ADDRESS_LENGTH}
-                                placeholder="Địa chỉ giao hàng chi tiết"
+                                placeholder="Địa chỉ giao hàng chi tiết (Địa chỉ sau sát nhập)"
                                 className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                             />
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <LocationCombobox
+                                    label="Tinh / Thanh pho"
+                                    placeholder="Tinh / Thanh pho *"
+                                    options={cityOptions}
+                                    value={form.customerCityId}
+                                    onSelect={handleCityChange}
+                                    disabled={
+                                        isSubmitting ||
+                                        isCreatingPayment ||
+                                        isLocationsLoading ||
+                                        !locationsLoaded
+                                    }
+                                    loading={isLocationsLoading}
+                                />
+                                <LocationCombobox
+                                    label="Quan / Huyen"
+                                    placeholder="Quan / Huyen *"
+                                    options={districtOptions}
+                                    value={form.customerDistrictId}
+                                    onSelect={handleDistrictChange}
+                                    disabled={
+                                        isSubmitting ||
+                                        isCreatingPayment ||
+                                        !selectedCity
+                                    }
+                                />
+                                <LocationCombobox
+                                    label="Phuong / Xa"
+                                    placeholder="Phuong / Xa *"
+                                    options={wardOptions}
+                                    value={form.customerWardId}
+                                    onSelect={handleWardChange}
+                                    disabled={
+                                        isSubmitting ||
+                                        isCreatingPayment ||
+                                        !selectedDistrict
+                                    }
+                                />
+                            </div>
+                            <div hidden aria-hidden="true" className="hidden">
                                 <select
                                     value={form.customerCityId ?? ''}
                                     onChange={handleCityChange}

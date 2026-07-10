@@ -48,7 +48,7 @@ module.exports = {
         'inverse-primary': colorToken('--color-inverse-primary'),
       },
       fontFamily: {
-        sans: ['"Montserrat"', 'sans-serif'],
+        sans: ['"Roboto"', 'sans-serif'],
       },
       borderRadius: {
         'lg': '2rem', 

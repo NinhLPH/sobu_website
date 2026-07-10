@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { PaymentStatus } from '../enum/union-types';
 import { usePaymentStore } from '../store/usePaymentStore';
+import { useCartStore } from '../store/useCartStore';
 import { paymentSession } from '../utils/payment-session';
 
 type ResultStatus = PaymentStatus | 'UNKNOWN';
@@ -61,6 +62,11 @@ export default function PaymentResult() {
         paymentError,
         clearPaymentError
     } = usePaymentStore();
+    const restorePendingOnlineCart = useCartStore(state => state.restorePendingOnlineCart);
+
+    useEffect(() => {
+        restorePendingOnlineCart();
+    }, [restorePendingOnlineCart]);
 
     useEffect(() => {
         if (!orderId || !paymentCode) {
