@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Plus, Trash2, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
+import { ChevronRight, Plus, Trash2, Loader2, ArrowLeft, CheckCircle, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
 import ImageUploader from '../components/common/ImageUploader';
 import { useRequestStore } from '../store/useRequestStore';
 import { ToastService } from '../service/toast.service';
@@ -10,6 +10,8 @@ import CatalogProductCombobox, {
     CatalogProductSelection
 } from '../components/common/CatalogProductCombobox';
 import { useAuthStore } from '../store/useAuthStore';
+import {usePublicUiStore} from '../store/usePublicUiStore';
+import {parseJsonConfig} from '../utils/website-config';
 
 interface RequestFormItem {
     nhanhProductId?: string;
@@ -25,14 +27,19 @@ const emptyItem = (): RequestFormItem => ({
     note: ''
 });
 
+type SocialLinks = Record<string, string>;
+
 export default function CreateRequest() {
     const { createRequestAction, isSubmitting, error, clearError } = useRequestStore();
     const userPhone = useAuthStore((state) => state.user?.phone?.trim() || '');
+    const configMap = usePublicUiStore((state) => state.configMap);
     const {
         allProducts,
         fetchAllProducts,
         isAllProductsLoading
     } = useProductStore();
+    const socialLinks = parseJsonConfig<SocialLinks>(configMap, 'social_links', {});
+    const facebookConsultationUrl = socialLinks.facebook?.trim() || '';
 
     // Form fields
     const [phone, setPhone] = useState(userPhone);
@@ -47,6 +54,7 @@ export default function CreateRequest() {
     const [uploadingFiles, setUploadingFiles] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [successCreated, setSuccessCreated] = useState(false);
+    const isCustomRequest = type === 'CUSTOM';
 
     useEffect(() => {
         void fetchAllProducts();
@@ -95,6 +103,10 @@ export default function CreateRequest() {
         clearError();
         setUploadError(null);
 
+        if (isCustomRequest) {
+            return;
+        }
+
         // Validate
         if (!phone.trim()) {
             setUploadError('Vui lòng nhập số điện thoại liên hệ!');
@@ -106,7 +118,7 @@ export default function CreateRequest() {
             setUploadError('Vui lòng thêm ít nhất một món hàng yêu cầu có tên!');
             return;
         }
-        if ((type === 'CUSTOM' || type === 'FINDING') && !requirements.trim()) {
+        if (type === 'FINDING' && !requirements.trim()) {
             setUploadError('Vui lòng nhập yêu cầu chi tiết cho loại yêu cầu đã chọn.');
             return;
         }
@@ -214,23 +226,27 @@ export default function CreateRequest() {
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Section 1: Basic Info */}
                 <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 space-y-4">
-                    <h2 className="text-sm font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">1. Thông tin liên hệ & Loại yêu cầu</h2>
+                    <h2 className="text-sm font-black text-on-surface uppercase tracking-wider border-b border-surface-container/80 pb-3">
+                        {isCustomRequest ? '1. Loại yêu cầu' : '1. Thông tin liên hệ & Loại yêu cầu'}
+                    </h2>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">
-                                Số điện thoại liên hệ
-                            </label>
-                            <input
-                                type="tel"
-                                value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
-                                placeholder="0912345678"
-                                disabled={isSubmitting}
-                                className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all placeholder:text-outline/40 text-on-surface"
-                                required
-                            />
-                        </div>
+                    <div className={`grid grid-cols-1 gap-4 ${isCustomRequest ? 'md:grid-cols-1' : 'md:grid-cols-2'}`}>
+                        {!isCustomRequest && (
+                            <div>
+                                <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">
+                                    Số điện thoại liên hệ
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    placeholder="0912345678"
+                                    disabled={isSubmitting}
+                                    className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all placeholder:text-outline/40 text-on-surface"
+                                    required
+                                />
+                            </div>
+                        )}
 
                         <div>
                             <label className="block text-xs font-bold text-outline uppercase tracking-wider mb-2 pl-1">
@@ -242,6 +258,7 @@ export default function CreateRequest() {
                                     const nextType = e.target.value as RequestWorkflowType;
                                     setType(nextType);
                                     setItems([emptyItem()]);
+                                    setUploadError(null);
                                 }}
                                 disabled={isSubmitting}
                                 className="w-full bg-surface-container rounded-2xl px-4 py-3.5 text-xs font-semibold focus:ring-2 focus:ring-primary/20 outline-none border border-transparent focus:border-primary/20 transition-all text-on-surface cursor-pointer"
@@ -254,6 +271,63 @@ export default function CreateRequest() {
                     </div>
                 </div>
 
+                {isCustomRequest ? (
+                    <section className="relative overflow-hidden rounded-[2rem] border border-[#1877F2]/20 bg-surface-container-lowest p-6 shadow-[0_24px_70px_-30px_rgba(24,119,242,0.45)] sm:p-8">
+                        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[#1877F2]/10 blur-3xl motion-reduce:hidden" />
+                        <div className="absolute -bottom-24 left-8 h-48 w-48 rounded-full bg-primary/10 blur-3xl motion-reduce:hidden" />
+
+                        <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                            <div className="space-y-5">
+                                <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-primary">
+                                    <Sparkles className="h-4 w-4" />
+                                    Custom
+                                </div>
+
+                                <div>
+                                    <h2 className="text-2xl font-black leading-tight tracking-tight text-on-surface sm:text-3xl">
+                                        Trao đổi trực tiếp với SOBU qua Facebook
+                                    </h2>
+                                    <p className="mt-2 max-w-2xl text-sm font-medium leading-7 text-on-surface-variant">
+                                        Đội ngũ SOBU sẽ cùng bạn làm rõ ý tưởng, phạm vi công việc và báo giá trước khi bắt đầu xử lý dịch vụ.
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-3 text-sm font-bold text-on-surface sm:grid-cols-3">
+                                    {['Tư vấn concept', 'Gửi ảnh tham khảo', 'Báo giá chi tiết'].map((item) => (
+                                        <div key={item} className="flex items-center gap-2 rounded-2xl bg-surface-container px-4 py-3">
+                                            <CheckCircle className="h-4 w-4 shrink-0 text-primary" />
+                                            <span>{item}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="relative flex flex-col items-stretch gap-3 rounded-3xl border border-surface-container-high bg-surface-container-low p-4 sm:min-w-[280px]">
+                                {facebookConsultationUrl ? (
+                                    <a
+                                        href={facebookConsultationUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="group inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-[#1877F2] px-6 py-4 text-sm font-black uppercase tracking-widest text-white shadow-[0_18px_36px_-14px_rgba(24,119,242,0.85)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#166FE5] hover:shadow-[0_24px_42px_-14px_rgba(24,119,242,0.95)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1877F2]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low active:translate-y-0 motion-reduce:transition-colors motion-reduce:hover:translate-y-0"
+                                    >
+                                        <MessageCircle className="h-5 w-5 transition-transform duration-300 group-hover:scale-110 motion-reduce:transition-none motion-reduce:group-hover:scale-100" />
+                                        Nhắn tin qua Facebook
+                                        <ExternalLink className="h-4 w-4 opacity-80" />
+                                    </a>
+                                ) : (
+                                    <span
+                                        aria-disabled="true"
+                                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-surface-container-high px-6 py-4 text-sm font-black uppercase tracking-widest text-outline shadow-none"
+                                    >
+                                        <MessageCircle className="h-5 w-5" />
+                                        Facebook chưa được cấu hình
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+                ) : (
+                    <>
                 {/* Section 2: Items manager */}
                 <div className="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-surface-container/60 space-y-4">
                     <div className="flex justify-between items-center border-b border-surface-container/80 pb-3">
@@ -375,6 +449,8 @@ export default function CreateRequest() {
                         <span>Gửi Yêu Cầu Cho SOBU Workshop</span>
                     )}
                 </button>
+                    </>
+                )}
             </form>
         </main>
     );

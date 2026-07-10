@@ -13,6 +13,12 @@ jest.mock('react-router-dom', () => ({
 jest.mock('../store/useRequestStore');
 jest.mock('../store/useProductStore');
 jest.mock('../store/useAuthStore');
+let mockConfigMap: Record<string, string> = {};
+jest.mock('../store/usePublicUiStore', () => ({
+    usePublicUiStore: (selector: any) => selector({
+        configMap: mockConfigMap
+    })
+}));
 jest.mock('../service/toast.service');
 jest.mock('../components/common/ImageUploader', () => ({
     __esModule: true,
@@ -38,11 +44,14 @@ const mockAuthPhone = (phone?: string) => {
 const getRequestTypeSelect = () => screen.getAllByRole('combobox')[0];
 const getProductInput = () => screen.getAllByRole('combobox')[1];
 const getSubmitButton = () => screen.getByRole('button', { name: /SOBU Workshop/i });
-const getRequirementsTextarea = () =>
-    screen.getAllByRole('textbox').find(element => element.tagName.toLowerCase() === 'textarea') as HTMLElement;
 
 beforeEach(() => {
     jest.clearAllMocks();
+    mockConfigMap = {
+        social_links: JSON.stringify({
+            facebook: 'https://facebook.com/sobu'
+        })
+    };
     mockAuthPhone();
     mockedUseRequestStore.mockReturnValue({
         createRequestAction,
@@ -100,39 +109,47 @@ describe('CreateRequest', () => {
         });
     });
 
-    it('lets CUSTOM requests create an item that is not in the catalog', async () => {
+    it('turns CUSTOM requests into a Facebook-only contact panel', () => {
         render(<CreateRequest />);
 
         fireEvent.change(getRequestTypeSelect(), {
             target: { value: 'CUSTOM' }
         });
-        fireEvent.change(screen.getByPlaceholderText('0912345678'), {
-            target: { value: '0901234567' }
-        });
-        fireEvent.change(getProductInput(), {
-            target: { value: 'Completely custom model' }
-        });
-        fireEvent.click(screen.getByRole('option', {
-            name: /Tạo sản phẩm mới: “Completely custom model”/i
-        }));
-        fireEvent.change(getRequirementsTextarea(), {
-            target: { value: 'Paint from attached reference' }
-        });
-        fireEvent.click(getSubmitButton());
 
-        await waitFor(() => {
-            expect(createRequestAction).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    type: 'CUSTOM',
-                    items: [
-                        expect.objectContaining({
-                            nhanhProductId: undefined,
-                            name: 'Completely custom model'
-                        })
-                    ]
-                })
-            );
+        expect(screen.queryByPlaceholderText('0912345678')).toBeNull();
+        expect(screen.getAllByRole('combobox')).toHaveLength(1);
+        expect(screen.queryByLabelText('Yêu cầu chi tiết')).toBeNull();
+        expect(screen.queryByTestId('image-uploader')).toBeNull();
+        expect(screen.queryByRole('button', { name: /SOBU Workshop/i })).toBeNull();
+        expect(screen.getByText(/liên hệ Shop qua Facebook/i)).toBeTruthy();
+
+        const facebookLink = screen.getByRole('link', { name: /Nhắn tin qua Facebook/i }) as HTMLAnchorElement;
+        expect(facebookLink.getAttribute('href')).toBe('https://facebook.com/sobu');
+        expect(facebookLink.getAttribute('target')).toBe('_blank');
+        expect(facebookLink.getAttribute('rel')).toBe('noreferrer');
+
+        fireEvent.submit(facebookLink.closest('form') as HTMLFormElement);
+
+        expect(createRequestAction).not.toHaveBeenCalled();
+    });
+
+    it('shows a disabled fallback when CUSTOM has no configured Facebook link', () => {
+        mockConfigMap = {
+            social_links: JSON.stringify({
+                facebook: '   '
+            })
+        };
+
+        render(<CreateRequest />);
+
+        fireEvent.change(getRequestTypeSelect(), {
+            target: { value: 'CUSTOM' }
         });
+
+        expect(screen.queryByRole('link', { name: /Nhắn tin qua Facebook/i })).toBeNull();
+        expect(screen.getByText('Facebook chưa được cấu hình').getAttribute('aria-disabled')).toBe('true');
+        fireEvent.submit(screen.getByText('Facebook chưa được cấu hình').closest('form') as HTMLFormElement);
+        expect(createRequestAction).not.toHaveBeenCalled();
     });
 
     it('prefills the request phone when the authenticated user has one', () => {
