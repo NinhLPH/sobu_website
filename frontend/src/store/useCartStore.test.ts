@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { CustomerService } from '../service/custom.service';
 import { ProductModel } from '../interface/product.model';
 import { useCartStore } from './useCartStore';
+import { onlineCartRecovery } from '../utils/online-cart-recovery';
 
 jest.mock('../service/custom.service');
 
@@ -31,6 +32,19 @@ const shippingQuote = {
     carrierId: 10,
     carrierServiceId: 20,
     shippingFee: 30000
+};
+
+const onlinePayment = {
+    id: 21,
+    orderId: 12,
+    paymentCode: 'SOBU-PAY-ONLINE',
+    type: 'FULL' as const,
+    paymentMethod: 'ONLINE' as const,
+    status: 'PENDING' as const,
+    amount: 350000,
+    checkoutUrl: 'https://pay.payos.vn/web/checkout',
+    createdAt: '2026-06-21T10:00:00',
+    updatedAt: '2026-06-21T10:00:00'
 };
 
 const shippingQuoteRequiredMessage = 'Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.';
@@ -114,6 +128,46 @@ describe('useCartStore order submission', () => {
             quantity: 3
         }]);
         expect(useCartStore.getState().isLoading).toBe(false);
+    });
+
+    it('restores a pending online cart when the server cart is empty', async () => {
+        window.sessionStorage.setItem('accessToken', 'access-token');
+        onlineCartRecovery.save(onlinePayment, [{ product, quantity: 2 }]);
+        mockedCustomerService.getCart.mockResolvedValue(emptyCartResponse);
+
+        await useCartStore.getState().fetchCart();
+
+        expect(mockedCustomerService.getCart).toHaveBeenCalledTimes(1);
+        expect(useCartStore.getState().items).toEqual([{
+            product,
+            quantity: 2
+        }]);
+        expect(useCartStore.getState().isLoading).toBe(false);
+    });
+
+    it('clears pending online cart recovery when the customer changes the cart', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 2));
+        mockedCustomerService.updateCartItem.mockResolvedValue({ success: true, statusCode: 200, message: 'Cart updated', data: null as any });
+        mockedCustomerService.removeCartItem.mockResolvedValue({ success: true, statusCode: 200, message: 'Item removed', data: null as any });
+
+        onlineCartRecovery.save(onlinePayment, [{ product, quantity: 1 }]);
+        await useCartStore.getState().addToCart(product, 2);
+        expect(onlineCartRecovery.get()).toBeNull();
+
+        onlineCartRecovery.save(onlinePayment, [{ product, quantity: 2 }]);
+        useCartStore.setState({ items: [{ product, quantity: 2 }] });
+        await useCartStore.getState().updateQuantity(product.id, 3);
+        expect(onlineCartRecovery.get()).toBeNull();
+
+        onlineCartRecovery.save(onlinePayment, [{ product, quantity: 3 }]);
+        useCartStore.setState({ items: [{ product, quantity: 3 }] });
+        await useCartStore.getState().removeFromCart(product.id);
+        expect(onlineCartRecovery.get()).toBeNull();
+
+        onlineCartRecovery.save(onlinePayment, [{ product, quantity: 3 }]);
+        useCartStore.setState({ items: [{ product, quantity: 3 }] });
+        await useCartStore.getState().clearCart();
+        expect(onlineCartRecovery.get()).toBeNull();
     });
 
     it('creates the API payload from cart items and clears the cart on success', async () => {

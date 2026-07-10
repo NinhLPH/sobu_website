@@ -10,10 +10,15 @@ import {ToastService} from "../service/toast.service";
 import { createIdempotencyKey } from '../utils/idempotency';
 import { CartItemDto } from '../interface/cart.dto';
 import { authStorage } from '../utils/auth-storage';
+import { onlineCartRecovery } from '../utils/online-cart-recovery';
 
 type CheckoutDetails =
     Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
     & OrderShippingLocationDto;
+
+interface SubmitOrderOptions {
+    clearCartOnSuccess?: boolean;
+}
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message ||
@@ -57,7 +62,8 @@ interface CartState {
     updateQuantity: (productId: string, quantity: number) => Promise<void>;
     clearCart: () => Promise<void>;
     clearCheckoutError: () => void;
-    submitOrder: (details: CheckoutDetails) => Promise<OrderResponseDto>;
+    submitOrder: (details: CheckoutDetails, options?: SubmitOrderOptions) => Promise<OrderResponseDto>;
+    restorePendingOnlineCart: () => boolean;
     getTotals: () => { subtotal: number; tax: number; total: number; itemCount: number };
 }
 
@@ -80,7 +86,11 @@ export const useCartStore = create<CartState>((set, get) => ({
         try {
             const response = await CustomerService.getCart();
             if (response.success) {
-                const items = (response.data?.items || []).map(mapCartItemDto);
+                const serverItems = (response.data?.items || []).map(mapCartItemDto);
+                const pendingOnlineCart = onlineCartRecovery.get();
+                const items = serverItems.length > 0
+                    ? serverItems
+                    : pendingOnlineCart?.items ?? [];
                 set({ items, isLoading: false });
                 return;
             }
@@ -101,6 +111,7 @@ export const useCartStore = create<CartState>((set, get) => ({
                 quantity
             });
             if (response.success) {
+                onlineCartRecovery.clear();
                 const items = (response.data?.items || []).map(mapCartItemDto);
                 set({ items });
             }
@@ -118,6 +129,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         try {
             const response = await CustomerService.removeCartItem(productId);
             if (response.success) {
+                onlineCartRecovery.clear();
                 ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
             }
         } catch (error: any) {
@@ -140,6 +152,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         });
         try {
             await CustomerService.updateCartItem(productId, safeQuantity);
+            onlineCartRecovery.clear();
         } catch (error: any) {
             set({ items: previousItems });
             if (!handleAuthError(error)) {
@@ -153,6 +166,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         set({ items: [] });
         try {
             await CustomerService.clearCart();
+            onlineCartRecovery.clear();
         } catch (error: any) {
             set({ items: previousItems });
             if (!handleAuthError(error)) {
@@ -163,7 +177,8 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     clearCheckoutError: () => set({ checkoutError: null }),
 
-    submitOrder: async (details) => {
+    submitOrder: async (details, options = {}) => {
+        const shouldClearCart = options.clearCartOnSuccess !== false;
         const items = get().items;
         if (items.length === 0) {
             const message = 'Giỏ hàng đang trống.';
@@ -227,10 +242,13 @@ export const useCartStore = create<CartState>((set, get) => ({
                 throw new Error(response.message || 'Không thể tạo đơn hàng.');
             }
 
-            await CustomerService.clearCart();
+            if (shouldClearCart) {
+                await CustomerService.clearCart();
+                onlineCartRecovery.clear();
+            }
 
             set({
-                items: [],
+                ...(shouldClearCart ? { items: [] } : {}),
                 isSubmitting: false,
                 checkoutError: null,
                 lastCreatedOrder: response.data,
@@ -243,6 +261,15 @@ export const useCartStore = create<CartState>((set, get) => ({
             set({ isSubmitting: false, checkoutError: message });
             throw error;
         }
+    },
+
+    restorePendingOnlineCart: () => {
+        const pendingOnlineCart = onlineCartRecovery.get();
+        if (!pendingOnlineCart) {
+            return false;
+        }
+        set({ items: pendingOnlineCart.items });
+        return true;
     },
 
     getTotals: () => {

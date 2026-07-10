@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import PaymentResult from './PaymentResult';
 import { usePaymentStore } from '../store/usePaymentStore';
+import { useCartStore } from '../store/useCartStore';
 
 let mockQuery = 'orderId=12&paymentCode=SOBU-PAY-001';
 
@@ -12,10 +13,13 @@ jest.mock('react-router-dom', () => ({
     useSearchParams: () => [new URLSearchParams(mockQuery)]
 }), { virtual: true });
 jest.mock('../store/usePaymentStore');
+jest.mock('../store/useCartStore');
 
 const mockedUsePaymentStore = jest.mocked(usePaymentStore);
+const mockedUseCartStore = jest.mocked(useCartStore);
 const fetchPayments = jest.fn<Promise<any>, any[]>();
 const clearPaymentError = jest.fn();
+const restorePendingOnlineCart = jest.fn();
 
 describe('PaymentResult', () => {
     beforeEach(() => {
@@ -27,6 +31,9 @@ describe('PaymentResult', () => {
             paymentError: null,
             clearPaymentError
         } as ReturnType<typeof usePaymentStore>);
+        mockedUseCartStore.mockImplementation((selector: any) => selector({
+            restorePendingOnlineCart
+        }));
     });
 
     it('does not trust a PayOS code=00 without a matching paid backend record', async () => {
@@ -83,5 +90,14 @@ describe('PaymentResult', () => {
 
         await waitFor(() => expect(screen.getByText('Thanh toán thành công')).toBeTruthy());
         expect(sessionStorage.getItem('sobu.pendingPayment')).toBeNull();
+    });
+
+    it('restores a pending online cart snapshot on mount', async () => {
+        fetchPayments.mockResolvedValue([]);
+
+        const view = render(<PaymentResult />);
+
+        await waitFor(() => expect(restorePendingOnlineCart).toHaveBeenCalled());
+        view.unmount();
     });
 });

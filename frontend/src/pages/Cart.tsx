@@ -9,6 +9,7 @@ import { ToastService } from '../service/toast.service';
 import { formatCurrency } from '../utils/format';
 import { PaymentMethod } from '../enum/union-types';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 import { ShippingQuoteDto } from '../interface/shipping.model';
 
@@ -571,6 +572,7 @@ export default function Cart() {
                     paymentMethod
                 });
                 if (paymentMethod === 'ONLINE') {
+                    onlineCartRecovery.save(payment, items);
                     redirectToPaymentCheckout(payment);
                     return;
                 }

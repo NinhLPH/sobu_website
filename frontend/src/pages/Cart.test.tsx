@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 
 const mockNavigate = jest.fn();
@@ -24,12 +25,20 @@ jest.mock('../service/shipping.service');
 jest.mock('../utils/payment-session', () => ({
     redirectToPaymentCheckout: require('@jest/globals').jest.fn()
 }));
+jest.mock('../utils/online-cart-recovery', () => ({
+    onlineCartRecovery: {
+        save: require('@jest/globals').jest.fn(),
+        get: require('@jest/globals').jest.fn(),
+        clear: require('@jest/globals').jest.fn()
+    }
+}));
 
 const mockedUseCartStore = jest.mocked(useCartStore);
 const mockedUseAuthStore = jest.mocked(useAuthStore);
 const mockedUseLocationStore = jest.mocked(useLocationStore);
 const mockedUsePaymentStore = jest.mocked(usePaymentStore);
 const mockedRedirectToPaymentCheckout = jest.mocked(redirectToPaymentCheckout);
+const mockedOnlineCartRecovery = jest.mocked(onlineCartRecovery);
 const mockedShippingService = jest.mocked(ShippingService);
 const mockSubmitOrder = jest.fn<Promise<any>, any[]>();
 const mockCreatePayment = jest.fn<Promise<any>, any[]>();
@@ -415,6 +424,7 @@ describe('Cart payment selection', () => {
         expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith(expect.objectContaining({
             codAmount: 350000
         }));
+        expect(mockedOnlineCartRecovery.save).not.toHaveBeenCalled();
         expect(mockNavigate).toHaveBeenCalledWith(
             '/tracking?orderId=12&paymentSetup=cod',
             { replace: true }
@@ -444,6 +454,10 @@ describe('Cart payment selection', () => {
             type: 'FULL',
             paymentMethod: 'ONLINE'
         }));
+        expect(mockedOnlineCartRecovery.save).toHaveBeenCalledWith(onlinePayment, [{
+            product,
+            quantity: 1
+        }]);
         expect(mockedRedirectToPaymentCheckout).toHaveBeenCalledWith(onlinePayment);
     });
 
