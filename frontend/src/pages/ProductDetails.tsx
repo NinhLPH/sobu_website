@@ -1,14 +1,19 @@
-import {useState, useEffect, useMemo} from 'react';
+import {createElement, useState, useEffect, useMemo} from 'react';
 import {useParams, Link} from 'react-router-dom';
-import {ChevronRight, Star, ShoppingBag, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
+import {Check, ChevronRight, MessageCircle, Star, ShoppingBag, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
+import {SiZalo} from 'react-icons/si';
 
 import {useCartStore} from '../store/useCartStore';
 import {formatCurrency} from "../utils/format";
 import ProductSlider from "../components/common/ProductSlider";
 import {useProductStore} from '../store/useProductStore';
+import {usePublicUiStore} from '../store/usePublicUiStore';
 import {PublicCatalogService} from '../service/public-catalog.service';
 import {mapListItemToProductModel, mapDetailToProductModel, ProductModel} from '../interface/product.model';
 import ProductReviewSection from '../components/reviews/ProductReviewSection';
+import {parseJsonConfig} from '../utils/website-config';
+
+type SocialLinks = Record<string, string>;
 
 export default function ProductDetail() {
     const {id} = useParams();
@@ -17,6 +22,10 @@ export default function ProductDetail() {
     const addToCart = useCartStore(state => state.addToCart);
     const [mainImage, setMainImage] = useState('');
     const [loadingDetail, setLoadingDetail] = useState(true);
+    const configMap = usePublicUiStore((state) => state.configMap);
+    const socialLinks = parseJsonConfig<SocialLinks>(configMap, 'social_links', {});
+    const facebookConsultationUrl = socialLinks.facebook?.trim() || '';
+    const zaloConsultationUrl = socialLinks.zalo?.trim() || '';
 
     const { products, productsLoaded, fetchProducts } = useProductStore();
 
@@ -171,7 +180,53 @@ export default function ProductDetail() {
                             <ShoppingBag className="w-4.5 h-4.5"/> Thêm vào giỏ
                         </button>
                     </div>
-                    <div className="flex flex-col gap-4 border-t border-outline-variant/20 pt-5 sm:flex-row sm:items-center sm:gap-6">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <a
+                            href={facebookConsultationUrl || undefined}
+                            target={facebookConsultationUrl ? '_blank' : undefined}
+                            rel={facebookConsultationUrl ? 'noreferrer' : undefined}
+                            aria-disabled={!facebookConsultationUrl}
+                            tabIndex={facebookConsultationUrl ? undefined : -1}
+                            className={`group inline-flex h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-black shadow-[0_12px_24px_-8px_rgba(24,119,242,0.5)] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                                facebookConsultationUrl
+                                    ? 'cursor-pointer bg-[#1877F2] text-white hover:-translate-y-0.5 hover:bg-[#166FE5] hover:shadow-[0_16px_30px_-8px_rgba(24,119,242,0.62)] active:translate-y-0'
+                                    : 'pointer-events-none bg-surface-container text-outline shadow-none'
+                            }`}
+                        >
+                            <MessageCircle className="h-4 w-4 transition-transform duration-200 group-hover:scale-110"/>
+                            {'T\u01b0 v\u1ea5n Messenger'}
+                        </a>
+                        <a
+                            href={zaloConsultationUrl || undefined}
+                            target={zaloConsultationUrl ? '_blank' : undefined}
+                            rel={zaloConsultationUrl ? 'noreferrer' : undefined}
+                            aria-disabled={!zaloConsultationUrl}
+                            tabIndex={zaloConsultationUrl ? undefined : -1}
+                            className={`group inline-flex h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-black shadow-[0_12px_24px_-8px_rgba(0,104,255,0.5)] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                                zaloConsultationUrl
+                                    ? 'cursor-pointer bg-[#0068FF] text-white hover:-translate-y-0.5 hover:bg-[#005CE0] hover:shadow-[0_16px_30px_-8px_rgba(0,104,255,0.62)] active:translate-y-0'
+                                    : 'pointer-events-none bg-surface-container text-outline shadow-none'
+                            }`}
+                        >
+                            <span className="flex h-4 w-4 items-center justify-center text-base leading-none transition-transform duration-200 group-hover:scale-110">
+                                {createElement(SiZalo as any, {'aria-hidden': true})}
+                            </span>
+                            {'T\u01b0 v\u1ea5n Zalo'}
+                        </a>
+                    </div>
+                    <ul className="flex flex-col gap-3 border-t border-outline-variant/20 pt-5 text-sm font-bold text-on-surface">
+                        {[
+                            'B\u1ea3o h\u00e0nh ch\u00ednh h\u00e3ng 24 th\u00e1ng.',
+                            'H\u1ed7 tr\u1ee3 \u0111\u1ed5i m\u1edbi trong 7 ng\u00e0y.',
+                            'Mi\u1ec5n ph\u00ed giao h\u00e0ng to\u00e0n qu\u1ed1c.',
+                        ].map((item) => (
+                            <li key={item} className="flex items-start gap-2.5">
+                                <Check className="mt-0.5 h-4 w-4 flex-none stroke-[3] text-on-surface"/>
+                                <span>{item}</span>
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="hidden">
                         <div className="flex items-center gap-2.5 text-on-surface font-bold text-xs">
                             <div
                                 className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
