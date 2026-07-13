@@ -9,17 +9,13 @@ import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PayOSCheckoutSession;
 import com.vn.sodu.payment.PayOSGateway;
-import com.vn.sodu.payment.PayOSPaymentStatusSnapshot;
-import com.vn.sodu.payment.PayOSProperties;
 import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.repo.OrderPaymentRepository;
 import com.vn.sodu.request.OrderType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +25,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
@@ -46,7 +41,6 @@ public class PaymentService {
     private final OrderPaymentRepository orderPaymentRepository;
     private final OrderRepository orderRepository;
     private final PayOSGateway payOSGateway;
-    private final PayOSProperties payOSProperties;
     private final PaymentCalculationService paymentCalculationService;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -298,39 +292,6 @@ public class PaymentService {
         Order updatedOrder = recalculateOrderPaymentState(payment.getOrder());
         savedPayment.setOrder(updatedOrder);
         return savedPayment;
-    }
-
-    @Scheduled(
-            initialDelayString = "#{@payOSProperties.reconciliation.initialDelayMs}",
-            fixedDelayString = "#{@payOSProperties.reconciliation.fixedDelayMs}"
-    )
-    public void reconcilePendingOnlinePayments() {
-        if (!payOSProperties.getReconciliation().isEnabled()) {
-            return;
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime staleCutoff = now.minusSeconds(Math.max(0L, payOSProperties.getReconciliation().getStaleAfterSeconds()));
-        int batchSize = Math.max(1, payOSProperties.getReconciliation().getBatchSize());
-        List<OrderPayment> candidates = orderPaymentRepository.findByStatusInAndPaymentMethodOrderByCreatedAtAsc(
-                EnumSet.of(PaymentStatus.PENDING, PaymentStatus.FAILED),
-                PaymentMethod.ONLINE,
-                PageRequest.of(0, batchSize)
-        );
-
-        for (OrderPayment payment : candidates) {
-            if (payment == null || payment.getProviderOrderCode() == null) {
-                continue;
-            }
-            if (!isReconciliationCandidate(payment, staleCutoff, now)) {
-                continue;
-            }
-            try {
-                reconcilePayment(payment, now);
-            } catch (RuntimeException ignored) {
-                // Transient provider lookup issues should not mutate local state.
-            }
-        }
     }
 
     @Transactional
@@ -589,32 +550,6 @@ public class PaymentService {
 
     private boolean requiresOrderLock(PaymentType type) {
         return type == PaymentType.FINAL;
-    }
-
-    private boolean isReconciliationCandidate(OrderPayment payment, LocalDateTime staleCutoff, LocalDateTime now) {
-        if (payment.getCreatedAt() != null && payment.getCreatedAt().isAfter(staleCutoff)) {
-            return payment.getExpiresAt() != null && !payment.getExpiresAt().isAfter(now);
-        }
-        return true;
-    }
-
-    private void reconcilePayment(OrderPayment payment, LocalDateTime now) {
-        PayOSPaymentStatusSnapshot snapshot = payOSGateway.getPaymentStatus(payment.getProviderOrderCode());
-        if (snapshot == null) {
-            if (payment.getExpiresAt() != null && !payment.getExpiresAt().isAfter(now)) {
-                markPaymentExpired(payment.getPaymentCode(), "Payment session expired");
-            }
-            return;
-        }
-
-        if (snapshot.status() == PaymentStatus.PAID) {
-            markPaymentPaid(payment.getPaymentCode());
-            return;
-        }
-
-        if (snapshot.status() == PaymentStatus.EXPIRED) {
-            markPaymentExpired(payment.getPaymentCode(), "Payment session expired");
-        }
     }
 
     private String generateUniquePaymentCode() {

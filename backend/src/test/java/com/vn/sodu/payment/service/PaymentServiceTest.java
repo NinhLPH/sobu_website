@@ -58,12 +58,10 @@ class PaymentServiceTest {
     void setUp() {
         paymentCalculationService = new PaymentCalculationService();
         payOSGateway = new MockPayOSGateway();
-        PayOSProperties payOSProperties = new PayOSProperties();
         paymentService = new PaymentService(
                 orderPaymentRepository,
                 orderRepository,
                 payOSGateway,
-                payOSProperties,
                 paymentCalculationService,
                 eventPublisher
         );
@@ -153,7 +151,6 @@ class PaymentServiceTest {
                 orderPaymentRepository,
                 orderRepository,
                 duplicateThenSuccessGateway,
-                new PayOSProperties(),
                 paymentCalculationService,
                 eventPublisher
         );
@@ -488,7 +485,6 @@ class PaymentServiceTest {
                 orderPaymentRepository,
                 orderRepository,
                 failingGateway,
-                new PayOSProperties(),
                 paymentCalculationService,
                 eventPublisher
         );
@@ -551,7 +547,6 @@ class PaymentServiceTest {
                 orderPaymentRepository,
                 orderRepository,
                 failingGateway,
-                new PayOSProperties(),
                 paymentCalculationService,
                 eventPublisher
         );
@@ -1005,7 +1000,7 @@ class PaymentServiceTest {
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(41L)).thenReturn(List.of(payment));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        paymentService.reconcilePendingOnlinePayments();
+        reconciliationService().reconcileBatch();
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(payment.getPaidAt()).isNotNull();
@@ -1057,9 +1052,20 @@ class PaymentServiceTest {
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(payment));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        paymentService.reconcilePendingOnlinePayments();
+        reconciliationService().reconcileBatch();
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
         verifyNoInteractions(eventPublisher);
+    }
+
+    private PaymentReconciliationService reconciliationService() {
+        PayOSProperties properties = new PayOSProperties();
+        properties.getReconciliation().setStaleAfterSeconds(0);
+        return new PaymentReconciliationService(
+                orderPaymentRepository,
+                payOSGateway,
+                properties,
+                paymentService
+        );
     }
 }
