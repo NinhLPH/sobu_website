@@ -275,6 +275,21 @@ export default function OrderTracking() {
             setCancelMessage('Đơn hàng đã được hủy.');
             await fetchPayments(response.data.id);
         } catch (error: any) {
+            try {
+                const refreshed = await CustomerService.getMyOrder(orderDetail.id);
+                if (refreshed.data.status === 'CANCELLED') {
+                    setOrderDetail(refreshed.data);
+                    setCancelMessage('Đơn hàng đã được hủy.');
+                    try {
+                        await fetchPayments(refreshed.data.id);
+                    } catch {
+                        // Payment history exposes its own error state.
+                    }
+                    return;
+                }
+            } catch {
+                // Preserve the original cancellation error when reconciliation is unavailable.
+            }
             setCancelMessage(
                 error?.response?.data?.message ||
                 error?.message ||

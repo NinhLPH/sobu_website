@@ -98,7 +98,7 @@ class OrderControllerTest {
                 .build();
 
         when(orderService.cancelMyOrder(3L, auth)).thenReturn(order);
-        when(orderResponseMapper.toDto(order)).thenReturn(dto);
+        when(orderQueryService.getMyOrderDetail(3L, auth)).thenReturn(dto);
         OrderController controller = new OrderController(orderQueryService, orderService, orderResponseMapper, idempotencyService);
 
         ResponseEntity<ApiResponseDTO<OrderResponseDto>> response = controller.cancelMyOrder(3L, auth);
@@ -107,7 +107,7 @@ class OrderControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getStatus()).isEqualTo(OrderStatus.CANCELLED);
         verify(orderService).cancelMyOrder(3L, auth);
-        verify(orderResponseMapper).toDto(order);
+        verify(orderQueryService).getMyOrderDetail(3L, auth);
     }
 
     @Test

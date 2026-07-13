@@ -158,4 +158,47 @@ describe('OrderTracking workflow', () => {
         }));
         expect(mockedRedirectToPaymentCheckout).toHaveBeenCalledWith(retryPayment);
     });
+
+    it('reconciles a cancelled order when the cancel response fails after commit', async () => {
+        mockSearchQuery = 'orderId=42';
+        mockedCustomerService.getMyOrder
+            .mockResolvedValueOnce({
+                success: true,
+                message: 'OK',
+                data: {
+                    id: 42,
+                    orderCode: 'SO-42',
+                    type: 'NORMAL',
+                    status: 'PENDING',
+                    paymentStatus: 'PENDING',
+                    totalAmount: 500000,
+                    items: []
+                }
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                message: 'OK',
+                data: {
+                    id: 42,
+                    orderCode: 'SO-42',
+                    type: 'NORMAL',
+                    status: 'CANCELLED',
+                    paymentStatus: 'PENDING',
+                    totalAmount: 500000,
+                    items: []
+                }
+            });
+        mockedCustomerService.cancelOrder.mockRejectedValue(new Error('Server returned 500'));
+        jest.spyOn(window, 'confirm').mockReturnValue(true);
+
+        render(<OrderTracking />);
+
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Hủy đơn' })).toBeTruthy());
+        fireEvent.click(screen.getByRole('button', { name: 'Hủy đơn' }));
+
+        await waitFor(() => expect(screen.getByText('Đơn hàng đã được hủy.')).toBeTruthy());
+        expect(mockedCustomerService.cancelOrder).toHaveBeenCalledTimes(1);
+        expect(mockedCustomerService.getMyOrder).toHaveBeenCalledTimes(2);
+        expect((screen.getByRole('button', { name: 'Đã hủy đơn' }) as HTMLButtonElement).disabled).toBe(true);
+    });
 });

@@ -116,8 +116,8 @@ public class OrderController {
             @PathVariable Long orderId,
             Authentication authentication
     ) {
-        Order order = orderService.cancelMyOrder(orderId, authentication);
-        OrderResponseDto response = orderResponseMapper.toDto(order);
+        orderService.cancelMyOrder(orderId, authentication);
+        OrderResponseDto response = orderQueryService.getMyOrderDetail(orderId, authentication);
         return ResponseEntity.ok(ApiResponseDTO.success(response, "Order cancelled", HttpStatus.OK.value()));
     }
 }

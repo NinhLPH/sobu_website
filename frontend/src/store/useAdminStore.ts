@@ -78,6 +78,8 @@ interface AdminState {
     workflowOrders: OrderResponseDto[];
     currentOrderDetail: OrderResponseDto | null;
     adminPayments: OrderPaymentResponseDto[];
+    isAdminPaymentsLoading: boolean;
+    adminPaymentsError: string | null;
     orderSyncQueue: OrderResponseDto[];
     pendingOrderSyncCount: number;
     ordersPage: Omit<PageResponse<OrderResponseDto>, 'content'>;
@@ -103,6 +105,7 @@ interface AdminState {
     updateRequest: (id: string, updates: Partial<ServiceRequest>) => void;
     fetchOrders: (params?: AdminOrderQueryParams) => Promise<void>;
     fetchOrderDetail: (id: string | number) => Promise<void>;
+    fetchOrderPayments: (id: string | number) => Promise<OrderPaymentResponseDto[]>;
     fetchOrderSyncQueue: () => Promise<void>;
     retryOrderSync: (id: string | number) => Promise<OrderSyncResultDto>;
     retryOrderSyncBatch: (ids: Array<string | number>) => Promise<OrderSyncBatchResult>;
@@ -120,6 +123,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     workflowOrders: [],
     currentOrderDetail: null,
     adminPayments: [],
+    isAdminPaymentsLoading: false,
+    adminPaymentsError: null,
     orderSyncQueue: [],
     pendingOrderSyncCount: 0,
     ordersPage: {
@@ -246,22 +251,52 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     fetchOrderDetail: async (id) => {
         set({
             isOrderDetailLoading: true,
+            isAdminPaymentsLoading: true,
             ordersError: null,
+            adminPaymentsError: null,
             orderActionMessage: null,
             currentOrderDetail: null,
             adminPayments: []
         });
+        const [orderResult, paymentsResult] = await Promise.allSettled([
+            AdminWorkflowService.getAdminOrderDetail(id),
+            AdminWorkflowService.getAdminOrderPayments(id)
+        ]);
+
+        set({
+            currentOrderDetail: orderResult.status === 'fulfilled'
+                ? orderResult.value.data
+                : null,
+            ordersError: orderResult.status === 'rejected'
+                ? getErrorMessage(orderResult.reason, 'Không thể tải chi tiết đơn hàng.')
+                : null,
+            adminPayments: paymentsResult.status === 'fulfilled'
+                ? paymentsResult.value.data ?? []
+                : [],
+            adminPaymentsError: paymentsResult.status === 'rejected'
+                ? getErrorMessage(paymentsResult.reason, 'Không thể tải lịch sử thanh toán.')
+                : null,
+            isOrderDetailLoading: false,
+            isAdminPaymentsLoading: false
+        });
+    },
+
+    fetchOrderPayments: async (id) => {
+        set({ isAdminPaymentsLoading: true, adminPaymentsError: null });
         try {
-            const response = await AdminWorkflowService.getAdminOrderDetail(id);
+            const response = await AdminWorkflowService.getAdminOrderPayments(id);
+            const payments = response.data ?? [];
             set({
-                currentOrderDetail: response.data,
-                isOrderDetailLoading: false
+                adminPayments: payments,
+                isAdminPaymentsLoading: false
             });
+            return payments;
         } catch (error) {
             set({
-                ordersError: getErrorMessage(error, 'Không thể tải chi tiết đơn hàng.'),
-                isOrderDetailLoading: false
+                adminPaymentsError: getErrorMessage(error, 'Không thể tải lịch sử thanh toán.'),
+                isAdminPaymentsLoading: false
             });
+            throw error;
         }
     },
 
@@ -450,6 +485,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
                     )
                 });
             }
+            try {
+                await get().fetchOrderPayments(id);
+            } catch {
+                // Keep the just-created payment visible and expose the refresh error separately.
+            }
             return response.data;
         } catch (error) {
             set({
@@ -486,6 +526,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
                     )
                 });
             }
+            try {
+                await get().fetchOrderPayments(orderId);
+            } catch {
+                // Keep the confirmed payment visible and expose the refresh error separately.
+            }
             return response.data;
         } catch (error) {
             set({
@@ -501,6 +546,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     clearCurrentOrder: () => set({
         currentOrderDetail: null,
         adminPayments: [],
+        isAdminPaymentsLoading: false,
+        adminPaymentsError: null,
         ordersError: null,
         orderActionMessage: null,
         isCreatingFinalPayment: false,

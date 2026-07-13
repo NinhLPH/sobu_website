@@ -12,10 +12,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -24,6 +27,26 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminPaymentController {
 
     private final PaymentService paymentService;
+
+    @GetMapping("/orders/{orderId}")
+    @Operation(
+            summary = "List payments for an order",
+            description = "Returns the persisted payment history for an order to staff and admin users."
+    )
+    public ResponseEntity<ApiResponseDTO<List<OrderPaymentResponseDto>>> listOrderPayments(
+            @PathVariable Long orderId,
+            Authentication authentication
+    ) {
+        requireStaff(authentication);
+        List<OrderPaymentResponseDto> payments = paymentService.refreshPaymentStatuses(orderId).stream()
+                .map(OrderPaymentResponseDto::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponseDTO.success(
+                payments,
+                "Payments retrieved",
+                HttpStatus.OK.value()
+        ));
+    }
 
     @PostMapping("/{paymentCode}/mock/confirm")
     @Operation(

@@ -17,12 +17,67 @@ describe('useAdminStore order sync', () => {
                 syncError: 'Old error'
             },
             adminPayments: [],
+            isAdminPaymentsLoading: false,
+            adminPaymentsError: null,
             isRetryingOrderSync: false,
             isCreatingFinalPayment: false,
             confirmingPaymentCode: null,
             ordersError: null,
             orderActionMessage: null
         });
+    });
+
+    it('loads order detail and persisted payment history together', async () => {
+        const payment = {
+            id: 30,
+            orderId: 12,
+            paymentCode: 'SOBU-PAY-30',
+            type: 'FULL' as const,
+            paymentMethod: 'ONLINE' as const,
+            status: 'PENDING' as const,
+            amount: 500000,
+            createdAt: '2026-07-13T10:00:00',
+            updatedAt: '2026-07-13T10:00:00'
+        };
+        mockedAdminWorkflowService.getAdminOrderDetail.mockResolvedValue({
+            success: true,
+            message: 'Order retrieved',
+            data: { id: 12, orderCode: 'SO-12', status: 'PENDING' }
+        });
+        mockedAdminWorkflowService.getAdminOrderPayments.mockResolvedValue({
+            success: true,
+            message: 'Payments retrieved',
+            data: [payment]
+        });
+
+        await useAdminStore.getState().fetchOrderDetail(12);
+        const state = useAdminStore.getState();
+
+        expect(mockedAdminWorkflowService.getAdminOrderDetail).toHaveBeenCalledWith(12);
+        expect(mockedAdminWorkflowService.getAdminOrderPayments).toHaveBeenCalledWith(12);
+        expect(state.currentOrderDetail?.orderCode).toBe('SO-12');
+        expect(state.adminPayments).toEqual([payment]);
+        expect(state.adminPaymentsError).toBeNull();
+        expect(state.isAdminPaymentsLoading).toBe(false);
+    });
+
+    it('keeps order detail visible when payment history fails to load', async () => {
+        mockedAdminWorkflowService.getAdminOrderDetail.mockResolvedValue({
+            success: true,
+            message: 'Order retrieved',
+            data: { id: 12, orderCode: 'SO-12', status: 'PENDING' }
+        });
+        mockedAdminWorkflowService.getAdminOrderPayments.mockRejectedValue({
+            response: { data: { message: 'Payment history unavailable' } }
+        });
+
+        await useAdminStore.getState().fetchOrderDetail(12);
+        const state = useAdminStore.getState();
+
+        expect(state.currentOrderDetail?.id).toBe(12);
+        expect(state.adminPayments).toEqual([]);
+        expect(state.adminPaymentsError).toBe('Payment history unavailable');
+        expect(state.ordersError).toBeNull();
     });
 
     it('merges the retry result into the current order detail', async () => {
@@ -103,6 +158,11 @@ describe('useAdminStore order sync', () => {
                 status: 'READY_FOR_FINAL_PAYMENT'
             }
         });
+        mockedAdminWorkflowService.getAdminOrderPayments.mockResolvedValue({
+            success: true,
+            message: 'Payments retrieved',
+            data: [finalPayment]
+        });
 
         const result = await useAdminStore.getState().createPreorderFinalPayment(12);
         const state = useAdminStore.getState();
@@ -112,6 +172,7 @@ describe('useAdminStore order sync', () => {
         expect(state.currentOrderDetail?.status).toBe('READY_FOR_FINAL_PAYMENT');
         expect(state.isCreatingFinalPayment).toBe(false);
         expect(state.orderActionMessage).toBe('Final payment created');
+        expect(mockedAdminWorkflowService.getAdminOrderPayments).toHaveBeenCalledWith(12);
     });
 
     it('confirms a mock payment and replaces it with the paid response', async () => {
@@ -146,6 +207,15 @@ describe('useAdminStore order sync', () => {
                 remainingAmount: 0
             }
         });
+        mockedAdminWorkflowService.getAdminOrderPayments.mockResolvedValue({
+            success: true,
+            message: 'Payments retrieved',
+            data: [{
+                ...pendingPayment,
+                status: 'PAID',
+                paidAt: '2026-06-14T10:05:00'
+            }]
+        });
 
         await useAdminStore.getState().confirmMockPayment(' SOBU-PAY-MOCK ');
         const state = useAdminStore.getState();
@@ -156,5 +226,6 @@ describe('useAdminStore order sync', () => {
         expect(state.adminPayments[0].status).toBe('PAID');
         expect(state.currentOrderDetail?.paymentStatus).toBe('PAID');
         expect(state.confirmingPaymentCode).toBeNull();
+        expect(mockedAdminWorkflowService.getAdminOrderPayments).toHaveBeenCalledWith(12);
     });
 });

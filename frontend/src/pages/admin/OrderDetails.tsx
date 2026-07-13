@@ -107,6 +107,7 @@ export default function AdminOrderDetail() {
         currentOrderDetail: order,
         adminPayments,
         fetchOrderDetail,
+        fetchOrderPayments,
         retryOrderSync,
         createPreorderFinalPayment,
         confirmMockPayment,
@@ -114,6 +115,8 @@ export default function AdminOrderDetail() {
         clearOrdersError,
         clearOrderActionMessage,
         isOrderDetailLoading,
+        isAdminPaymentsLoading,
+        adminPaymentsError,
         retryingOrderIds,
         isCreatingFinalPayment,
         confirmingPaymentCode,
@@ -141,6 +144,17 @@ export default function AdminOrderDetail() {
             await retryOrderSync(id);
         } catch {
             // The admin store exposes the backend message through ordersError.
+        }
+    };
+
+    const handleRetryPayments = async () => {
+        if (!id) {
+            return;
+        }
+        try {
+            await fetchOrderPayments(id);
+        } catch {
+            // The admin store exposes the payment-specific error below.
         }
     };
 
@@ -338,7 +352,11 @@ export default function AdminOrderDetail() {
                                 </h2>
                             </div>
                             <span className="text-[9px] font-black uppercase text-outline">
-                                {adminPayments.length} giao dịch trong phiên
+                                {isAdminPaymentsLoading
+                                    ? 'Đang tải giao dịch...'
+                                    : adminPaymentsError
+                                        ? 'Chưa xác định'
+                                        : `${adminPayments.length} giao dịch đã ghi nhận`}
                             </span>
                         </div>
 
@@ -385,7 +403,32 @@ export default function AdminOrderDetail() {
                             </div>
                         </div>
 
-                        {adminPayments.length > 0 ? (
+                        {isAdminPaymentsLoading && adminPayments.length === 0 && (
+                            <div className="flex items-center justify-center gap-2 rounded-xl border border-outline-variant/20 p-4 text-xs font-bold text-outline">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Đang tải lịch sử thanh toán...
+                            </div>
+                        )}
+
+                        {adminPaymentsError && (
+                            <div className="flex flex-col gap-3 rounded-xl border border-error/20 bg-error/10 p-4 text-xs font-bold text-error sm:flex-row sm:items-center sm:justify-between">
+                                <span className="flex items-start gap-2">
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    {adminPaymentsError}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleRetryPayments}
+                                    disabled={isAdminPaymentsLoading}
+                                    className="flex items-center justify-center gap-2 rounded-lg border border-error/20 px-3 py-2 text-[9px] font-black uppercase disabled:opacity-50"
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${isAdminPaymentsLoading ? 'animate-spin' : ''}`} />
+                                    Thử lại
+                                </button>
+                            </div>
+                        )}
+
+                        {adminPayments.length > 0 && (
                             <div className="space-y-3">
                                 {adminPayments.map(payment => (
                                     <div
@@ -427,9 +470,11 @@ export default function AdminOrderDetail() {
                                     </div>
                                 ))}
                             </div>
-                        ) : (
+                        )}
+
+                        {!isAdminPaymentsLoading && !adminPaymentsError && adminPayments.length === 0 && (
                             <p className="rounded-xl border border-dashed border-outline-variant/30 p-4 text-xs font-medium leading-relaxed text-outline">
-                                Các giao dịch vừa tạo hoặc xác nhận trong màn hình này sẽ xuất hiện tại đây.
+                                Chưa có giao dịch thanh toán nào được ghi nhận cho đơn hàng này.
                             </p>
                         )}
                     </section>
