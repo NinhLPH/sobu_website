@@ -94,6 +94,7 @@ public class Order {
     private String nhanhOrderCode;
     private Long carrierId;
     private Long carrierServiceId;
+    private String trackingUrl;
 
     @Column(precision = 19, scale = 2)
     @Builder.Default

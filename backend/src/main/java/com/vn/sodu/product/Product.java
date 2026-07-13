@@ -106,6 +106,10 @@ public class Product {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean active = true;
+
     // fallback
     @Column(columnDefinition = "TEXT")
     private String rawData;

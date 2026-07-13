@@ -17,6 +17,7 @@ import java.util.Optional;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByOrderCode(String orderCode);
+    Optional<Order> findByAppOrderId(String appOrderId);
     Optional<Order> findByRequestId(Long requestId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

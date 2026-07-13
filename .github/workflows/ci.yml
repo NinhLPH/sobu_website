@@ -77,6 +77,7 @@ jobs:
       NHANH_BUSINESS_ID: "0"
       NHANH_BASE_URL: https://pos.open.nhanh.vn/api
       NHANH_SYNC_CRON: "0 0 * * * *"
+      NHANH_WEBHOOKS_VERIFYTOKEN: ""
       MAIL_HOST: smtp.gmail.com
       MAIL_PORT: "587"
       MAIL_USERNAME: ci@example.com

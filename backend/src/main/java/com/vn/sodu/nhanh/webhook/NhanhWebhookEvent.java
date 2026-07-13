@@ -13,7 +13,8 @@ public enum NhanhWebhookEvent {
     ORDER_UPDATE("orderUpdate"),
     ORDER_DELETE("orderDelete"),
     ORDER_PARTIAL_RETURN("orderPartialReturn"),
-    PAYMENT_RECEIVED("paymentReceived");
+    PAYMENT_RECEIVED("paymentReceived"),
+    APP_UNINSTALLED("appUninstalled");
 
     private final String eventName;
 
