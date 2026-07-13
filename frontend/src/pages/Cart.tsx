@@ -130,6 +130,14 @@ const isUsableShippingQuote = (
     quote: ShippingQuoteDto | null | undefined
 ): quote is CompleteShippingQuote => normalizeShippingQuote(quote) !== null;
 
+const TEMPORARY_SHIPPING_CARRIER_ID = 29;
+const TEMPORARY_SHIPPING_CARRIER_SERVICE_ID = 186;
+
+// TODO(backend): Remove this temporary checkout restriction after the shipping quotes contract is stable.
+const isTemporarySupportedShippingQuote = (quote: CompleteShippingQuote) =>
+    quote.carrierId === TEMPORARY_SHIPPING_CARRIER_ID &&
+    quote.carrierServiceId === TEMPORARY_SHIPPING_CARRIER_SERVICE_ID;
+
 const normalizeSearchText = (value: unknown) =>
     typeof value === 'string'
         ? value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -567,7 +575,8 @@ export default function Cart() {
                 const quotes = response.data ?? [];
                 const usableQuotes = quotes
                     .map(normalizeShippingQuote)
-                    .filter((quote): quote is CompleteShippingQuote => quote !== null);
+                    .filter((quote): quote is CompleteShippingQuote => quote !== null)
+                    .filter(isTemporarySupportedShippingQuote);
                 setShippingQuotes(usableQuotes);
                 if (usableQuotes.length === 0) {
                     setShippingQuoteError(
@@ -636,8 +645,10 @@ export default function Cart() {
 
             const confirmedQuote = (response.data ?? [])
                 .map(normalizeShippingQuote)
+                .filter((item): item is CompleteShippingQuote => item !== null)
+                .filter(isTemporarySupportedShippingQuote)
                 .find((item): item is CompleteShippingQuote =>
-                    item !== null && shippingQuoteKey(item, index) === key
+                    shippingQuoteKey(item, index) === key
                 );
             if (!confirmedQuote) {
                 throw new Error('Khong the xac nhan phi giao hang da chon. Vui long chon phuong thuc khac.');

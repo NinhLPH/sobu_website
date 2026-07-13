@@ -69,9 +69,9 @@ const locationTree = {
 };
 
 const shippingQuote = {
-    carrierId: 10,
+    carrierId: 29,
     carrierName: 'GHN',
-    carrierServiceId: 20,
+    carrierServiceId: 186,
     carrierServiceName: 'Standard',
     shipFee: 32000,
     customerShipFee: 30000,
@@ -80,9 +80,9 @@ const shippingQuote = {
 };
 
 const expressShippingQuote = {
-    carrierId: 30,
+    carrierId: 29,
     carrierName: 'AhaMove',
-    carrierServiceId: 40,
+    carrierServiceId: 186,
     carrierServiceName: 'Hoa toc',
     shipFee: 14000,
     customerShipFee: 14000,
@@ -93,9 +93,9 @@ const expressShippingQuote = {
 const shippingQuotes = [shippingQuote, expressShippingQuote];
 
 const stringCarrierShippingQuote = {
-    carrierId: '50',
+    carrierId: '29',
     carrierName: 'Viettel Post',
-    carrierServiceId: '60',
+    carrierServiceId: '186',
     carrierServiceName: 'Nhanh',
     shipFee: '22000',
     customerShipFee: '21000',
@@ -103,11 +103,11 @@ const stringCarrierShippingQuote = {
     description: null
 };
 
-const nullCarrierShippingQuotes = [
+const temporarySupportedShippingQuotes = [
     {
-        carrierId: null,
+        carrierId: 29,
         carrierName: null,
-        carrierServiceId: null,
+        carrierServiceId: 186,
         carrierServiceName: null,
         shipFee: 14000,
         customerShipFee: 14000,
@@ -115,9 +115,9 @@ const nullCarrierShippingQuotes = [
         description: null
     },
     {
-        carrierId: null,
+        carrierId: 29,
         carrierName: null,
-        carrierServiceId: null,
+        carrierServiceId: 186,
         carrierServiceName: 'Hỏa tốc (null)',
         shipFee: 14000,
         customerShipFee: 14000,
@@ -232,6 +232,53 @@ describe('Cart payment selection', () => {
         expect(screen.getAllByText(/30\.000/)).not.toHaveLength(0);
     });
 
+    it('only renders the temporarily supported carrier service', async () => {
+        mockedShippingService.getQuotes.mockResolvedValueOnce({
+            success: true,
+            statusCode: 200,
+            message: 'Shipping quotes retrieved',
+            data: [
+                shippingQuote,
+                {
+                    ...expressShippingQuote,
+                    carrierId: 30,
+                    carrierServiceId: 40,
+                    carrierName: 'Unsupported carrier'
+                }
+            ]
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+
+        expect(await screen.findByText(/GHN/)).toBeTruthy();
+        expect(screen.queryByText('Unsupported carrier')).toBeNull();
+    });
+
+    it('keeps checkout disabled when the response has no temporarily supported quote', async () => {
+        mockedShippingService.getQuotes.mockResolvedValueOnce({
+            success: true,
+            statusCode: 200,
+            message: 'Shipping quotes retrieved',
+            data: [{
+                ...shippingQuote,
+                carrierId: 30,
+                carrierServiceId: 40,
+                carrierName: 'Unsupported carrier'
+            }]
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+
+        await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(
+            screen.getByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')
+        ).toBeTruthy());
+        expect(screen.queryByText('Unsupported carrier')).toBeNull();
+        expect(getCheckoutButton().disabled).toBe(true);
+    });
+
     it('does not request new shipping quotes when the detailed address changes', async () => {
         render(<Cart />);
         selectShippingLocation();
@@ -245,13 +292,20 @@ describe('Cart payment selection', () => {
         expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1);
     });
 
-    it('renders fee-backed quotes with missing carrier info and submits without carrier ids', async () => {
-        mockedShippingService.getQuotes.mockResolvedValueOnce({
-            success: true,
-            statusCode: 200,
-            message: 'Shipping quotes retrieved',
-            data: nullCarrierShippingQuotes
-        });
+    it('confirms temporarily supported quotes before creating an order', async () => {
+        mockedShippingService.getQuotes
+            .mockResolvedValueOnce({
+                success: true,
+                statusCode: 200,
+                message: 'Shipping quotes retrieved',
+                data: temporarySupportedShippingQuotes
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                statusCode: 200,
+                message: 'Shipping quote confirmed',
+                data: temporarySupportedShippingQuotes
+            });
 
         render(<Cart />);
         selectShippingLocation();
@@ -263,17 +317,17 @@ describe('Cart payment selection', () => {
         fireEvent.click(standardOption);
 
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
-        expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1);
+        expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(2);
 
         fireEvent.click(getCheckoutButton());
 
         await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
+            carrierId: 29,
+            carrierServiceId: 186,
             shippingFee: 14000
         }), {
             clearCartOnSuccess: false
         }));
-        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('carrierId');
-        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('carrierServiceId');
     });
 
     it('does not render invalid shipping quotes or enable checkout', async () => {
@@ -319,8 +373,8 @@ describe('Cart payment selection', () => {
         fireEvent.click(getCheckoutButton());
 
         await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
-            carrierId: 50,
-            carrierServiceId: 60,
+            carrierId: 29,
+            carrierServiceId: 186,
             shippingFee: 21000
         }), {
             clearCartOnSuccess: false
@@ -351,8 +405,8 @@ describe('Cart payment selection', () => {
             customerWardId: 3,
             cartSubtotal: 350000,
             codAmount: 0,
-            carrierId: 10,
-            carrierServiceId: 20
+            carrierId: 29,
+            carrierServiceId: 186
         }));
 
         expect(getCheckoutButton().disabled).toBe(true);
@@ -362,10 +416,25 @@ describe('Cart payment selection', () => {
             success: true,
             statusCode: 200,
             message: 'Shipping quote confirmed',
-            data: [shippingQuote]
+            data: [
+                {
+                    ...shippingQuote,
+                    carrierId: 30,
+                    carrierServiceId: 40,
+                    carrierName: 'Unsupported carrier'
+                },
+                shippingQuote
+            ]
         });
 
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
+        fireEvent.click(getCheckoutButton());
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
+            carrierId: 29,
+            carrierServiceId: 186
+        }), {
+            clearCartOnSuccess: false
+        }));
     });
 
     it('keeps checkout disabled when quote confirmation no longer returns the selected option', async () => {
@@ -432,8 +501,8 @@ describe('Cart payment selection', () => {
         fireEvent.click(screen.getByRole('button', { name: /COD/i }));
 
         await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
-            carrierId: 30,
-            carrierServiceId: 40,
+            carrierId: 29,
+            carrierServiceId: 186,
             shippingFee: 14000,
             customerAddress: '123 Nguyen Trai'
         }), {
