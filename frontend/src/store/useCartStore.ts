@@ -11,6 +11,7 @@ import { createIdempotencyKey } from '../utils/idempotency';
 import { CartItemDto } from '../interface/cart.dto';
 import { authStorage } from '../utils/auth-storage';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
+import { cartFallback } from '../utils/cart-fallback';
 
 type CheckoutDetails =
     Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
@@ -40,8 +41,11 @@ const mapCartItemDto = (dto: CartItemDto): CartItem => ({
     quantity: dto.quantity,
 });
 
+const isAuthError = (error: any) =>
+    error?.response?.status === 401 || error?.response?.status === 403;
+
 const handleAuthError = (error: any) => {
-    if (error?.response?.status === 401 || error?.response?.status === 403) {
+    if (isAuthError(error)) {
         ToastService.error('Vui lòng đăng nhập để sử dụng giỏ hàng');
         return true;
     }
@@ -50,6 +54,7 @@ const handleAuthError = (error: any) => {
 
 interface CartState {
     items: CartItem[];
+    isUsingFallback: boolean;
     isLoading: boolean;
     isSubmitting: boolean;
     checkoutError: string | null;
@@ -69,6 +74,7 @@ interface CartState {
 
 export const useCartStore = create<CartState>((set, get) => ({
     items: [],
+    isUsingFallback: false,
     isLoading: false,
     isSubmitting: false,
     checkoutError: null,
@@ -78,7 +84,13 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     fetchCart: async () => {
         if (!authStorage.getAccessToken()) {
-            set({ items: [], isLoading: false });
+            set({ items: [], isLoading: false, isUsingFallback: false });
+            return;
+        }
+
+        const fallbackItems = cartFallback.get();
+        if (fallbackItems !== null) {
+            set({ items: fallbackItems, isLoading: false, isUsingFallback: true });
             return;
         }
 
@@ -91,16 +103,39 @@ export const useCartStore = create<CartState>((set, get) => ({
                 const items = serverItems.length > 0
                     ? serverItems
                     : pendingOnlineCart?.items ?? [];
-                set({ items, isLoading: false });
+                set({ items, isLoading: false, isUsingFallback: false });
                 return;
             }
-            set({ isLoading: false });
-        } catch {
-            set({ isLoading: false });
+            set({ items: [], isLoading: false, isUsingFallback: true });
+            cartFallback.save([]);
+        } catch (error) {
+            if (isAuthError(error)) {
+                set({ isLoading: false });
+                return;
+            }
+
+            set({ items: [], isLoading: false, isUsingFallback: true });
+            cartFallback.save([]);
         }
     },
 
     addToCart: async (product, quantity = 1) => {
+        const addToFallback = () => {
+            const items = [
+                ...get().items.filter(item => item.product.id !== product.id),
+                { product, quantity }
+            ];
+            onlineCartRecovery.clear();
+            cartFallback.save(items);
+            set({ items, isUsingFallback: true });
+        };
+
+        if (get().isUsingFallback) {
+            addToFallback();
+            ToastService.success('Đã thêm sản phẩm vào giỏ hàng');
+            return;
+        }
+
         try {
             const response = await CustomerService.addCartItem({
                 productId: product.id,
@@ -114,28 +149,49 @@ export const useCartStore = create<CartState>((set, get) => ({
                 onlineCartRecovery.clear();
                 const items = (response.data?.items || []).map(mapCartItemDto);
                 set({ items });
+            } else {
+                addToFallback();
             }
             ToastService.success('Đã thêm sản phẩm vào giỏ hàng');
         } catch (error: any) {
             if (!handleAuthError(error)) {
-                ToastService.error(getErrorMessage(error, 'Không thể thêm sản phẩm vào giỏ hàng'));
+                addToFallback();
+                ToastService.success('Đã thêm sản phẩm vào giỏ hàng');
             }
         }
     },
 
     removeFromCart: async (productId) => {
         const previousItems = get().items;
-        set({ items: previousItems.filter(item => item.product.id !== productId) });
+        const items = previousItems.filter(item => item.product.id !== productId);
+        set({ items });
+
+        const removeFromFallback = () => {
+            onlineCartRecovery.clear();
+            cartFallback.save(items);
+            set({ isUsingFallback: true });
+        };
+
+        if (get().isUsingFallback) {
+            removeFromFallback();
+            ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
+            return;
+        }
+
         try {
             const response = await CustomerService.removeCartItem(productId);
             if (response.success) {
                 onlineCartRecovery.clear();
-                ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
+            } else {
+                removeFromFallback();
             }
+            ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
         } catch (error: any) {
-            set({ items: previousItems });
-            if (!handleAuthError(error)) {
-                ToastService.error(getErrorMessage(error, 'Không thể xóa sản phẩm'));
+            if (handleAuthError(error)) {
+                set({ items: previousItems });
+            } else {
+                removeFromFallback();
+                ToastService.warning('Đã xóa sản phẩm khỏi giỏ hàng');
             }
         }
     },
@@ -143,20 +199,36 @@ export const useCartStore = create<CartState>((set, get) => ({
     updateQuantity: async (productId, quantity) => {
         const safeQuantity = Math.max(1, quantity);
         const previousItems = get().items;
-        set({
-            items: previousItems.map(item =>
-                item.product.id === productId
-                    ? { ...item, quantity: safeQuantity }
-                    : item
-            )
-        });
-        try {
-            await CustomerService.updateCartItem(productId, safeQuantity);
+        const items = previousItems.map(item =>
+            item.product.id === productId
+                ? { ...item, quantity: safeQuantity }
+                : item
+        );
+        set({ items });
+
+        const updateFallback = () => {
             onlineCartRecovery.clear();
+            cartFallback.save(items);
+            set({ isUsingFallback: true });
+        };
+
+        if (get().isUsingFallback) {
+            updateFallback();
+            return;
+        }
+
+        try {
+            const response = await CustomerService.updateCartItem(productId, safeQuantity);
+            if (response.success) {
+                onlineCartRecovery.clear();
+            } else {
+                updateFallback();
+            }
         } catch (error: any) {
-            set({ items: previousItems });
-            if (!handleAuthError(error)) {
-                ToastService.error(getErrorMessage(error, 'Không thể cập nhật số lượng'));
+            if (handleAuthError(error)) {
+                set({ items: previousItems });
+            } else {
+                updateFallback();
             }
         }
     },
@@ -164,13 +236,30 @@ export const useCartStore = create<CartState>((set, get) => ({
     clearCart: async () => {
         const previousItems = get().items;
         set({ items: [] });
-        try {
-            await CustomerService.clearCart();
+
+        const clearFallback = () => {
             onlineCartRecovery.clear();
+            cartFallback.save([]);
+            set({ isUsingFallback: true });
+        };
+
+        if (get().isUsingFallback) {
+            clearFallback();
+            return;
+        }
+
+        try {
+            const response = await CustomerService.clearCart();
+            if (response.success) {
+                onlineCartRecovery.clear();
+            } else {
+                clearFallback();
+            }
         } catch (error: any) {
-            set({ items: previousItems });
-            if (!handleAuthError(error)) {
-                ToastService.error(getErrorMessage(error, 'Không thể xóa giỏ hàng'));
+            if (handleAuthError(error)) {
+                set({ items: previousItems });
+            } else {
+                clearFallback();
             }
         }
     },
@@ -243,12 +332,17 @@ export const useCartStore = create<CartState>((set, get) => ({
             }
 
             if (shouldClearCart) {
-                await CustomerService.clearCart();
+                if (get().isUsingFallback) {
+                    cartFallback.clear();
+                } else {
+                    await CustomerService.clearCart();
+                }
                 onlineCartRecovery.clear();
             }
 
             set({
                 ...(shouldClearCart ? { items: [] } : {}),
+                ...(shouldClearCart ? { isUsingFallback: false } : {}),
                 isSubmitting: false,
                 checkoutError: null,
                 lastCreatedOrder: response.data,
