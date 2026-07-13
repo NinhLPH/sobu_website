@@ -12,7 +12,8 @@ jest.mock('react-router-dom', () => ({
     Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
         <a href={to}>{children}</a>
     ),
-    useSearchParams: () => [new URLSearchParams(mockSearchQuery)]
+    useSearchParams: () => [new URLSearchParams(mockSearchQuery)],
+    useParams: () => ({})
 }), { virtual: true });
 jest.mock('../service/custom.service');
 jest.mock('../store/usePaymentStore');

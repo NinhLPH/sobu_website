@@ -1,12 +1,14 @@
 package com.vn.sodu.order;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.global.idempotency.IdempotencyScope;
 import com.vn.sodu.global.idempotency.IdempotencyService;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
 import com.vn.sodu.order.controller.OrderController;
 import com.vn.sodu.order.dtos.OrderResponseDto;
+import com.vn.sodu.order.dtos.CustomerOrderListItemDto;
 import com.vn.sodu.order.mapper.OrderResponseMapper;
 import com.vn.sodu.order.services.OrderQueryService;
 import com.vn.sodu.order.services.OrderService;
@@ -16,10 +18,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -61,6 +66,28 @@ class OrderControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getOrderCode()).isEqualTo("SOBU-REQ-1");
         verify(orderQueryService).getMyOrderDetail(1L, auth);
+    }
+
+    @Test
+    void listMyOrdersReturnsAuthenticatedCustomerPage() {
+        Authentication auth = customerAuth();
+        CustomerOrderListItemDto dto = CustomerOrderListItemDto.builder().id(1L).orderCode("SOBU-REQ-1").build();
+        when(orderQueryService.listMyOrders(
+                auth, 0, 10, "SOBU", "NEW", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 10), "createdAt", "DESC"
+        )).thenReturn(new PageImpl<>(List.of(dto), PageRequest.of(0, 10), 1));
+        OrderController controller = new OrderController(orderQueryService, orderService, orderResponseMapper, idempotencyService);
+
+        ResponseEntity<ApiResponseDTO<PageResponse<CustomerOrderListItemDto>>> response = controller.listMyOrders(
+                auth, 0, 10, "SOBU", "NEW", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 10), "createdAt", "DESC"
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData().getContent()).extracting(CustomerOrderListItemDto::getOrderCode)
+                .containsExactly("SOBU-REQ-1");
+        verify(orderQueryService).listMyOrders(
+                auth, 0, 10, "SOBU", "NEW", LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 10), "createdAt", "DESC"
+        );
     }
 
     @Test

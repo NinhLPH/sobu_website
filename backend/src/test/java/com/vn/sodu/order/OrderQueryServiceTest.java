@@ -1,6 +1,7 @@
 package com.vn.sodu.order;
 
 import com.vn.sodu.order.dtos.OrderResponseDto;
+import com.vn.sodu.order.dtos.CustomerOrderListItemDto;
 import com.vn.sodu.order.mapper.OrderResponseMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.order.services.OrderQueryService;
@@ -24,6 +25,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,6 +65,43 @@ class OrderQueryServiceTest {
         assertThat(page.getContent().get(0).getOrderCode()).isEqualTo("SOBU-REQ-1");
         assertThat(page.getContent().get(0).getRequestCode()).isEqualTo("REQ-1");
         assertThat(page.getContent().get(0).getItems()).hasSize(1);
+    }
+
+    @Test
+    void listMyOrdersScopesResultsAndAppliesCustomerFilters() {
+        Authentication auth = customerAuth();
+        LocalDate createdFrom = LocalDate.of(2026, 7, 1);
+        LocalDate createdTo = LocalDate.of(2026, 7, 10);
+        LocalDateTime expectedFrom = createdFrom.atStartOfDay();
+        LocalDateTime expectedTo = createdTo.plusDays(1).atStartOfDay();
+        PageRequest expectedPageable = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "totalAmount"));
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("customer@example.com")));
+        when(orderRepository.findCustomerOrders(
+                "customer@example.com", "SOBU", OrderStatus.NEW, expectedFrom, expectedTo, expectedPageable
+        )).thenReturn(new PageImpl<>(List.of(sampleOrder()), expectedPageable, 11));
+
+        Page<CustomerOrderListItemDto> page = service.listMyOrders(
+                auth, 1, 10, " SOBU ", "NEW", createdFrom, createdTo, "totalAmount", "ASC"
+        );
+
+        assertThat(page.getTotalElements()).isEqualTo(11);
+        assertThat(page.getContent()).extracting(CustomerOrderListItemDto::getOrderCode).containsExactly("SOBU-REQ-1");
+    }
+
+    @Test
+    void listMyOrdersUsesSafeCustomerPagingDefaults() {
+        Authentication auth = customerAuth();
+        PageRequest expectedPageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account("customer@example.com")));
+        when(orderRepository.findCustomerOrders(
+                "customer@example.com", null, null, null, null, expectedPageable
+        )).thenReturn(new PageImpl<>(List.of(), expectedPageable, 0));
+
+        Page<CustomerOrderListItemDto> page = service.listMyOrders(
+                auth, -1, 0, null, "ALL", null, null, "syncStatus", "invalid"
+        );
+
+        assertThat(page).isEmpty();
     }
 
     @Test

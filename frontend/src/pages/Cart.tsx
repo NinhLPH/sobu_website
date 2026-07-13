@@ -791,7 +791,7 @@ export default function Cart() {
                     return;
                 }
                 navigate(
-                    `/tracking?orderId=${encodeURIComponent(String(order.id))}&paymentSetup=cod`,
+                    `/orders/${encodeURIComponent(String(order.id))}?paymentSetup=cod`,
                     { replace: true }
                 );
             } catch (error: any) {
@@ -800,7 +800,7 @@ export default function Cart() {
                     'Đơn hàng đã được tạo nhưng chưa thể khởi tạo thanh toán. Bạn có thể thử lại trong trang theo dõi đơn.'
                 ));
                 navigate(
-                    `/tracking?orderId=${encodeURIComponent(String(order.id))}&paymentSetup=failed`,
+                    `/orders/${encodeURIComponent(String(order.id))}?paymentSetup=failed`,
                     { replace: true }
                 );
             }

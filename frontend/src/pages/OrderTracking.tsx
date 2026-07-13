@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
     CreditCard,
     ChevronRight,
@@ -129,8 +129,9 @@ const paymentTypeLabels: Record<OrderPaymentType, string> = {
 };
 
 export default function OrderTracking() {
+    const { orderId: routeOrderId } = useParams<{ orderId?: string }>();
     const [searchParams] = useSearchParams();
-    const initialOrderId = searchParams.get('orderId') || '';
+    const initialOrderId = routeOrderId || searchParams.get('orderId') || '';
     const initialNhanhOrderId = searchParams.get('nhanhOrderId') || '';
     const initialReference = initialOrderId || initialNhanhOrderId;
     const initialTrackingType: TrackingType = initialOrderId ? 'internal' : 'nhanh';
@@ -331,7 +332,9 @@ export default function OrderTracking() {
             <nav className="mb-6 flex items-center gap-2 text-xs font-bold text-on-surface-variant">
                 <Link to="/" className="transition-colors hover:text-primary">Trang chủ</Link>
                 <ChevronRight className="h-3.5 w-3.5" />
-                <span className="text-primary">Tra cứu đơn hàng</span>
+                <Link to="/orders" className="transition-colors hover:text-primary">Đơn hàng của tôi</Link>
+                <ChevronRight className="h-3.5 w-3.5" />
+                <span className="text-primary">Chi tiết đơn hàng</span>
             </nav>
 
             <div className="mx-auto mb-10 max-w-xl text-center">
@@ -585,7 +588,7 @@ export default function OrderTracking() {
                                     Lịch sử thanh toán
                                 </h2>
                                 <p className="mt-1 text-[11px] font-medium text-outline">
-                                    Trạng thái được đồng bộ lại từ backend và webhook PayOS.
+                                    Trạng thái đơn hàng được cập nhật từ backend và webhook PayOS.
                                 </p>
                             </div>
                             <button

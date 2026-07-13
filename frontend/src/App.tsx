@@ -25,6 +25,8 @@ import RequestDetail from "./pages/RequestDetail";
 import AdminSync from "./pages/admin/Sync";
 import AdminNhanhCallback from "./pages/admin/NhanhCallback";
 import OrderTracking from "./pages/OrderTracking";
+import MyOrders from "./pages/MyOrders";
+import LegacyTrackingRedirect from "./pages/LegacyTrackingRedirect";
 import PaymentResult from "./pages/PaymentResult";
 import StaticPage from "./pages/StaticPage";
 import UserProfile from "./pages/UserProfile";
@@ -72,7 +74,6 @@ export default function App() {
                         <Route path="/terms" element={<StaticPage slug="terms"/>}/>
                         <Route path="/policies/privacy" element={<StaticPage slug="privacy-policy"/>}/>
                         <Route path="/policies/terms" element={<StaticPage slug="terms"/>}/>
-                        <Route path="/tracking" element={<OrderTracking/>}/>
                         <Route path="/payment-result" element={<PaymentResult/>}/>
                         <Route path="/payment/return" element={<PaymentResult/>}/>
                         <Route path="/payment/cancel" element={<PaymentResult/>}/>
@@ -81,6 +82,10 @@ export default function App() {
                         <Route element={<ProtectedRoute allowedRoles={['USER', 'ADMIN']} />}>
                             <Route path="/cart" element={<Cart/>}/>
                             <Route path="/profile" element={<UserProfile/>}/>
+                            <Route path="/orders" element={<MyOrders/>}/>
+                            <Route path="/orders/lookup" element={<OrderTracking/>}/>
+                            <Route path="/orders/:orderId" element={<OrderTracking/>}/>
+                            <Route path="/tracking" element={<LegacyTrackingRedirect/>}/>
                             <Route path="/requests" element={<MyRequests/>}/>
                             <Route path="/requests/new" element={<CreateRequest/>}/>
                             <Route path="/requests/:id" element={<RequestDetail/>}/>

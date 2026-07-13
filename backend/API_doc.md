@@ -3242,6 +3242,82 @@ Uses the common error responses. Typical statuses: `400`, `401`, `500`.
 
 ## Endpoint
 
+**List My Orders**
+
+### Method
+
+`GET`
+
+### URI
+
+`/api/orders/me`
+
+### Description
+
+Returns a paginated order history for the authenticated customer only. The response intentionally excludes order synchronization fields and sync controls.
+
+### Authorization
+
+| Type | Required |
+| ---- | -------- |
+| Bearer Token | Yes |
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+| --------- | ---- | -------- | ------- | ----------- |
+| page | Integer | No | 0 | Zero-based page index |
+| size | Integer | No | 10 | Page size, maximum 100 |
+| query | String | No | - | Matches SOBU order code or Nhanh ID/code |
+| status | String | No | - | Order status; omit or use `ALL` for every status |
+| createdFrom | Date | No | - | Inclusive creation date in `YYYY-MM-DD` |
+| createdTo | Date | No | - | Inclusive creation date in `YYYY-MM-DD` |
+| sortBy | String | No | createdAt | One of `createdAt`, `totalAmount`, `status` |
+| sortDirection | String | No | DESC | `ASC` or `DESC` |
+
+### Success Response
+
+#### HTTP Status
+
+`200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Orders retrieved",
+  "data": {
+    "content": [{
+      "id": 1,
+      "orderCode": "ORD-001",
+      "type": "NORMAL",
+      "status": "PROCESSING",
+      "totalAmount": 730000,
+      "paidAmount": 0,
+      "remainingAmount": 730000,
+      "paymentStatus": "PENDING",
+      "createdAt": "2026-07-13T10:00:00"
+    }],
+    "pageNumber": 0,
+    "pageSize": 10,
+    "totalElements": 1,
+    "totalPages": 1,
+    "hasNext": false,
+    "hasPrevious": false
+  }
+}
+```
+
+### Error Responses
+
+Uses the common error responses. Typical statuses: `400`, `401`, `500`.
+
+### Notes
+
+* The authenticated account email determines visible orders; callers cannot select another customer.
+* Alias available at `/api/v1/orders/me`.
+
+## Endpoint
+
 **Get My Order Detail**
 
 ### Method
@@ -3314,7 +3390,7 @@ Uses the common error responses. Typical statuses: `401`, `404`, `500`.
 
 ### Business Rules
 
-* Order visibility is bound to the authenticated account phone.
+* Order visibility is bound to the authenticated account email.
 
 ### Notes
 
