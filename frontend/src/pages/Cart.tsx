@@ -15,6 +15,7 @@ import { ShippingService } from '../service/shipping.service';
 import { ShippingQuoteDto } from '../interface/shipping.model';
 import { LocationCity, LocationDistrict, LocationWard } from '../interface/location.model';
 import { parseJsonConfig } from '../utils/website-config';
+import { getPaymentCheckoutErrorMessage } from '../utils/payment-checkout-error';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -783,11 +784,10 @@ export default function Cart() {
                     { replace: true }
                 );
             } catch (error: any) {
-                ToastService.error(
-                    error?.response?.data?.message ||
-                    error?.message ||
+                ToastService.error(getPaymentCheckoutErrorMessage(
+                    error?.response?.data?.message || error?.message,
                     'Đơn hàng đã được tạo nhưng chưa thể khởi tạo thanh toán. Bạn có thể thử lại trong trang theo dõi đơn.'
-                );
+                ));
                 navigate(
                     `/tracking?orderId=${encodeURIComponent(String(order.id))}&paymentSetup=failed`,
                     { replace: true }

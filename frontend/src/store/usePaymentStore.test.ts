@@ -49,7 +49,7 @@ describe('usePaymentStore', () => {
         expect(usePaymentStore.getState().isLoadingPayments).toBe(false);
     });
 
-    it('creates an online payment and stores redirect context', async () => {
+    it('creates an online payment and leaves redirect context to the navigation helper', async () => {
         mockedCustomerService.createOrderPayment.mockResolvedValue({
             success: true,
             statusCode: 201,
@@ -72,10 +72,7 @@ describe('usePaymentStore', () => {
         );
         expect(result).toEqual(payment);
         expect(usePaymentStore.getState().payments).toEqual([payment]);
-        expect(JSON.parse(sessionStorage.getItem('sobu.pendingPayment') || '{}')).toEqual({
-            orderId: '12',
-            paymentCode: 'SOBU-PAY-001'
-        });
+        expect(sessionStorage.getItem('sobu.pendingPayment')).toBeNull();
     });
 
     it('reuses the idempotency key after a transport failure', async () => {
@@ -100,5 +97,23 @@ describe('usePaymentStore', () => {
         expect(secondKey).toBe(firstKey);
         expect(usePaymentStore.getState().isCreatingPayment).toBe(false);
         expect(usePaymentStore.getState().paymentError).toBe('Network unavailable');
+    });
+
+    it('hides the raw PayOS duplicate-order error while preserving retry state', async () => {
+        mockedCustomerService.createOrderPayment.mockRejectedValue(
+            new Error('PayOS checkout creation failed: Đơn thanh toán đã tồn tại')
+        );
+
+        await expect(
+            usePaymentStore.getState().createPayment(12, {
+                type: 'FULL',
+                paymentMethod: 'ONLINE'
+            })
+        ).rejects.toThrow('Đơn thanh toán đã tồn tại');
+
+        expect(usePaymentStore.getState().paymentError).toBe(
+            'Không thể tạo phiên thanh toán PayOS. Đơn hàng vẫn được giữ nguyên; vui lòng thử lại tại trang theo dõi đơn.'
+        );
+        expect(usePaymentStore.getState().pendingPaymentKey).toEqual(expect.any(String));
     });
 });

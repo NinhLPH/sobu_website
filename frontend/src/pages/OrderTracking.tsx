@@ -135,6 +135,7 @@ export default function OrderTracking() {
     const initialReference = initialOrderId || initialNhanhOrderId;
     const initialTrackingType: TrackingType = initialOrderId ? 'internal' : 'nhanh';
     const initialPaymentSetup = searchParams.get('paymentSetup');
+    const isPaymentSetupFailed = initialPaymentSetup === 'failed';
     const [reference, setReference] = useState(initialReference);
     const [trackingType, setTrackingType] = useState<TrackingType>(
         initialTrackingType
@@ -148,8 +149,8 @@ export default function OrderTracking() {
         if (initialPaymentSetup === 'cod') {
             return 'Đã ghi nhận phương thức COD cho đơn hàng.';
         }
-        if (initialPaymentSetup === 'failed') {
-            return 'Đơn hàng đã được tạo nhưng chưa thể khởi tạo thanh toán. Vui lòng thử lại bên dưới.';
+        if (isPaymentSetupFailed) {
+            return 'Đơn hàng đã được tạo nhưng chưa thể khởi tạo thanh toán. Giỏ hàng vẫn được giữ nguyên; vui lòng thử lại bên dưới.';
         }
         return null;
     });
@@ -593,6 +594,18 @@ export default function OrderTracking() {
                             </div>
                         )}
 
+                        {isPaymentSetupFailed && (
+                            <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                                <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                <div>
+                                    <p className="font-black">Phiên thanh toán chưa được tạo</p>
+                                    <p className="mt-1 font-medium">
+                                        Đơn hàng đã được lưu và giỏ hàng chưa bị xóa. Bạn có thể tạo lại phiên PayOS ngay tại đây.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {availablePaymentTypes.length > 0 && (
                             <div className="grid gap-3 rounded-2xl bg-surface-container p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                                 <label className="space-y-1.5 text-[10px] font-black uppercase text-outline">
@@ -653,7 +666,9 @@ export default function OrderTracking() {
                                         ? 'Tiếp tục thanh toán'
                                         : paymentMethod === 'COD'
                                             ? 'Chọn COD'
-                                            : 'Thanh toán ngay'}
+                                            : isPaymentSetupFailed
+                                                ? 'Thử tạo lại thanh toán'
+                                                : 'Thanh toán ngay'}
                                 </button>
                             </div>
                         )}

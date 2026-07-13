@@ -125,6 +125,75 @@ class PaymentServiceTest {
     }
 
     @Test
+    void createPaymentRegeneratesProviderOrderCodeWhenPayOSReportsDuplicate() {
+        List<Long> attemptedProviderOrderCodes = new ArrayList<>();
+        int[] checkoutAttempts = {0};
+        PayOSGateway duplicateThenSuccessGateway = new PayOSGateway() {
+            @Override
+            public String providerName() {
+                return "PAYOS_TEST";
+            }
+
+            @Override
+            public PayOSCheckoutSession createCheckout(Order order, OrderPayment payment) {
+                attemptedProviderOrderCodes.add(payment.getProviderOrderCode());
+                checkoutAttempts[0]++;
+                if (checkoutAttempts[0] == 1) {
+                    throw new IllegalStateException("PayOS checkout creation failed: Đơn thanh toán đã tồn tại");
+                }
+                return new PayOSCheckoutSession(
+                        "payos-link-2",
+                        "https://pay.payos.vn/web/checkout/retry",
+                        "QR-RETRY",
+                        LocalDateTime.now().plusMinutes(5)
+                );
+            }
+        };
+        PaymentService retryingPaymentService = new PaymentService(
+                orderPaymentRepository,
+                orderRepository,
+                duplicateThenSuccessGateway,
+                new PayOSProperties(),
+                paymentCalculationService,
+                eventPublisher
+        );
+        Order order = Order.builder()
+                .id(6L)
+                .orderCode("SOBU-ORD-6")
+                .type(OrderType.NORMAL)
+                .totalAmount(new BigDecimal("1000"))
+                .paidAmount(BigDecimal.ZERO)
+                .remainingAmount(new BigDecimal("1000"))
+                .paymentStatus(PaymentStatus.PENDING)
+                .build();
+        List<OrderPayment> storedPayments = new ArrayList<>();
+
+        when(orderRepository.findById(6L)).thenReturn(Optional.of(order));
+        when(orderPaymentRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.findByProviderOrderCode(any())).thenReturn(Optional.empty());
+        when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(6L))
+                .thenAnswer(invocation -> List.copyOf(storedPayments));
+        when(orderPaymentRepository.save(any(OrderPayment.class))).thenAnswer(invocation -> {
+            OrderPayment payment = invocation.getArgument(0);
+            if (payment.getId() == null) {
+                payment.setId(6L);
+                storedPayments.add(payment);
+            }
+            return payment;
+        });
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OrderPayment payment = retryingPaymentService.createPayment(order, PaymentType.FULL, PaymentMethod.ONLINE);
+
+        assertThat(attemptedProviderOrderCodes).hasSize(2);
+        assertThat(attemptedProviderOrderCodes.get(1)).isGreaterThan(attemptedProviderOrderCodes.get(0));
+        assertThat(payment.getProviderOrderCode()).isEqualTo(attemptedProviderOrderCodes.get(1));
+        assertThat(payment.getProviderOrderCode()).isNotEqualTo(payment.getId());
+        assertThat(payment.getCheckoutUrl()).isEqualTo("https://pay.payos.vn/web/checkout/retry");
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
     void createPaymentPublishesSyncEventForNormalCodPaymentBeforePaid() {
         Order order = Order.builder()
                 .id(19L)
