@@ -27,9 +27,12 @@ import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +40,8 @@ public class PaymentService {
 
     private static final DateTimeFormatter PAYMENT_CODE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final int PAYOS_DUPLICATE_ORDER_CODE_MAX_ATTEMPTS = 3;
+    private static final AtomicLong LAST_PROVIDER_ORDER_CODE = new AtomicLong(System.currentTimeMillis());
 
     private final OrderPaymentRepository orderPaymentRepository;
     private final OrderRepository orderRepository;
@@ -115,17 +120,14 @@ public class PaymentService {
                 .status(PaymentStatus.PENDING)
                 .amount(amount)
                 .provider(paymentMethod == PaymentMethod.COD ? "COD" : payOSGateway.providerName())
+                .providerOrderCode(generateUniqueProviderOrderCode())
                 .build();
 
         OrderPayment savedPayment = orderPaymentRepository.save(payment);
-        if (savedPayment.getProviderOrderCode() == null) {
-            savedPayment.setProviderOrderCode(savedPayment.getId());
-            savedPayment = orderPaymentRepository.save(savedPayment);
-        }
 
         if (paymentMethod == PaymentMethod.ONLINE) {
             try {
-                PayOSCheckoutSession session = payOSGateway.createCheckout(managedOrder, savedPayment);
+                PayOSCheckoutSession session = createPayOSCheckout(managedOrder, savedPayment);
                 savedPayment.setProviderReference(session.providerReference());
                 savedPayment.setCheckoutUrl(session.checkoutUrl());
                 savedPayment.setQrCode(session.qrCode());
@@ -149,6 +151,62 @@ public class PaymentService {
             publishOrderReadyForSync(updatedOrder, savedPayment);
         }
         return savedPayment;
+    }
+
+    private PayOSCheckoutSession createPayOSCheckout(Order order, OrderPayment payment) {
+        for (int attempt = 1; attempt <= PAYOS_DUPLICATE_ORDER_CODE_MAX_ATTEMPTS; attempt++) {
+            try {
+                return payOSGateway.createCheckout(order, payment);
+            } catch (RuntimeException ex) {
+                if (!isDuplicateProviderOrderCodeError(ex)
+                        || attempt == PAYOS_DUPLICATE_ORDER_CODE_MAX_ATTEMPTS) {
+                    throw ex;
+                }
+                payment.setProviderOrderCode(generateUniqueProviderOrderCode());
+                orderPaymentRepository.save(payment);
+            }
+        }
+        throw new IllegalStateException("Unable to create PayOS checkout");
+    }
+
+    private Long generateUniqueProviderOrderCode() {
+        for (int attempt = 0; attempt < 20; attempt++) {
+            long candidate = LAST_PROVIDER_ORDER_CODE.updateAndGet(previous ->
+                    Math.max(System.currentTimeMillis(), previous + 1)
+            );
+            if (orderPaymentRepository.findByProviderOrderCode(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("Unable to generate a unique PayOS provider order code");
+    }
+
+    private boolean isDuplicateProviderOrderCodeError(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null) {
+                String normalized = Normalizer.normalize(message, Normalizer.Form.NFD)
+                        .replaceAll("\\p{M}", "")
+                        .toLowerCase(Locale.ROOT)
+                        .replace('\u0111', 'd');
+                boolean duplicate = normalized.contains("already exists")
+                        || normalized.contains("already exist")
+                        || normalized.contains("duplicate")
+                        || normalized.contains("ton tai");
+                boolean orderCode = normalized.contains("order code")
+                        || normalized.contains("ordercode")
+                        || (normalized.contains("don thanh toan") && normalized.contains("ton tai"));
+                if (duplicate && orderCode) {
+                    return true;
+                }
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private Order loadOrderForPaymentCreation(Long orderId, PaymentType type) {

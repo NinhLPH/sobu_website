@@ -51,6 +51,12 @@ export const AdminWorkflowService = {
         return apiClient.get(`/api/admin/orders/${orderId}`);
     },
 
+    getAdminOrderPayments: (
+        orderId: string | number
+    ): Promise<ApiResponseDTO<OrderPaymentResponseDto[]>> => {
+        return apiClient.get(`/v1/api/admin/payments/orders/${orderId}`);
+    },
+
     retryOrderSync: (
         orderId: string | number
     ): Promise<ApiResponseDTO<OrderSyncResultDto>> => {

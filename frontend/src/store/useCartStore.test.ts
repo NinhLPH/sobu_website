@@ -72,6 +72,13 @@ const cartWithItem = (item: typeof product, quantity: number) => ({
     }
 });
 
+const signInForFallback = (id = 99) => {
+    window.sessionStorage.setItem('accessToken', 'access-token');
+    window.sessionStorage.setItem('user', JSON.stringify({ id, email: `user-${id}@example.com` }));
+};
+
+const fallbackStorageKey = (id = 99) => `sobu.cartFallback.v1:${id}`;
+
 it('does not fetch the server cart when the store module is imported', () => {
     expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
 });
@@ -85,6 +92,7 @@ describe('useCartStore order submission', () => {
         mockedCustomerService.clearCart.mockResolvedValue({ success: true, statusCode: 200, message: 'Cart cleared', data: null as any });
         useCartStore.setState({
             items: [],
+            isUsingFallback: false,
             isLoading: false,
             isSubmitting: false,
             checkoutError: null,
@@ -130,6 +138,44 @@ describe('useCartStore order submission', () => {
         expect(useCartStore.getState().isLoading).toBe(false);
     });
 
+    it('restores the account-scoped fallback cart without requesting the server', async () => {
+        signInForFallback();
+        window.sessionStorage.setItem(fallbackStorageKey(), JSON.stringify({
+            items: [{ product, quantity: 2 }]
+        }));
+
+        await useCartStore.getState().fetchCart();
+
+        expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
+        expect(useCartStore.getState().items).toEqual([{ product, quantity: 2 }]);
+        expect(useCartStore.getState().isUsingFallback).toBe(true);
+    });
+
+    it('keeps fallback carts isolated by authenticated account', async () => {
+        signInForFallback(99);
+        window.sessionStorage.setItem(fallbackStorageKey(99), JSON.stringify({
+            items: [{ product, quantity: 1 }]
+        }));
+        signInForFallback(100);
+        mockedCustomerService.getCart.mockResolvedValue(emptyCartResponse);
+
+        await useCartStore.getState().fetchCart();
+
+        expect(useCartStore.getState().items).toEqual([]);
+        expect(useCartStore.getState().isUsingFallback).toBe(false);
+    });
+
+    it('uses session fallback when fetching the cart fails', async () => {
+        signInForFallback();
+        mockedCustomerService.getCart.mockRejectedValue(new Error('Network unavailable'));
+
+        await useCartStore.getState().fetchCart();
+
+        expect(useCartStore.getState().items).toEqual([]);
+        expect(useCartStore.getState().isUsingFallback).toBe(true);
+        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBe(JSON.stringify({ items: [] }));
+    });
+
     it('restores a pending online cart when the server cart is empty', async () => {
         window.sessionStorage.setItem('accessToken', 'access-token');
         onlineCartRecovery.save(onlinePayment, [{ product, quantity: 2 }]);
@@ -143,6 +189,53 @@ describe('useCartStore order submission', () => {
             quantity: 2
         }]);
         expect(useCartStore.getState().isLoading).toBe(false);
+    });
+
+    it('falls back locally when adding an item fails', async () => {
+        signInForFallback();
+        mockedCustomerService.addCartItem.mockRejectedValue(new Error('Redis unavailable'));
+
+        await useCartStore.getState().addToCart(product, 2);
+
+        expect(useCartStore.getState().items).toEqual([{ product, quantity: 2 }]);
+        expect(useCartStore.getState().isUsingFallback).toBe(true);
+        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({
+            items: [{ product, quantity: 2 }]
+        });
+    });
+
+    it('falls back locally when updating, removing, or clearing the cart fails', async () => {
+        signInForFallback();
+        useCartStore.setState({ items: [{ product, quantity: 1 }] });
+        mockedCustomerService.updateCartItem.mockRejectedValue(new Error('Network unavailable'));
+
+        await useCartStore.getState().updateQuantity(product.id, 3);
+
+        expect(useCartStore.getState().items).toEqual([{ product, quantity: 3 }]);
+        expect(useCartStore.getState().isUsingFallback).toBe(true);
+
+        useCartStore.setState({ items: [{ product, quantity: 3 }], isUsingFallback: false });
+        mockedCustomerService.removeCartItem.mockRejectedValue(new Error('Server unavailable'));
+        await useCartStore.getState().removeFromCart(product.id);
+        expect(useCartStore.getState().items).toEqual([]);
+
+        useCartStore.setState({ items: [{ product, quantity: 1 }], isUsingFallback: false });
+        mockedCustomerService.clearCart.mockRejectedValue(new Error('Server unavailable'));
+        await useCartStore.getState().clearCart();
+        expect(useCartStore.getState().items).toEqual([]);
+        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({ items: [] });
+    });
+
+    it('keeps the current cart and does not enter fallback after an authentication failure', async () => {
+        signInForFallback();
+        useCartStore.setState({ items: [{ product, quantity: 1 }] });
+        mockedCustomerService.removeCartItem.mockRejectedValue({ response: { status: 401 } });
+
+        await useCartStore.getState().removeFromCart(product.id);
+
+        expect(useCartStore.getState().items).toEqual([{ product, quantity: 1 }]);
+        expect(useCartStore.getState().isUsingFallback).toBe(false);
+        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBeNull();
     });
 
     it('clears pending online cart recovery when the customer changes the cart', async () => {
@@ -260,6 +353,42 @@ describe('useCartStore order submission', () => {
             quantity: 1
         }]);
         expect(useCartStore.getState().checkoutError).toBeNull();
+    });
+
+    it('clears the fallback cart after checkout without calling the cart API', async () => {
+        signInForFallback();
+        useCartStore.setState({
+            items: [{ product, quantity: 1 }],
+            isUsingFallback: true
+        });
+        window.sessionStorage.setItem(fallbackStorageKey(), JSON.stringify({
+            items: [{ product, quantity: 1 }]
+        }));
+        mockedCustomerService.createOrder.mockResolvedValue({
+            success: true,
+            statusCode: 201,
+            message: 'Order created',
+            data: {
+                id: 3,
+                orderCode: 'ORD-003',
+                status: 'NEW',
+                syncStatus: 'PENDING',
+                totalAmount: 350000,
+                items: []
+            }
+        });
+
+        await useCartStore.getState().submitOrder({
+            customerName: 'Nguyen Van A',
+            customerMobile: '0901234567',
+            ...shippingLocation,
+            ...shippingQuote
+        });
+
+        expect(mockedCustomerService.clearCart).not.toHaveBeenCalled();
+        expect(useCartStore.getState().items).toEqual([]);
+        expect(useCartStore.getState().isUsingFallback).toBe(false);
+        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBeNull();
     });
 
     it('keeps cart items and exposes the backend message when creation fails', async () => {

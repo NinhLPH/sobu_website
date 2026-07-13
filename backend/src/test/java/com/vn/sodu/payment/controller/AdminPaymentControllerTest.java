@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
@@ -21,6 +22,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,12 +33,57 @@ class AdminPaymentControllerTest {
     private PaymentService paymentService;
 
     @Test
-    void confirmMockPaymentReturnsUpdatedPayment() {
+    void listOrderPaymentsReturnsPersistedHistory() {
+        Authentication authentication = staffAuth();
+        Order order = Order.builder().id(10L).build();
+        OrderPayment first = OrderPayment.builder()
+                .id(30L)
+                .order(order)
+                .paymentCode("SOBU-PAY-30")
+                .type(PaymentType.DEPOSIT)
+                .status(PaymentStatus.PAID)
+                .amount(new BigDecimal("300.00"))
+                .provider("PAYOS")
+                .build();
+        OrderPayment second = OrderPayment.builder()
+                .id(31L)
+                .order(order)
+                .paymentCode("SOBU-PAY-31")
+                .type(PaymentType.FINAL)
+                .status(PaymentStatus.PENDING)
+                .amount(new BigDecimal("700.00"))
+                .provider("PAYOS")
+                .build();
+        when(paymentService.refreshPaymentStatuses(10L)).thenReturn(List.of(first, second));
+
+        AdminPaymentController controller = new AdminPaymentController(paymentService);
+        ResponseEntity<ApiResponseDTO<List<OrderPaymentResponseDto>>> response =
+                controller.listOrderPayments(10L, authentication);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData())
+                .extracting(OrderPaymentResponseDto::getPaymentCode)
+                .containsExactly("SOBU-PAY-30", "SOBU-PAY-31");
+        verify(paymentService).refreshPaymentStatuses(10L);
+    }
+
+    @Test
+    void listOrderPaymentsRejectsCustomerRole() {
         Authentication authentication = new UsernamePasswordAuthenticationToken(
-                "staff@example.com",
+                "customer@example.com",
                 "n/a",
-                List.of(new SimpleGrantedAuthority("ROLE_STAFF"))
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
         );
+        AdminPaymentController controller = new AdminPaymentController(paymentService);
+
+        assertThatThrownBy(() -> controller.listOrderPayments(10L, authentication))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void confirmMockPaymentReturnsUpdatedPayment() {
+        Authentication authentication = staffAuth();
         Order order = Order.builder().id(11L).build();
         OrderPayment payment = OrderPayment.builder()
                 .id(31L)
@@ -63,11 +110,7 @@ class AdminPaymentControllerTest {
 
     @Test
     void createPreorderFinalPaymentReturnsCreatedCheckout() {
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                "staff@example.com",
-                "n/a",
-                List.of(new SimpleGrantedAuthority("ROLE_STAFF"))
-        );
+        Authentication authentication = staffAuth();
         Order order = Order.builder().id(12L).build();
         OrderPayment payment = OrderPayment.builder()
                 .id(32L)
@@ -91,5 +134,13 @@ class AdminPaymentControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getType()).isEqualTo(PaymentType.FINAL);
         verify(paymentService).createPreorderFinalPayment(12L);
+    }
+
+    private Authentication staffAuth() {
+        return new UsernamePasswordAuthenticationToken(
+                "staff@example.com",
+                "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_STAFF"))
+        );
     }
 }

@@ -5,6 +5,7 @@ import {
 } from '../interface/order.model';
 import { CustomerService } from '../service/custom.service';
 import { createIdempotencyKey } from '../utils/idempotency';
+import { getPaymentCheckoutErrorMessage } from '../utils/payment-checkout-error';
 
 let latestPaymentsRequestId = 0;
 
@@ -138,7 +139,10 @@ export const usePaymentStore = create<PaymentState>((set, get) => ({
         } catch (error) {
             set({
                 isCreatingPayment: false,
-                paymentError: getErrorMessage(error, 'Không thể tạo phiên thanh toán.')
+                paymentError: getPaymentCheckoutErrorMessage(
+                    getErrorMessage(error, 'Không thể tạo phiên thanh toán.'),
+                    'Không thể tạo phiên thanh toán.'
+                )
             });
             throw error;
         }

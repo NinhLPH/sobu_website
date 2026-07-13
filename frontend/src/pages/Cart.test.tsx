@@ -499,5 +499,7 @@ describe('Cart payment selection', () => {
         ));
         expect(mockSubmitOrder).toHaveBeenCalledTimes(1);
         expect(mockCreatePayment).toHaveBeenCalledTimes(1);
+        expect(mockedOnlineCartRecovery.save).not.toHaveBeenCalled();
+        expect(mockedRedirectToPaymentCheckout).not.toHaveBeenCalled();
     });
 });
