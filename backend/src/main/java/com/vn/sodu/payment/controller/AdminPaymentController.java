@@ -3,6 +3,8 @@ package com.vn.sodu.payment.controller;
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.dto.OrderPaymentResponseDto;
+import com.vn.sodu.payment.service.PayOSPaymentReconciliationService;
+import com.vn.sodu.payment.service.PaymentReconciliationResult;
 import com.vn.sodu.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +29,24 @@ import java.util.List;
 public class AdminPaymentController {
 
     private final PaymentService paymentService;
+    private final PayOSPaymentReconciliationService payOSPaymentReconciliationService;
+
+    @PostMapping("/reconcile")
+    @Operation(
+            summary = "Reconcile pending online payments",
+            description = "Checks one configured batch against PayOS and applies paid or expired statuses."
+    )
+    public ResponseEntity<ApiResponseDTO<PaymentReconciliationResult>> reconcilePendingOnlinePayments(
+            Authentication authentication
+    ) {
+        requireStaff(authentication);
+        PaymentReconciliationResult result = payOSPaymentReconciliationService.reconcilePendingOnlinePayments();
+        return ResponseEntity.ok(ApiResponseDTO.success(
+                result,
+                "Payment reconciliation completed",
+                HttpStatus.OK.value()
+        ));
+    }
 
     @GetMapping("/orders/{orderId}")
     @Operation(

@@ -70,6 +70,11 @@ public class NhanhLocationSyncCoordinator {
         submit(Trigger.OAUTH);
     }
 
+    public void triggerManualSync() {
+        nhanhService.getValidAccessToken();
+        submit(Trigger.MANUAL);
+    }
+
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     public void pollExpiredSnapshot() {
         try {
@@ -185,6 +190,7 @@ public class NhanhLocationSyncCoordinator {
     private enum Trigger {
         STARTUP,
         OAUTH,
+        MANUAL,
         TTL,
         DEFERRED
     }

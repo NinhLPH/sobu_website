@@ -52,6 +52,7 @@ class PaymentServiceTest {
 
     private PaymentCalculationService paymentCalculationService;
     private PaymentService paymentService;
+    private PayOSPaymentReconciliationService reconciliationService;
     private MockPayOSGateway payOSGateway;
 
     @BeforeEach
@@ -66,6 +67,12 @@ class PaymentServiceTest {
                 payOSProperties,
                 paymentCalculationService,
                 eventPublisher
+        );
+        reconciliationService = new PayOSPaymentReconciliationService(
+                orderPaymentRepository,
+                payOSGateway,
+                payOSProperties,
+                paymentService
         );
     }
 
@@ -467,7 +474,7 @@ class PaymentServiceTest {
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.READY_FOR_FINAL_PAYMENT);
         assertThat(payment.getType()).isEqualTo(PaymentType.FINAL);
-        assertThat(payment.getProviderOrderCode()).isEqualTo(118L);
+        assertThat(payment.getProviderOrderCode()).isNotNull().isNotEqualTo(118L);
         assertThat(payment.getCheckoutUrl()).contains(payment.getPaymentCode());
     }
 
@@ -1005,7 +1012,7 @@ class PaymentServiceTest {
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(41L)).thenReturn(List.of(payment));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        paymentService.reconcilePendingOnlinePayments();
+        reconciliationService.reconcilePendingOnlinePayments();
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PAID);
         assertThat(payment.getPaidAt()).isNotNull();
@@ -1057,7 +1064,7 @@ class PaymentServiceTest {
         when(orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(42L)).thenReturn(List.of(payment));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        paymentService.reconcilePendingOnlinePayments();
+        reconciliationService.reconcilePendingOnlinePayments();
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.EXPIRED);
         verifyNoInteractions(eventPublisher);

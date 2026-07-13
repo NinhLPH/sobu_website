@@ -6,6 +6,8 @@ import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PaymentStatus;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.dto.OrderPaymentResponseDto;
+import com.vn.sodu.payment.service.PayOSPaymentReconciliationService;
+import com.vn.sodu.payment.service.PaymentReconciliationResult;
 import com.vn.sodu.payment.service.PaymentService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +34,9 @@ class AdminPaymentControllerTest {
     @Mock
     private PaymentService paymentService;
 
+    @Mock
+    private PayOSPaymentReconciliationService reconciliationService;
+
     @Test
     void listOrderPaymentsReturnsPersistedHistory() {
         Authentication authentication = staffAuth();
@@ -56,7 +61,7 @@ class AdminPaymentControllerTest {
                 .build();
         when(paymentService.refreshPaymentStatuses(10L)).thenReturn(List.of(first, second));
 
-        AdminPaymentController controller = new AdminPaymentController(paymentService);
+        AdminPaymentController controller = new AdminPaymentController(paymentService, reconciliationService);
         ResponseEntity<ApiResponseDTO<List<OrderPaymentResponseDto>>> response =
                 controller.listOrderPayments(10L, authentication);
 
@@ -75,7 +80,7 @@ class AdminPaymentControllerTest {
                 "n/a",
                 List.of(new SimpleGrantedAuthority("ROLE_USER"))
         );
-        AdminPaymentController controller = new AdminPaymentController(paymentService);
+        AdminPaymentController controller = new AdminPaymentController(paymentService, reconciliationService);
 
         assertThatThrownBy(() -> controller.listOrderPayments(10L, authentication))
                 .isInstanceOf(AccessDeniedException.class);
@@ -97,7 +102,7 @@ class AdminPaymentControllerTest {
 
         when(paymentService.markPaymentPaid("SOBU-PAY-31")).thenReturn(payment);
 
-        AdminPaymentController controller = new AdminPaymentController(paymentService);
+        AdminPaymentController controller = new AdminPaymentController(paymentService, reconciliationService);
 
         ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> response =
                 controller.confirmMockPayment("SOBU-PAY-31", authentication);
@@ -125,7 +130,7 @@ class AdminPaymentControllerTest {
 
         when(paymentService.createPreorderFinalPayment(12L)).thenReturn(payment);
 
-        AdminPaymentController controller = new AdminPaymentController(paymentService);
+        AdminPaymentController controller = new AdminPaymentController(paymentService, reconciliationService);
 
         ResponseEntity<ApiResponseDTO<OrderPaymentResponseDto>> response =
                 controller.createPreorderFinalPayment(12L, authentication);
@@ -134,6 +139,35 @@ class AdminPaymentControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getType()).isEqualTo(PaymentType.FINAL);
         verify(paymentService).createPreorderFinalPayment(12L);
+    }
+
+    @Test
+    void reconcilePendingOnlinePaymentsReturnsBatchResultForStaff() {
+        Authentication authentication = staffAuth();
+        PaymentReconciliationResult result = new PaymentReconciliationResult(3, 1, 1, 0, 0, 1);
+        when(reconciliationService.reconcilePendingOnlinePayments()).thenReturn(result);
+        AdminPaymentController controller = new AdminPaymentController(paymentService, reconciliationService);
+
+        ResponseEntity<ApiResponseDTO<PaymentReconciliationResult>> response =
+                controller.reconcilePendingOnlinePayments(authentication);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData()).isEqualTo(result);
+        verify(reconciliationService).reconcilePendingOnlinePayments();
+    }
+
+    @Test
+    void reconcilePendingOnlinePaymentsRejectsCustomerRole() {
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                "customer@example.com",
+                "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_USER"))
+        );
+        AdminPaymentController controller = new AdminPaymentController(paymentService, reconciliationService);
+
+        assertThatThrownBy(() -> controller.reconcilePendingOnlinePayments(authentication))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     private Authentication staffAuth() {
