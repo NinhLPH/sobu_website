@@ -34,6 +34,8 @@ jest.mock('./pages/BlogDetail', () => () => null);
 jest.mock('./pages/ServicesLandingPage', () => () => null);
 jest.mock('./pages/Membership', () => () => null);
 jest.mock('./pages/OrderTracking', () => () => null);
+jest.mock('./pages/MyOrders', () => () => null);
+jest.mock('./pages/LegacyTrackingRedirect', () => () => null);
 jest.mock('./pages/PaymentResult', () => () => null);
 jest.mock('./pages/StaticPage', () => () => null);
 jest.mock('./pages/Cart', () => () => null);
@@ -60,6 +62,7 @@ describe('App route layout', () => {
 
         expect(siteLayout?.querySelector('[data-path="/products"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/cart"]')).toBeTruthy();
+        expect(siteLayout?.querySelector('[data-path="/orders"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/payment-result"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/about"]')).toBeTruthy();
         expect(siteLayout?.querySelector('[data-path="/privacy"]')).toBeTruthy();

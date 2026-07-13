@@ -158,7 +158,7 @@ describe('Header mobile navigation', () => {
         expect(screen.getByText('Sobu Admin')).toBeTruthy();
         expect(screen.getByRole('link', {name: 'Trang quản trị (Admin)'}).getAttribute('href')).toBe('/admin');
         expect(screen.getByRole('link', {name: 'Yêu cầu của tôi'}).getAttribute('href')).toBe('/requests');
-        expect(screen.getByRole('link', {name: 'Tra cứu đơn hàng'}).getAttribute('href')).toBe('/tracking');
+        expect(screen.getByRole('link', {name: 'Đơn hàng của tôi'}).getAttribute('href')).toBe('/orders');
         expect(screen.getByRole('button', {name: 'Đăng xuất'})).toBeTruthy();
     });
 

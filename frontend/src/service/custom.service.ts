@@ -8,6 +8,8 @@ import {
 import {
     CreateNormalOrderDto,
     CreateOrderPaymentDto,
+    CustomerOrderQueryParams,
+    CustomerOrderListItemDto,
     OrderPaymentResponseDto,
     OrderResponseDto
 } from '../interface/order.model';
@@ -15,6 +17,12 @@ import { createIdempotencyKey } from '../utils/idempotency';
 import { CartDto } from '../interface/cart.dto';
 
 export const CustomerService = {
+    getMyOrders: (
+        params?: CustomerOrderQueryParams
+    ): Promise<ApiResponseDTO<PageResponse<CustomerOrderListItemDto>>> => {
+        return apiClient.get('/api/orders/me', { params });
+    },
+
     getMyRequests: (
         params?: Record<string, unknown>
     ): Promise<ApiResponseDTO<PageResponse<RequestResponseDto>>> => {

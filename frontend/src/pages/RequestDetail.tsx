@@ -272,7 +272,7 @@ export default function RequestDetail() {
                                         Mã đơn: {currentRequestDetail.nhanhOrderCode || currentRequestDetail.nhanhOrderId}
                                     </p>
                                     <Link
-                                        to={`/tracking?nhanhOrderId=${encodeURIComponent(
+                                        to={`/orders/lookup?nhanhOrderId=${encodeURIComponent(
                                             currentRequestDetail.nhanhOrderCode ||
                                             currentRequestDetail.nhanhOrderId ||
                                             ''

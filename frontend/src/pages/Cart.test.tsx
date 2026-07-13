@@ -517,7 +517,7 @@ describe('Cart payment selection', () => {
         }));
         expect(mockedOnlineCartRecovery.save).not.toHaveBeenCalled();
         expect(mockNavigate).toHaveBeenCalledWith(
-            '/tracking?orderId=12&paymentSetup=cod',
+            '/orders/12?paymentSetup=cod',
             { replace: true }
         );
     });
@@ -563,7 +563,7 @@ describe('Cart payment selection', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng và thanh toán' }));
 
         await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(
-            '/tracking?orderId=12&paymentSetup=failed',
+            '/orders/12?paymentSetup=failed',
             { replace: true }
         ));
         expect(mockSubmitOrder).toHaveBeenCalledTimes(1);

@@ -198,8 +198,8 @@ export default function PaymentResult() {
                 <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                     <Link
                         to={orderId
-                            ? `/tracking?orderId=${encodeURIComponent(orderId)}`
-                            : '/tracking'}
+                            ? `/orders/${encodeURIComponent(orderId)}`
+                            : '/orders'}
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-xs font-black uppercase tracking-wider text-white"
                     >
                         <ReceiptText className="h-4 w-4" />

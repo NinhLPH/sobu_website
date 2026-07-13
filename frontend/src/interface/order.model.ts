@@ -125,3 +125,26 @@ export interface AdminOrderQueryParams {
     sortBy?: string;
     sortDirection?: 'ASC' | 'DESC';
 }
+
+export interface CustomerOrderListItemDto {
+    id: number;
+    orderCode?: string;
+    type?: RequestType;
+    status?: OrderStatus;
+    totalAmount?: number;
+    paidAmount?: number;
+    remainingAmount?: number;
+    paymentStatus?: PaymentStatus;
+    createdAt?: string;
+}
+
+export interface CustomerOrderQueryParams {
+    page?: number;
+    size?: number;
+    query?: string;
+    status?: OrderStatus | 'ALL';
+    createdFrom?: string;
+    createdTo?: string;
+    sortBy?: 'createdAt' | 'totalAmount' | 'status';
+    sortDirection?: 'ASC' | 'DESC';
+}

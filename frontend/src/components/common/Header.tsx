@@ -539,12 +539,12 @@ export default function Header() {
                                                     <span>Yêu cầu của tôi</span>
                                                 </Link>
                                                 <Link
-                                                    to="/tracking"
+                                                    to="/orders"
                                                     onClick={() => setIsUserMenuOpen(false)}
                                                     className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
                                                 >
                                                     <Search className="w-4 h-4 text-primary"/>
-                                                    <span>Tra cứu đơn hàng</span>
+                                                    <span>Đơn hàng của tôi</span>
                                                 </Link>
                                                 <button
                                                     onClick={async () => {

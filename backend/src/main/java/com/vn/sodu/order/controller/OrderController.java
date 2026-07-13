@@ -1,11 +1,13 @@
 package com.vn.sodu.order.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.global.idempotency.IdempotencyScope;
 import com.vn.sodu.global.idempotency.IdempotencyService;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.OrderResponseDto;
+import com.vn.sodu.order.dtos.CustomerOrderListItemDto;
 import com.vn.sodu.order.mapper.OrderResponseMapper;
 import com.vn.sodu.order.services.OrderQueryService;
 import com.vn.sodu.order.services.OrderService;
@@ -17,6 +19,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.data.domain.Page;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,10 +28,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.time.LocalDate;
 
 @RestController
 @RequiredArgsConstructor
@@ -119,5 +125,26 @@ public class OrderController {
         orderService.cancelMyOrder(orderId, authentication);
         OrderResponseDto response = orderQueryService.getMyOrderDetail(orderId, authentication);
         return ResponseEntity.ok(ApiResponseDTO.success(response, "Order cancelled", HttpStatus.OK.value()));
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "List my orders", description = "Returns a paginated order history scoped to the authenticated customer.")
+    public ResponseEntity<ApiResponseDTO<PageResponse<CustomerOrderListItemDto>>> listMyOrders(
+            Authentication authentication,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size,
+            @RequestParam(name = "query", required = false) String query,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "createdFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdFrom,
+            @RequestParam(name = "createdTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdTo,
+            @RequestParam(name = "sortBy", defaultValue = "createdAt") String sortBy,
+            @RequestParam(name = "sortDirection", defaultValue = "DESC") String sortDirection
+    ) {
+        Page<CustomerOrderListItemDto> orders = orderQueryService.listMyOrders(
+                authentication, page, size, query, status, createdFrom, createdTo, sortBy, sortDirection
+        );
+        return ResponseEntity.ok(ApiResponseDTO.success(
+                PageResponse.from(orders), "Orders retrieved", HttpStatus.OK.value()
+        ));
     }
 }
