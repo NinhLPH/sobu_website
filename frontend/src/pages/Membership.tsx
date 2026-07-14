@@ -38,7 +38,7 @@ export default function Membership() {
             name: 'Gold Collector',
             icon: Star,
             price: 'Tích lũy từ 20.000.000 đ',
-            cardBg: 'bg-gradient-to-b from-amber-50/40 to-white border-2 border-amber-400 shadow-[0_20px_50px_-10px_rgba(245,158,11,0.15)] md:-mt-6 relative z-10',
+            cardBg: 'bg-gradient-to-b from-amber-50/40 to-surface-container-lowest border-2 border-amber-400 shadow-[0_20px_50px_-10px_rgba(245,158,11,0.15)] md:-mt-6 relative z-10',
             iconStyle: 'text-amber-500 bg-amber-50 border border-amber-200 shadow-sm shadow-amber-500/10',
             badgeStyle: 'bg-amber-500 text-white tracking-widest uppercase text-[9px] font-black',
             textColor: 'text-on-surface',
@@ -55,7 +55,7 @@ export default function Membership() {
             badgeStyle: 'bg-white/10 text-zinc-300 border border-white/10',
             textColor: 'text-white',
             perkCheckColor: 'text-zinc-400',
-            btnStyle: 'bg-white text-neutral-950 hover:bg-zinc-100 shadow-lg shadow-white/5 hover:scale-[1.02]',
+            btnStyle: 'bg-surface-container-lowest text-on-surface hover:bg-surface-container-low shadow-lg shadow-white/5 hover:scale-[1.02]',
             perks: ['Tích điểm 5% mỗi đơn hàng', 'Mức giá thẩm định Thu mua (Trade-in) tốt nhất', 'Vé mời tham gia Private Sale săn mô hình hiếm', 'Trợ lý cá nhân hỗ trợ 1-1 qua Zalo 24/7', 'Miễn phí 100% công độ hệ thống LED cơ bản']
         }
     ];

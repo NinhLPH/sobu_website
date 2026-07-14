@@ -178,8 +178,82 @@
     background-color: rgb(var(--color-outline-variant));
   }
 
-  :is(.dark, [data-theme='dark']) .admin-surface .bg-white {
+  /* Legacy utility colors still occur in customer and admin flows. Keep them aligned
+     with the shared dark palette instead of letting light-mode surfaces show through. */
+  :is(.dark, [data-theme='dark']) .bg-white {
     background-color: rgb(var(--color-surface-container-lowest));
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100, .bg-gray-200) {
+    background-color: rgb(var(--color-surface-container));
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-slate-700, .text-gray-600, .text-gray-700, .text-gray-800) {
+    color: rgb(var(--color-on-surface-variant));
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.border-slate-200, .border-slate-300, .border-gray-200) {
+    border-color: rgb(var(--color-outline-variant) / 0.65);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.bg-green-50, .bg-green-100, .bg-green-50\/50, .bg-emerald-50\/70) {
+    background-color: rgb(16 185 129 / 0.16);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.text-green-500, .text-green-600, .text-green-700, .text-green-800, .text-green-900) {
+    color: rgb(110 231 183);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.border-green-200, .border-emerald-200) {
+    border-color: rgb(16 185 129 / 0.4);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.bg-red-50, .bg-red-100, .bg-red-50\/50) {
+    background-color: rgb(var(--color-error) / 0.16);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.text-red-600, .text-red-700, .text-red-800) {
+    color: rgb(255 154 160);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.border-red-200, .border-red-300) {
+    border-color: rgb(var(--color-error) / 0.42);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.bg-amber-50, .bg-amber-100) {
+    background-color: rgb(245 158 11 / 0.17);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.text-amber-600, .text-amber-700, .text-amber-800, .text-amber-900, .text-amber-950) {
+    color: rgb(252 211 77);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.border-amber-200, .border-amber-300, .border-amber-400) {
+    border-color: rgb(245 158 11 / 0.45);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.bg-blue-100, .bg-cyan-100, .bg-indigo-100, .bg-purple-100) {
+    background-color: rgb(var(--color-primary) / 0.16);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.text-blue-800, .text-cyan-800, .text-indigo-700, .text-indigo-800, .text-indigo-900, .text-indigo-950, .text-purple-800) {
+    color: rgb(165 216 255);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.border-blue-200, .border-cyan-200, .border-indigo-100, .border-indigo-200, .border-purple-200) {
+    border-color: rgb(var(--color-primary) / 0.38);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.bg-orange-50, .bg-yellow-100) {
+    background-color: rgb(245 158 11 / 0.15);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.text-orange-700, .text-yellow-800) {
+    color: rgb(253 211 77);
+  }
+
+  :is(.dark, [data-theme='dark']) :is(.border-orange-200, .border-yellow-200) {
+    border-color: rgb(245 158 11 / 0.4);
   }
 
   :is(.dark, [data-theme='dark']) .admin-surface .text-white {

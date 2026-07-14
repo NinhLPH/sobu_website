@@ -328,7 +328,7 @@ export default function OrderTracking() {
     );
 
     return (
-        <main className="mx-auto w-full min-w-0 max-w-4xl bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
+        <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
             <nav className="mb-6 flex items-center gap-2 text-xs font-bold text-on-surface-variant">
                 <Link to="/" className="transition-colors hover:text-primary">Trang chủ</Link>
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -337,16 +337,16 @@ export default function OrderTracking() {
                 <span className="text-primary">Chi tiết đơn hàng</span>
             </nav>
 
-            <div className="mx-auto mb-10 max-w-xl text-center">
-                <h1 className="mb-2 text-3xl font-black uppercase tracking-tight text-on-surface">
-                    Tra cứu đơn hàng
-                </h1>
-                <p className="text-xs font-bold text-outline">
-                    Chọn loại mã bạn đang có. Việc tra cứu yêu cầu đăng nhập và đơn hàng phải thuộc tài khoản hiện tại.
-                </p>
-            </div>
+            <div className="mb-10 grid gap-6 lg:grid-cols-2 lg:items-end">
+                <div className="text-left">
+                    <h1 className="text-3xl font-black uppercase tracking-tight text-on-surface">
+                        Tra cứu đơn hàng
+                    </h1>
+                </div>
 
-            <form onSubmit={handleSearch} className="mx-auto mb-12 max-w-xl space-y-3">
+
+            </div>
+            <form onSubmit={handleSearch} className="space-y-3 mb-10">
                 <div className="grid grid-cols-2 gap-2 rounded-xl bg-surface-container p-1">
                     <button
                         type="button"
@@ -406,7 +406,7 @@ export default function OrderTracking() {
                 </div>
 
                 {trackingError && (
-                    <p className="text-center text-xs font-bold text-error">{trackingError}</p>
+                    <p className="text-left text-xs font-bold text-error">{trackingError}</p>
                 )}
             </form>
 

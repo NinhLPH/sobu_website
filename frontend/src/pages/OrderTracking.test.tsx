@@ -45,6 +45,35 @@ beforeEach(() => {
 });
 
 describe('OrderTracking workflow', () => {
+    it('uses the full page width with a responsive lookup layout', async () => {
+        mockedCustomerService.getOrderByNhanhId.mockResolvedValue({
+            success: true,
+            message: 'OK',
+            data: {
+                id: 42,
+                orderCode: 'SO-42',
+                nhanhOrderId: 'NH-42',
+                type: 'NORMAL',
+                status: 'PENDING',
+                paymentStatus: 'PENDING',
+                totalAmount: 1500000,
+                items: []
+            }
+        });
+
+        const { container } = render(<OrderTracking />);
+
+        await waitFor(() => expect(mockedCustomerService.getOrderByNhanhId).toHaveBeenCalled());
+
+        const main = container.querySelector('main');
+        const lookupForm = container.querySelector('form');
+
+        expect(main?.className).toContain('w-full');
+        expect(main?.className).not.toContain('max-w-4xl');
+        expect(lookupForm?.className).not.toContain('max-w-xl');
+        expect(lookupForm?.parentElement?.className).toContain('lg:grid-cols-2');
+    });
+
     it('opens an order directly from a nhanhOrderId query parameter', async () => {
         mockedCustomerService.getOrderByNhanhId.mockResolvedValue({
             success: true,
