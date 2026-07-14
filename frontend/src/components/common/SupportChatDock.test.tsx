@@ -232,7 +232,7 @@ describe('SupportChatDock', () => {
 
         expect(screen.getByRole('button', { name: 'Mo chat ho tro' })).toBeTruthy();
         fireEvent.click(screen.getByRole('button', { name: 'Mo chat ho tro' }));
-        expect(screen.getByText('Chat ho tro cho nhan vien')).toBeTruthy();
+        expect(screen.getByText('Chat Hỗ trợ')).toBeTruthy();
         expect(screen.getByRole('link', { name: 'Mo admin support' }).getAttribute('href')).toBe('/admin/support');
         expect(SupportChatService.getConversation).not.toHaveBeenCalled();
         expect(SupportChatService.getMessages).not.toHaveBeenCalled();
@@ -474,6 +474,40 @@ describe('SupportChatDock', () => {
         });
 
         expect(screen.getByText('Live reply')).toBeTruthy();
+    });
+
+    it('keeps a live message when the initial history request resolves afterwards', async () => {
+        const history = deferred<typeof historyResponse>();
+        mockGetMessages.mockReturnValue(history.promise);
+
+        render(<SupportChatDock/>);
+        const socket = await openChatAndWaitForSocket();
+
+        act(() => {
+            socket.triggerOpen();
+            socket.triggerMessage({ type: 'AUTH_SUCCESS' });
+            socket.triggerMessage({
+                type: 'MESSAGE_CREATED',
+                message: {
+                    id: 3,
+                    conversationId: 1,
+                    senderId: 99,
+                    senderEmail: 'staff@example.com',
+                    senderRole: 'STAFF',
+                    content: 'Live reply before history',
+                    createdAt: '2026-07-03T12:03:00'
+                }
+            });
+        });
+
+        expect(screen.getByText('Live reply before history')).toBeTruthy();
+
+        await act(async () => {
+            history.resolve(historyResponse);
+        });
+
+        expect(screen.getByText('Oldest history')).toBeTruthy();
+        expect(screen.getByText('Live reply before history')).toBeTruthy();
     });
 
     it('supports data.message fallback for MESSAGE_CREATED events', async () => {
