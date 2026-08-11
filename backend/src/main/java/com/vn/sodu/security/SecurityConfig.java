@@ -52,7 +52,8 @@ public class SecurityConfig {
             "/api/v1/public/**",
             "/api/nhanh/**",
             "/api/payos/**",
-            "/ws/**"
+            "/ws/**",
+            "/sitemap.xml"
     };
 
     @Bean

@@ -33,7 +33,6 @@ COPY --chown=appuser:appgroup --from=builder /app/target/extracted/spring-boot-l
 COPY --chown=appuser:appgroup --from=builder /app/target/extracted/snapshot-dependencies/ ./
 COPY --chown=appuser:appgroup --from=builder /app/target/extracted/application/ ./
 
-# Chỉ chown uploads, không chown toàn bộ /app
 RUN mkdir -p /app/uploads && chown appuser:appgroup /app/uploads
 
 USER appuser
@@ -43,4 +42,4 @@ EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
   CMD wget -qO- http://127.0.0.1:8081/actuator/health || exit 1
 
-ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "org.springframework.boot.loader.launch.JarLauncher"]

@@ -1,7 +1,11 @@
+networks:
+  sobu-network:
+    driver: bridge
+
 services:
   mysql:
-    image: ${MYSQL_IMAGE}
-    container_name: ${MYSQL_CONTAINER_NAME}
+    image: ${MYSQL_IMAGE:-mysql:8.4}
+    container_name: ${MYSQL_CONTAINER_NAME:-sobu-mysql}
     restart: unless-stopped
 
     environment:
@@ -12,7 +16,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
 
     ports:
-      - "${MYSQL_PORT}:3306"
+      - "${MYSQL_PORT:-3306}:3306"
 
     volumes:
       - mysql_data:/var/lib/mysql
@@ -24,44 +28,61 @@ services:
       retries: 10
       start_period: 30s
 
+    networks:
+      - sobu-network
+
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: ${REDIS_CONTAINER_NAME:-sobu-redis}
     restart: unless-stopped
 
     environment:
       TZ: Asia/Ho_Chi_Minh
 
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
     volumes:
       - redis_data:/data
 
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - sobu-network
+
   backend:
     image: ${BACKEND_IMAGE}
-    container_name: ${BACKEND_CONTAINER_NAME}
+    container_name: ${BACKEND_CONTAINER_NAME:-sobu-backend}
     restart: unless-stopped
 
     depends_on:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
     environment:
       TZ: Asia/Ho_Chi_Minh
+      APP_STORAGE_LOCAL_DIR: /app/uploads
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
 
     env_file:
       - .env
 
     ports:
-      - "${BACKEND_PORT}:${SERVER_PORT}"
+      - "${BACKEND_PORT:-8081}:${SERVER_PORT:-8081}"
 
     volumes:
-      - backend_uploads:/app/uploads
+      - ${UPLOADS_HOST_DIR:-./uploads}:/app/uploads
+
+    networks:
+      - sobu-network
 
 volumes:
   mysql_data:
-  backend_uploads:
   redis_data:

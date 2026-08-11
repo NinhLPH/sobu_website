@@ -4,8 +4,10 @@ target/
 .git/
 .gitignore
 *.md
+*.log
 .codex/
 .notebook/
 .env
 .env.*
 src/main/resources/.env
+src/test/
