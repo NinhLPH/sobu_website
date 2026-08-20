@@ -1,5 +1,6 @@
 package com.vn.sodu.product.category.service;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.product.category.Category;
 import com.vn.sodu.product.category.CategoryRepo;
@@ -13,7 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
 import com.vn.sodu.nhanh.service.NhanhClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -23,6 +26,7 @@ public class CategorySyncService {
     private final CategoryMapper categoryMapper;
     private final NhanhService nhanhService;
     private final NhanhClient nhanhClient;
+    private final NhanhEnabled nhanhEnabled;
 
     private static final String CATEGORY_LIST_PATH = "/v3.0/product/category";
 
@@ -31,6 +35,10 @@ public class CategorySyncService {
      */
     @Scheduled(cron = "${nhanh.sync.cron:0 0 */12 * * *}")
     public void syncCategories() {
+        if (!nhanhEnabled.isEnabled()) {
+            log.debug("Nhanh integration disabled — skipping category sync");
+            return;
+        }
         List<NhanhCategoryDTO> categories = fetchAllCategories();
 
         if (categories.isEmpty()) {
@@ -77,6 +85,15 @@ public class CategorySyncService {
 
         Category category = categoryMapper.toEntity(dto);
         if (category == null) return false;
+
+        // Set external_id for upsert mapping
+        category.setExternalId(dto.getId());
+
+        // If existing, keep PK; otherwise leave id null for IDENTITY generation
+        java.util.Optional<Category> existing = categoryRepo.findByExternalId(dto.getId());
+        if (existing.isPresent()) {
+            category.setId(existing.get().getId());
+        }
 
         // The FK is persisted from parentId, not from the read-only parent relation.
         Long parentId = dto.getParentId();

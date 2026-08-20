@@ -2,6 +2,7 @@ package com.vn.sodu.order.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddRequest;
 import com.vn.sodu.nhanh.dto.NhanhOrderAddResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderEditRequest;
@@ -31,6 +32,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -43,6 +45,7 @@ import java.util.Optional;
 import java.util.Objects;
 
 @Slf4j
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Service
 @RequiredArgsConstructor
 public class OrderSyncService {
@@ -59,12 +62,17 @@ public class OrderSyncService {
     private final NhanhSyncAttemptRepository nhanhSyncAttemptRepository;
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
+    private final NhanhEnabled nhanhEnabled;
 
     public void syncOrderToNhanh(Long orderId) {
         syncOrderToNhanh(orderId, null);
     }
 
     public void syncOrderToNhanh(Long orderId, String paymentCode) {
+        if (!nhanhEnabled.isEnabled()) {
+            log.debug("Nhanh integration disabled — skipping sync for order id={}", orderId);
+            return;
+        }
         Order order = loadOrder(orderId);
         SyncTarget target = resolveSyncTarget(order, paymentCode);
         if (target == null) {
@@ -97,6 +105,10 @@ public class OrderSyncService {
     }
 
     public void cancelOrderOnNhanh(Long orderId) {
+        if (!nhanhEnabled.isEnabled()) {
+            log.debug("Nhanh integration disabled — skipping cancellation for order id={}", orderId);
+            return;
+        }
         Order order = loadOrder(orderId);
 
         if (order.getNhanhOrderId() == null || order.getNhanhOrderId().isBlank()) {
@@ -135,6 +147,9 @@ public class OrderSyncService {
             fixedDelayString = "#{@nhanhProperties.sync.recovery.fixedDelayMs}"
     )
     public void recoverOrderSyncs() {
+        if (!nhanhEnabled.isEnabled()) {
+            return;
+        }
         if (!nhanhProperties.getSync().getRecovery().isEnabled()) {
             return;
         }

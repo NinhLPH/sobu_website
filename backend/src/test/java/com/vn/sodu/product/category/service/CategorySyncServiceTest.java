@@ -1,6 +1,7 @@
 package com.vn.sodu.product.category.service;
 
 import com.vn.sodu.nhanh.service.NhanhService;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.product.category.Category;
 import com.vn.sodu.product.category.CategoryRepo;
 import com.vn.sodu.product.category.dto.NhanhCategoryDTO;
@@ -35,6 +36,9 @@ class CategorySyncServiceTest {
     @Mock
     private NhanhService nhanhService;
 
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
     @Spy
     @InjectMocks
     private CategorySyncService categorySyncService;
@@ -45,6 +49,7 @@ class CategorySyncServiceTest {
         NhanhCategoryDTO parent = new NhanhCategoryDTO(1L, null, "P", "Parent", 1, null, null, 1);
         NhanhCategoryDTO child = new NhanhCategoryDTO(2L, 1L, "C", "Child", 2, null, null, 1);
 
+        when(nhanhEnabled.isEnabled()).thenReturn(true);
         doReturn(List.of(child, parent)).when(categorySyncService).fetchAllCategories();
         doReturn(true).when(categorySyncService).syncOne(any(NhanhCategoryDTO.class));
 
@@ -61,6 +66,7 @@ class CategorySyncServiceTest {
         NhanhCategoryDTO a = new NhanhCategoryDTO(1L, 2L, "A", "A", 1, null, null, 1);
         NhanhCategoryDTO b = new NhanhCategoryDTO(2L, 1L, "B", "B", 1, null, null, 1);
 
+        when(nhanhEnabled.isEnabled()).thenReturn(true);
         doReturn(List.of(a, b)).when(categorySyncService).fetchAllCategories();
 
         categorySyncService.syncCategories();

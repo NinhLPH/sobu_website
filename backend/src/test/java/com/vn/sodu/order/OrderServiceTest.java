@@ -1,6 +1,8 @@
 package com.vn.sodu.order;
 
 import com.vn.sodu.global.exception.ForbiddenOperationException;
+import com.vn.sodu.audit.AuditAction;
+import com.vn.sodu.inventory.InsufficientStockException;
 import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
@@ -10,6 +12,9 @@ import com.vn.sodu.order.services.OrderService;
 import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.service.PaymentCheckoutCreationException;
 import com.vn.sodu.payment.service.PaymentService;
+import com.vn.sodu.integration.NhanhEnabled;
+import com.vn.sodu.product.Product;
+import com.vn.sodu.audit.AuditService;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.user.Account;
@@ -30,7 +35,11 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,10 +68,47 @@ class OrderServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
+    @Mock
+    private AuditService auditService;
+
+    @Mock
+    private com.vn.sodu.location.AddressService addressService;
+
+    @Mock
+    private com.vn.sodu.product.repo.ProductRepo productRepo;
+
+    @Mock
+    private com.vn.sodu.inventory.InventoryService inventoryService;
+
+    @Mock
+    private com.vn.sodu.voucher.service.VoucherService voucherService;
+
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
+        lenient().when(addressService.isWardInProvince(any(), any())).thenReturn(true);
+        lenient().when(voucherService.applyVouchers(any())).thenAnswer(invocation -> {
+            com.vn.sodu.voucher.dto.VoucherApplyRequestDto req = invocation.getArgument(0);
+            BigDecimal subtotal = req.getSubtotal() != null ? req.getSubtotal() : BigDecimal.ZERO;
+            BigDecimal shippingFee = req.getShippingFee() != null ? req.getShippingFee() : BigDecimal.ZERO;
+            return com.vn.sodu.voucher.dto.VoucherApplyResponseDto.builder()
+                    .valid(true)
+                    .subtotalDiscount(BigDecimal.ZERO)
+                    .shippingDiscount(BigDecimal.ZERO)
+                    .totalDiscount(BigDecimal.ZERO)
+                    .originalSubtotal(subtotal)
+                    .originalShippingFee(shippingFee)
+                    .finalSubtotal(subtotal)
+                    .finalShippingFee(shippingFee)
+                    .finalTotal(subtotal.add(shippingFee))
+                    .message("OK")
+                    .build();
+        });
         orderService = new OrderService(
                 orderRepository,
                 orderConversionPolicy,
@@ -70,7 +116,13 @@ class OrderServiceTest {
                 requestToOrderMapper,
                 paymentService,
                 accountRepo,
-                eventPublisher
+                eventPublisher,
+                nhanhEnabled,
+                auditService,
+                addressService,
+                productRepo,
+                inventoryService,
+                voucherService
         );
     }
 
@@ -115,6 +167,7 @@ class OrderServiceTest {
                 .customerName("Nguyen Van A")
                 .customerMobile("0900000001")
                 .customerAddress("1 Nguyen Trai")
+                .customerStreet("1 Nguyen Trai")
                 .customerCityName("Ho Chi Minh")
                 .customerCityId(1L)
                 .customerDistrictId(2L)
@@ -254,6 +307,37 @@ class OrderServiceTest {
     }
 
     @Test
+    void cancelMyOrderDoesNotPublishCancelEventWhenNhanhDisabled() {
+        Authentication auth = customerAuth();
+        Account account = new Account();
+        account.setEmail("customer@example.com");
+        Order order = Order.builder()
+                .id(201L)
+                .customerEmail("customer@example.com")
+                .status(OrderStatus.PROCESSING)
+                .build();
+
+        when(nhanhEnabled.isEnabled()).thenReturn(false);
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(orderRepository.findByIdForUpdate(201L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(order)).thenReturn(order);
+
+        Order result = orderService.cancelMyOrder(201L, auth);
+
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(orderRepository).save(order);
+        verify(eventPublisher, never()).publishEvent(any());
+        verify(auditService).record(
+                eq(AuditAction.ORDER_STATUS_OVERRIDE),
+                eq("ORDER"),
+                eq("201"),
+                eq(OrderStatus.PROCESSING.name()),
+                eq(OrderStatus.CANCELLED.name()),
+                anyString()
+        );
+    }
+
+    @Test
     void cancelMyOrderRejectsShippedOrder() {
         Authentication auth = customerAuth();
         Account account = new Account();
@@ -271,6 +355,109 @@ class OrderServiceTest {
                 .isInstanceOf(ForbiddenOperationException.class);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPED);
         verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void createNormalOrderResolvesProductSnapshotsAndReservesStock() {
+        Product product = Product.builder()
+                .id(500L)
+                .name("Snapshot Name")
+                .retailPrice(new BigDecimal("200000"))
+                .build();
+        when(productRepo.findById(500L)).thenReturn(Optional.of(product));
+
+        CreateNormalOrderDto dto = CreateNormalOrderDto.builder()
+                .customerName("Nguyen Van A")
+                .customerMobile("0900000001")
+                .customerStreet("1 Nguyen Trai")
+                .customerCityName("Ho Chi Minh")
+                .customerCityId(1L)
+                .customerDistrictId(2L)
+                .customerWardId(3L)
+                .carrierId(10L)
+                .carrierServiceId(20L)
+                .shippingFee(BigDecimal.ZERO)
+                .items(List.of(CreateNormalOrderItemDto.builder()
+                        .productId(500L)
+                        .name("Client-Provided Name")
+                        .price(new BigDecimal("100000"))
+                        .quantity(2)
+                        .build()))
+                .build();
+        when(orderRepository.findByOrderCode(anyString())).thenReturn(Optional.empty());
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(100L);
+            return order;
+        });
+        when(inventoryService.reserveForOrder(any(Order.class))).thenReturn(List.of());
+
+        Order result = orderService.createNormalOrder(dto);
+
+        OrderItem item = result.getItems().get(0);
+        assertThat(item.getProductId()).isEqualTo(500L);
+        assertThat(item.getName()).isEqualTo("Snapshot Name");
+        assertThat(item.getPrice()).isEqualByComparingTo("200000.00");
+        assertThat(item.getQuantity()).isEqualTo(2);
+        assertThat(result.getTotalAmount()).isEqualByComparingTo("400000.00");
+        verify(inventoryService).reserveForOrder(result);
+    }
+
+    @Test
+    void createNormalOrderRejectsWhenStockIsInsufficient() {
+        Product product = Product.builder()
+                .id(501L)
+                .name("Snapshot Name")
+                .retailPrice(new BigDecimal("100000"))
+                .build();
+        when(productRepo.findById(501L)).thenReturn(Optional.of(product));
+
+        CreateNormalOrderDto dto = CreateNormalOrderDto.builder()
+                .customerName("Nguyen Van A")
+                .customerMobile("0900000001")
+                .customerStreet("1 Nguyen Trai")
+                .customerCityName("Ho Chi Minh")
+                .customerCityId(1L)
+                .customerDistrictId(2L)
+                .customerWardId(3L)
+                .carrierId(10L)
+                .carrierServiceId(20L)
+                .shippingFee(BigDecimal.ZERO)
+                .items(List.of(CreateNormalOrderItemDto.builder()
+                        .productId(501L)
+                        .name("Snapshot Name")
+                        .quantity(2)
+                        .build()))
+                .build();
+        when(orderRepository.findByOrderCode(anyString())).thenReturn(Optional.empty());
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(inventoryService.reserveForOrder(any(Order.class)))
+                .thenThrow(new InsufficientStockException(501L, 2, 1));
+
+        assertThatThrownBy(() -> orderService.createNormalOrder(dto))
+                .isInstanceOf(InsufficientStockException.class);
+    }
+
+    @Test
+    void cancelMyOrderReleasesReservedStock() {
+        Authentication auth = customerAuth();
+        Account account = new Account();
+        account.setEmail("customer@example.com");
+        Order order = Order.builder()
+                .id(202L)
+                .customerEmail("customer@example.com")
+                .status(OrderStatus.PROCESSING)
+                .items(List.of(OrderItem.builder().productId(500L).quantity(2).build()))
+                .build();
+
+        when(accountRepo.findByEmail("customer@example.com")).thenReturn(Optional.of(account));
+        when(orderRepository.findByIdForUpdate(202L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(order)).thenReturn(order);
+
+        Order result = orderService.cancelMyOrder(202L, auth);
+
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(inventoryService).releaseForOrder(order);
     }
 
     private Authentication customerAuth() {

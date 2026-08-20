@@ -277,16 +277,14 @@ export const useCartStore = create<CartState>((set, get) => ({
 
         const hasValidShippingLocation = [
             details.customerCityName,
-            details.customerDistrictName,
             details.customerWardName
         ].every((name) => name.trim().length > 0) && [
             details.customerCityId,
-            details.customerDistrictId,
             details.customerWardId
         ].every((id) => Number.isInteger(id) && id > 0);
 
         if (!hasValidShippingLocation) {
-            const message = 'Vui lòng chọn đầy đủ tỉnh/thành phố, quận/huyện và phường/xã.';
+            const message = 'Vui lòng chọn đầy đủ tỉnh/thành phố và phường/xã.';
             set({ checkoutError: message });
             throw new Error(message);
         }

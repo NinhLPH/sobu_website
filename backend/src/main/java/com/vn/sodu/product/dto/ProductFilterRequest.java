@@ -26,5 +26,7 @@ public class ProductFilterRequest {
     private BigDecimal minPrice;
     private BigDecimal maxPrice;
     private Boolean inStock;
+    private Boolean active;
+    private String status;
 }
 

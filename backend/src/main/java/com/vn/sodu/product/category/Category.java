@@ -18,7 +18,11 @@ import lombok.*;
 public class Category {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "external_id", unique = true)
+    private Long externalId;
 
     @Column(name = "parent_id")
     private Long parentId;

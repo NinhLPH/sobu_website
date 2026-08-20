@@ -1,6 +1,6 @@
 package com.vn.sodu.product.dto;
 
-import com.vn.sodu.product.ProductVideo;
+import com.vn.sodu.voucher.dto.VoucherSummaryDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -41,6 +41,13 @@ public class ProductDetailDTO {
     private Double averageRating;
     private Long reviewsCount;
     private java.time.LocalDateTime updatedAt;
+    private Boolean active;
+    private Long badgeId;
+    private String badgeName;
+    private String badgeColor;
+    private String badgeTextColor;
 
+    // Voucher promotional data
+    private VoucherSummaryDTO bestVoucher;
+    private List<VoucherSummaryDTO> applicableVouchers;
 }
-

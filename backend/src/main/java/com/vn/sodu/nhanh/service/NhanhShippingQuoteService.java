@@ -3,6 +3,8 @@ package com.vn.sodu.nhanh.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vn.sodu.global.exception.ExternalServiceException;
+import com.vn.sodu.integration.IntegrationProperties;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
@@ -30,9 +32,16 @@ public class NhanhShippingQuoteService {
     private final NhanhProperties nhanhProperties;
     private final NhanhIntegrationRepo nhanhIntegrationRepo;
     private final ObjectMapper objectMapper;
+    private final NhanhEnabled nhanhEnabled;
+    private final IntegrationProperties integrationProperties;
 
     public List<ShippingQuoteDto> quote(ShippingQuoteRequestDto request) {
         validateRequest(request);
+
+        if (!nhanhEnabled.isEnabled()) {
+            return localFlatRateQuote();
+        }
+
         validateOrigin();
 
         String accessToken = nhanhService.getValidAccessToken();
@@ -143,9 +152,29 @@ public class NhanhShippingQuoteService {
         return quotes;
     }
 
-    private boolean isNhanhAccountShipping() {
+private boolean isNhanhAccountShipping() {
         Integer type = nhanhProperties.getShipping().getType();
         return type == null || type == 1;
+    }
+
+    /**
+     * Local-mode (Nhanh disabled) shipping fallback: a single flat-rate
+     * standard quote so the storefront checkout can complete without any
+     * external shipping provider.
+     */
+    private List<ShippingQuoteDto> localFlatRateQuote() {
+        BigDecimal fee = money(integrationProperties.getLocal().getShipping().getFlatFee());
+        ShippingQuoteDto quote = ShippingQuoteDto.builder()
+                .carrierId(29L)
+                .carrierName("Giao hàng tiêu chuẩn")
+                .carrierServiceId(186L)
+                .carrierServiceName("Tiêu chuẩn")
+                .shipFee(fee)
+                .customerShipFee(fee)
+                .deliveryTime("2-4 ngày")
+                .description("Phí giao hàng cố định (local mode)")
+                .build();
+        return List.of(quote);
     }
 
     private List<ShippingQuoteDto> toQuotes(NhanhResponse<List<NhanhShippingFeeOption>> response) {
@@ -288,9 +317,8 @@ public class NhanhShippingQuoteService {
             throw new IllegalArgumentException("Shipping quote payload is required");
         }
         if (request.getCustomerCityId() == null || request.getCustomerCityId() <= 0
-                || request.getCustomerDistrictId() == null || request.getCustomerDistrictId() <= 0
                 || request.getCustomerWardId() == null || request.getCustomerWardId() <= 0) {
-            throw new IllegalArgumentException("Shipping quote requires customer city, district, and ward ids");
+            throw new IllegalArgumentException("Shipping quote requires customer city and ward ids");
         }
         if (request.getCartSubtotal() == null || request.getCartSubtotal().signum() < 0) {
             throw new IllegalArgumentException("Cart subtotal must be greater than or equal to 0");

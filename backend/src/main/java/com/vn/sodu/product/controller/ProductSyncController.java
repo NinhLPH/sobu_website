@@ -1,5 +1,6 @@
 package com.vn.sodu.product.controller;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.product.service.ProductSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +23,8 @@ import java.util.Map;
 @Tag(name = "Admin Sync", description = "Admin endpoints for syncing data from the upstream source")
 public class ProductSyncController {
 
-    private final ProductSyncService productSyncService;
+    private final ObjectProvider<ProductSyncService> productSyncServiceProvider;
+    private final NhanhEnabled nhanhEnabled;
 
     @PostMapping("/sync")
     @Operation(
@@ -34,6 +37,11 @@ public class ProductSyncController {
                             schema = @Schema(implementation = java.util.Map.class)))
     })
     public ResponseEntity<Map<String, String>> syncProducts() {
+        nhanhEnabled.requireEnabled();
+        ProductSyncService productSyncService = productSyncServiceProvider.getIfAvailable();
+        if (productSyncService == null) {
+            throw new IllegalStateException("Product sync service is unavailable");
+        }
         // Trigger one-page sync from Nhanh into local database.
         productSyncService.syncProducts();
         return ResponseEntity.ok(Map.of("message", "Sync success"));

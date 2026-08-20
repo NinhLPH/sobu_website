@@ -8,10 +8,12 @@ import com.vn.sodu.order.dtos.OrderSyncResultDto;
 import com.vn.sodu.order.services.OrderQueryService;
 import com.vn.sodu.order.services.OrderSyncService;
 import com.vn.sodu.request.OrderType;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,7 +39,13 @@ class OrderSyncControllerTest {
     private OrderSyncService orderSyncService;
 
     @Mock
+    private ObjectProvider<OrderSyncService> orderSyncServiceProvider;
+
+    @Mock
     private OrderQueryService orderQueryService;
+
+    @Mock
+    private NhanhEnabled nhanhEnabled;
 
     @Test
     void listOrdersRequiresStaffAndReturnsPage() {
@@ -47,7 +56,7 @@ class OrderSyncControllerTest {
                 .build();
         when(orderQueryService.listOrders(0, 20, "createdAt", "DESC"))
                 .thenReturn(new PageImpl<>(List.of(dto), PageRequest.of(0, 20), 1));
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
 
         ResponseEntity<ApiResponseDTO<PageResponse<OrderResponseDto>>> response =
                 controller.listOrders(staffAuth(), 0, 20, "createdAt", "DESC");
@@ -67,7 +76,7 @@ class OrderSyncControllerTest {
                 .items(Collections.emptyList())
                 .build();
         when(orderQueryService.getOrderDetail(1L)).thenReturn(dto);
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
 
         ResponseEntity<ApiResponseDTO<OrderResponseDto>> response =
                 controller.getOrderDetail(1L, staffAuth());
@@ -89,7 +98,7 @@ class OrderSyncControllerTest {
                 .nhanhOrderCode("SOBU-REQ-1")
                 .build();
         when(orderSyncService.retryOrderSync(1L)).thenReturn(order);
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
 
         ResponseEntity<ApiResponseDTO<OrderSyncResultDto>> response =
                 controller.retryOrderSync(1L, staffAuth());
@@ -104,10 +113,15 @@ class OrderSyncControllerTest {
 
     @Test
     void retryOrderSyncRejectsNonStaff() {
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
 
         assertThrows(AccessDeniedException.class,
                 () -> controller.retryOrderSync(1L, new UsernamePasswordAuthenticationToken("user", "n/a")));
+    }
+
+    private ObjectProvider<OrderSyncService> syncServiceProvider() {
+        lenient().when(orderSyncServiceProvider.getIfAvailable()).thenReturn(orderSyncService);
+        return orderSyncServiceProvider;
     }
 
     private Authentication staffAuth() {

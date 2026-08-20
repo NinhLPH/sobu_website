@@ -1,6 +1,7 @@
 package com.vn.sodu.nhanh.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.dto.CarrierConfigRequestDto;
 import com.vn.sodu.nhanh.dto.CarrierConfigResponseDto;
 import com.vn.sodu.nhanh.service.NhanhShippingQuoteService;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class AdminNhanhShippingController {
 
     private final NhanhShippingQuoteService nhanhShippingQuoteService;
+    private final NhanhEnabled nhanhEnabled;
 
     @GetMapping("/carriers")
     @Operation(
@@ -31,6 +33,7 @@ public class AdminNhanhShippingController {
             @ApiResponse(responseCode = "502", description = "Failed to fetch carriers from Nhanh API")
     })
     public ResponseEntity<ApiResponseDTO<com.fasterxml.jackson.databind.JsonNode>> getCarriers() {
+        nhanhEnabled.requireEnabled();
         com.fasterxml.jackson.databind.JsonNode carriers = nhanhShippingQuoteService.getCarriers();
         return ResponseEntity.ok(ApiResponseDTO.success(carriers, "Carriers retrieved successfully from Nhanh"));
     }
@@ -44,6 +47,7 @@ public class AdminNhanhShippingController {
             @ApiResponse(responseCode = "200", description = "Carrier configuration retrieved successfully")
     })
     public ResponseEntity<ApiResponseDTO<CarrierConfigResponseDto>> getCarrierConfig() {
+        nhanhEnabled.requireEnabled();
         CarrierConfigResponseDto config = nhanhShippingQuoteService.getCarrierConfig();
         return ResponseEntity.ok(ApiResponseDTO.success(config, "Carrier configuration retrieved successfully"));
     }
@@ -60,6 +64,7 @@ public class AdminNhanhShippingController {
     })
     public ResponseEntity<ApiResponseDTO<Void>> updateCarrierConfig(
             @Valid @RequestBody CarrierConfigRequestDto request) {
+        nhanhEnabled.requireEnabled();
         nhanhShippingQuoteService.saveCarrierConfig(request);
         return ResponseEntity.ok(ApiResponseDTO.success(null, "Carrier configuration updated successfully"));
     }

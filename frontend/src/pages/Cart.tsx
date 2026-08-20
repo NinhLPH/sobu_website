@@ -13,7 +13,7 @@ import { redirectToPaymentCheckout } from '../utils/payment-session';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 import { ShippingQuoteDto } from '../interface/shipping.model';
-import { LocationCity, LocationDistrict, LocationWard } from '../interface/location.model';
+import { LocationProvince, LocationWard } from '../interface/location.model';
 import { parseJsonConfig } from '../utils/website-config';
 import { getPaymentCheckoutErrorMessage } from '../utils/payment-checkout-error';
 
@@ -31,17 +31,18 @@ interface CheckoutForm {
     customerEmail: string;
     customerAddress: string;
     customerCityName: string;
-    customerDistrictName: string;
     customerWardName: string;
     customerCityId: number | null;
-    customerDistrictId: number | null;
     customerWardId: number | null;
+    customerStreet: string;
+    customerHamlet: string;
+    hasStreet: boolean;
     description: string;
 }
 
 type CheckoutTextField = Exclude<
     keyof CheckoutForm,
-    'customerCityId' | 'customerDistrictId' | 'customerWardId'
+    'customerCityId' | 'customerWardId' | 'hasStreet'
 >;
 
 type SocialLinks = Record<string, string>;
@@ -52,11 +53,12 @@ const initialCheckoutForm: CheckoutForm = {
     customerEmail: '',
     customerAddress: '',
     customerCityName: '',
-    customerDistrictName: '',
     customerWardName: '',
     customerCityId: null,
-    customerDistrictId: null,
     customerWardId: null,
+    customerStreet: '',
+    customerHamlet: '',
+    hasStreet: true,
     description: ''
 };
 
@@ -321,22 +323,14 @@ function LocationCombobox({
     );
 }
 
-const cityToComboboxOption = (city: LocationCity): LocationComboboxOption => ({
-    id: city.cityId,
-    name: city.cityName,
-    otherName: city.otherName
-});
-
-const districtToComboboxOption = (district: LocationDistrict): LocationComboboxOption => ({
-    id: district.districtId,
-    name: district.districtName,
-    otherName: district.otherName
+const provinceToComboboxOption = (province: LocationProvince): LocationComboboxOption => ({
+    id: province.id,
+    name: province.name
 });
 
 const wardToComboboxOption = (ward: LocationWard): LocationComboboxOption => ({
-    id: ward.wardId,
-    name: ward.wardName,
-    otherName: ward.otherName
+    id: ward.id,
+    name: ward.name
 });
 
 const locationSelectValue = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
@@ -428,11 +422,14 @@ export default function Cart() {
     } = usePaymentStore();
     const configMap = usePublicUiStore((state) => state.configMap);
     const {
-        locationTree,
+        provinces,
+        wards,
         locationsLoaded,
         isLoading: isLocationsLoading,
+        isLoadingWards,
         error: locationError,
-        fetchLocations,
+        fetchProvinces,
+        selectProvince,
         cancelScheduledRetry
     } = useLocationStore();
     const { subtotal, itemCount } = getTotals();
@@ -455,12 +452,12 @@ export default function Cart() {
     const facebookSupportUrl = socialLinks.facebook?.trim() || '';
 
     useEffect(() => {
-        void fetchLocations(true);
+        void fetchProvinces(true);
         if (isAuthenticated) {
             void fetchCart();
         }
         return cancelScheduledRetry;
-    }, [fetchLocations, cancelScheduledRetry, fetchCart, isAuthenticated]);
+    }, [fetchProvinces, cancelScheduledRetry, fetchCart, isAuthenticated]);
 
     useEffect(() => {
         if (!user) {
@@ -483,26 +480,12 @@ export default function Cart() {
         clearCheckoutError();
     };
 
-    const cities = useMemo(() => locationTree?.cities ?? [], [locationTree]);
-    const selectedCity = useMemo(
-        () => cities.find((city) => city.cityId === form.customerCityId),
-        [cities, form.customerCityId]
-    );
-    const districts = useMemo(() => selectedCity?.districts ?? [], [selectedCity]);
-    const selectedDistrict = useMemo(
-        () => districts.find((district) => district.districtId === form.customerDistrictId),
-        [districts, form.customerDistrictId]
-    );
-    const wards = useMemo(() => selectedDistrict?.wards ?? [], [selectedDistrict]);
-    const cityOptions = useMemo(() => cities.map(cityToComboboxOption), [cities]);
-    const districtOptions = useMemo(() => districts.map(districtToComboboxOption), [districts]);
+    const provinceOptions = useMemo(() => provinces.map(provinceToComboboxOption), [provinces]);
     const wardOptions = useMemo(() => wards.map(wardToComboboxOption), [wards]);
     const hasSelectedShippingLocation =
         form.customerCityId !== null &&
-        form.customerDistrictId !== null &&
         form.customerWardId !== null &&
         Boolean(form.customerCityName) &&
-        Boolean(form.customerDistrictName) &&
         Boolean(form.customerWardName);
     const selectedShippingQuote = shippingQuotes.find(
         (quote, index) => shippingQuoteKey(quote, index) === selectedShippingQuoteKey
@@ -529,7 +512,6 @@ export default function Cart() {
 
         return {
             customerCityId: form.customerCityId as number,
-            customerDistrictId: form.customerDistrictId as number,
             customerWardId: form.customerWardId as number,
             cartSubtotal: subtotal,
             codAmount: paymentMethod === 'COD' ? subtotal : 0,
@@ -542,7 +524,6 @@ export default function Cart() {
         };
     }, [
         form.customerCityId,
-        form.customerDistrictId,
         form.customerWardId,
         paymentMethod,
         subtotal
@@ -668,46 +649,30 @@ export default function Cart() {
         }
     };
 
-    const handleCityChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
-        const cityId = locationSelectValue(value);
-        const city = cities.find((item) => item.cityId === cityId);
+    const handleProvinceChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
+        const provinceId = locationSelectValue(value);
+        const province = provinces.find((item) => item.id === provinceId);
 
         setForm((current) => ({
             ...current,
-            customerCityId: city?.cityId ?? null,
-            customerCityName: city?.cityName ?? '',
-            customerDistrictId: null,
-            customerDistrictName: '',
+            customerCityId: province?.id ?? null,
+            customerCityName: province?.name ?? '',
             customerWardId: null,
             customerWardName: ''
         }));
-        setValidationError(null);
-        clearCheckoutError();
-    };
-
-    const handleDistrictChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
-        const districtId = locationSelectValue(value);
-        const district = districts.find((item) => item.districtId === districtId);
-
-        setForm((current) => ({
-            ...current,
-            customerDistrictId: district?.districtId ?? null,
-            customerDistrictName: district?.districtName ?? '',
-            customerWardId: null,
-            customerWardName: ''
-        }));
+        selectProvince(provinceId);
         setValidationError(null);
         clearCheckoutError();
     };
 
     const handleWardChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
         const wardId = locationSelectValue(value);
-        const ward = wards.find((item) => item.wardId === wardId);
+        const ward = wards.find((item) => item.id === wardId);
 
         setForm((current) => ({
             ...current,
-            customerWardId: ward?.wardId ?? null,
-            customerWardName: ward?.wardName ?? ''
+            customerWardId: ward?.id ?? null,
+            customerWardName: ward?.name ?? ''
         }));
         setValidationError(null);
         clearCheckoutError();
@@ -735,15 +700,20 @@ export default function Cart() {
 
         if (
             form.customerCityId === null ||
-            form.customerDistrictId === null ||
             form.customerWardId === null ||
             !form.customerCityName ||
-            !form.customerDistrictName ||
             !form.customerWardName
         ) {
             setValidationError(
-                'Vui lòng chọn đầy đủ tỉnh/thành phố, quận/huyện và phường/xã.'
+                'Vui lòng chọn đầy đủ tỉnh/thành phố và phường/xã.'
             );
+            return;
+        }
+
+        const street = form.hasStreet ? form.customerStreet.trim() : '';
+        const hamlet = form.hasStreet ? form.customerHamlet.trim() : '';
+        if (!street && !hamlet) {
+            setValidationError('Vui lòng nhập tên đường hoặc xóm/ấp để giao hàng.');
             return;
         }
 
@@ -763,11 +733,11 @@ export default function Cart() {
                 customerEmail: form.customerEmail.trim() || undefined,
                 customerAddress: form.customerAddress.trim() || undefined,
                 customerCityName: form.customerCityName,
-                customerDistrictName: form.customerDistrictName,
                 customerWardName: form.customerWardName,
                 customerCityId: form.customerCityId,
-                customerDistrictId: form.customerDistrictId,
                 customerWardId: form.customerWardId,
+                customerStreet: street || undefined,
+                customerHamlet: hamlet || undefined,
                 shippingFee,
                 ...(carrierId !== null && carrierServiceId !== null
                     ? {
@@ -914,16 +884,16 @@ export default function Cart() {
                                 onChange={(event) => updateField('customerAddress', event.target.value)}
                                 disabled={isSubmitting || isCreatingPayment}
                                 maxLength={MAX_CUSTOMER_ADDRESS_LENGTH}
-                                placeholder="Địa chỉ giao hàng chi tiết (Địa chỉ sau sát nhập)"
+                                placeholder="Địa chỉ giao hàng chi tiết (số nhà, đường, xóm/ấp...)"
                                 className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                             />
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <LocationCombobox
                                     label="Tỉnh/Thành phố"
                                     placeholder="Tỉnh/Thành phố *"
-                                    options={cityOptions}
+                                    options={provinceOptions}
                                     value={form.customerCityId}
-                                    onSelect={handleCityChange}
+                                    onSelect={handleProvinceChange}
                                     disabled={
                                         isSubmitting ||
                                         isCreatingPayment ||
@@ -931,18 +901,6 @@ export default function Cart() {
                                         !locationsLoaded
                                     }
                                     loading={isLocationsLoading}
-                                />
-                                <LocationCombobox
-                                    label="Quận/Huyện"
-                                    placeholder="Quận/Huyện *"
-                                    options={districtOptions}
-                                    value={form.customerDistrictId}
-                                    onSelect={handleDistrictChange}
-                                    disabled={
-                                        isSubmitting ||
-                                        isCreatingPayment ||
-                                        !selectedCity
-                                    }
                                 />
                                 <LocationCombobox
                                     label="Phường/Xã"
@@ -953,14 +911,67 @@ export default function Cart() {
                                     disabled={
                                         isSubmitting ||
                                         isCreatingPayment ||
-                                        !selectedDistrict
+                                        form.customerCityId === null ||
+                                        isLoadingWards
                                     }
+                                    loading={isLoadingWards}
                                 />
                             </div>
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-[10px] font-black uppercase tracking-wider text-outline">
+                                    Địa chỉ giao nhận
+                                </p>
+                                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-on-surface-variant">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.hasStreet}
+                                        onChange={(event) => {
+                                            setForm((current) => ({
+                                                ...current,
+                                                hasStreet: event.target.checked
+                                            }));
+                                            setValidationError(null);
+                                            clearCheckoutError();
+                                        }}
+                                        disabled={isSubmitting || isCreatingPayment}
+                                        className="h-4 w-4 accent-primary"
+                                    />
+                                    Có tên đường
+                                </label>
+                            </div>
+                            {form.hasStreet ? (
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <input
+                                        type="text"
+                                        value={form.customerStreet}
+                                        onChange={(event) => updateField('customerStreet', event.target.value)}
+                                        disabled={isSubmitting || isCreatingPayment}
+                                        placeholder="Tên đường *"
+                                        className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={form.customerHamlet}
+                                        onChange={(event) => updateField('customerHamlet', event.target.value)}
+                                        disabled={isSubmitting || isCreatingPayment}
+                                        placeholder="Xóm/Ấp (nếu có)"
+                                        className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={form.customerHamlet}
+                                    onChange={(event) => updateField('customerHamlet', event.target.value)}
+                                    disabled={isSubmitting || isCreatingPayment}
+                                    placeholder="Tên xóm/ấp/địa danh nhận hàng *"
+                                    className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            )}
                             <div hidden aria-hidden="true" className="hidden">
                                 <select
                                     value={form.customerCityId ?? ''}
-                                    onChange={handleCityChange}
+                                    onChange={handleProvinceChange}
                                     disabled={
                                         isSubmitting ||
                                         isCreatingPayment ||
@@ -973,27 +984,9 @@ export default function Cart() {
                                     <option value="">
                                         {isLocationsLoading ? 'Đang tải...' : 'Tỉnh / Thành phố *'}
                                     </option>
-                                    {cities.map((city) => (
-                                        <option key={city.cityId} value={city.cityId}>
-                                            {city.cityName}
-                                        </option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={form.customerDistrictId ?? ''}
-                                    onChange={handleDistrictChange}
-                                    disabled={
-                                        isSubmitting ||
-                                        isCreatingPayment ||
-                                        !selectedCity
-                                    }
-                                    className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                    required
-                                >
-                                    <option value="">Quận/Huyện *</option>
-                                    {districts.map((district) => (
-                                        <option key={district.districtId} value={district.districtId}>
-                                            {district.districtName}
+                                    {provinces.map((province) => (
+                                        <option key={province.id} value={province.id}>
+                                            {province.name}
                                         </option>
                                     ))}
                                 </select>
@@ -1003,24 +996,19 @@ export default function Cart() {
                                     disabled={
                                         isSubmitting ||
                                         isCreatingPayment ||
-                                        !selectedDistrict
+                                        form.customerCityId === null
                                     }
                                     className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                                     required
                                 >
                                     <option value="">Phường/Xã *</option>
                                     {wards.map((ward) => (
-                                        <option key={ward.wardId} value={ward.wardId}>
-                                            {ward.wardName}
+                                        <option key={ward.id} value={ward.id}>
+                                            {ward.name}
                                         </option>
                                     ))}
                                 </select>
                             </div>
-                            {locationTree?.stale && (
-                                <p className="text-xs font-semibold text-amber-700">
-                                    Đang sử dụng dữ liệu địa điểm được lưu gần nhất.
-                                </p>
-                            )}
                             <textarea
                                 value={form.description}
                                 onChange={(event) => updateField('description', event.target.value)}
@@ -1084,7 +1072,7 @@ export default function Cart() {
                             </legend>
                             {!hasSelectedShippingLocation && (
                                 <p className="mt-2 text-xs font-semibold text-on-surface-variant">
-                                    Chọn đầy đủ tỉnh/thành, quận/huyện và phường/xã để tính phí giao hàng.
+                                    Chọn đầy đủ tỉnh/thành phố và phường/xã để tính phí giao hàng.
                                 </p>
                             )}
                             {hasSelectedShippingLocation && isLoadingShippingQuotes && (

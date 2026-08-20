@@ -1,4 +1,20 @@
 -- ========================
+-- MIGRATION: IDENTITY columns for local catalog management
+-- Run once in production; safe to run multiple times in dev (idempotent where possible)
+-- ========================
+-- MySQL: convert id columns to AUTO_INCREMENT (IDENTITY)
+-- Note: If tables already have AUTO_INCREMENT, these are no-ops or will error; adjust for your env.
+-- For production, run these manually before deploying the new code.
+-- ALTER TABLE products MODIFY id BIGINT NOT NULL AUTO_INCREMENT;
+-- ALTER TABLE categories MODIFY id BIGINT NOT NULL AUTO_INCREMENT;
+-- ALTER TABLE brands MODIFY id BIGINT NOT NULL AUTO_INCREMENT;
+-- ALTER TABLE categories ADD COLUMN external_id BIGINT NULL, ADD UNIQUE KEY uk_categories_external_id (external_id);
+-- ALTER TABLE brands ADD COLUMN external_id BIGINT NULL, ADD UNIQUE KEY uk_brands_external_id (external_id);
+
+-- Backfill active column for existing products (default true)
+UPDATE products SET active = TRUE WHERE active IS NULL;
+
+-- ========================
 -- ROLE
 -- ========================
 INSERT INTO role (name, description) VALUES 
@@ -558,4 +574,38 @@ admin_reply = VALUES(admin_reply),
 replied_by = VALUES(replied_by),
 replied_at = VALUES(replied_at),
 updated_at = VALUES(updated_at);
+
+-- ========================
+-- VOUCHERS
+-- ========================
+INSERT INTO vouchers (id, code, name, type, slot, scope, geo_scope, value, max_discount_amount, min_order_value, usage_limit, used_count, auto_apply, active, deleted, start_date, end_date, created_at, updated_at) VALUES
+(1, 'SOBUAUTO5', 'Tự động giảm 5% toàn đơn từ 200k', 'DISCOUNT_PERCENT', 'ORDER', 'ALL', 'ALL', 5.00, 50000.00, 200000.00, 1000, 0, true, true, false, '2026-01-01 00:00:00', '2026-12-31 23:59:59', NOW(), NOW()),
+(2, 'HANOIFREE', 'Miễn phí vận chuyển 11 quận nội thành Hà Nội', 'FREE_SHIP', 'SHIPPING', 'ALL', 'HANOI_CENTER', 30000.00, 30000.00, 150000.00, 2000, 0, true, true, false, '2026-01-01 00:00:00', '2026-12-31 23:59:59', NOW(), NOW()),
+(3, 'SKINCARE10', 'Giảm 10% cho danh mục Chăm sóc da', 'DISCOUNT_PERCENT', 'ITEM', 'CATEGORY', 'ALL', 10.00, 50000.00, 200000.00, 500, 0, false, true, false, '2026-01-01 00:00:00', '2026-12-31 23:59:59', NOW(), NOW()),
+(4, 'PROMOVIP15', 'Giảm 15% sản phẩm Sodu Gentle', 'DISCOUNT_PERCENT', 'ITEM', 'PRODUCT', 'ALL', 15.00, 60000.00, 100000.00, 300, 0, false, true, false, '2026-01-01 00:00:00', '2026-12-31 23:59:59', NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+name = VALUES(name),
+type = VALUES(type),
+slot = VALUES(slot),
+scope = VALUES(scope),
+geo_scope = VALUES(geo_scope),
+value = VALUES(value),
+max_discount_amount = VALUES(max_discount_amount),
+min_order_value = VALUES(min_order_value),
+usage_limit = VALUES(usage_limit),
+auto_apply = VALUES(auto_apply),
+active = VALUES(active),
+deleted = VALUES(deleted),
+updated_at = VALUES(updated_at);
+
+-- Link category voucher to category 1 (if exists)
+INSERT IGNORE INTO voucher_category_ids (voucher_id, category_id) VALUES
+(3, 1),
+(3, 2);
+
+-- Link product voucher to product 1001 / 1
+INSERT IGNORE INTO voucher_product_ids (voucher_id, product_id) VALUES
+(4, 1001),
+(4, 1);
+
 

@@ -6,6 +6,8 @@ import com.vn.sodu.order.OrderStatus;
 import com.vn.sodu.order.NhanhSyncStage;
 import com.vn.sodu.order.OrderSyncStatus;
 import com.vn.sodu.order.repo.OrderRepository;
+import com.vn.sodu.inventory.InventoryService;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.payment.OrderPayment;
 import com.vn.sodu.payment.PayOSCheckoutSession;
 import com.vn.sodu.payment.PayOSGateway;
@@ -45,6 +47,8 @@ public class PaymentService {
     private final PayOSProperties payOSProperties;
     private final PaymentCalculationService paymentCalculationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final NhanhEnabled nhanhEnabled;
+    private final InventoryService inventoryService;
 
     public void initializeOrderPaymentState(Order order) {
         if (order == null) {
@@ -271,6 +275,7 @@ public class PaymentService {
         payment.setFailureReason(reason == null || reason.isBlank() ? "Payment failed" : reason);
         OrderPayment savedPayment = orderPaymentRepository.save(payment);
         Order updatedOrder = recalculateOrderPaymentState(payment.getOrder());
+        releaseStockIfOrderAbandoned(updatedOrder);
         savedPayment.setOrder(updatedOrder);
         return savedPayment;
     }
@@ -292,6 +297,7 @@ public class PaymentService {
         payment.setFailureReason(reason == null || reason.isBlank() ? "Payment session expired" : reason);
         OrderPayment savedPayment = orderPaymentRepository.save(payment);
         Order updatedOrder = recalculateOrderPaymentState(payment.getOrder());
+        releaseStockIfOrderAbandoned(updatedOrder);
         savedPayment.setOrder(updatedOrder);
         return savedPayment;
     }
@@ -316,6 +322,9 @@ public class PaymentService {
     }
 
     private void publishOrderReadyForSync(Order order, OrderPayment payment) {
+        if (!nhanhEnabled.isEnabled()) {
+            return;
+        }
         if (order == null || order.getId() == null || payment == null) {
             return;
         }
@@ -408,6 +417,30 @@ public class PaymentService {
                         && payment.getType() == type
                         && (payment.getStatus() == PaymentStatus.PENDING || payment.getStatus() == PaymentStatus.PAID)
         );
+    }
+
+    /**
+     * Releases reserved stock when a payment becomes terminal and the order has
+     * no live payment left and nothing has been paid — the order is effectively
+     * abandoned. Reservations are kept while any pending payment exists so a
+     * customer retrying a payment cannot oversell.
+     */
+    private void releaseStockIfOrderAbandoned(Order order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+        if (order.getPaidAmount() != null && order.getPaidAmount().signum() > 0) {
+            return;
+        }
+        if (hasLivePendingPayment(order.getId())) {
+            return;
+        }
+        inventoryService.releaseForOrder(order);
+    }
+
+    private boolean hasLivePendingPayment(Long orderId) {
+        return orderPaymentRepository.findByOrderIdOrderByCreatedAtAsc(orderId).stream()
+                .anyMatch(payment -> payment != null && payment.getStatus() == PaymentStatus.PENDING);
     }
 
     private List<OrderPayment> normalizePendingPayments(Long orderId, List<OrderPayment> payments) {

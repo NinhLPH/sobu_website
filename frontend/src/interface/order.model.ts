@@ -20,11 +20,13 @@ export interface CreateNormalOrderItemDto {
 
 export interface OrderShippingLocationDto {
     customerCityName: string;
-    customerDistrictName: string;
+    customerDistrictName?: string;
     customerWardName: string;
     customerCityId: number;
-    customerDistrictId: number;
+    customerDistrictId?: number;
     customerWardId: number;
+    customerStreet?: string;
+    customerHamlet?: string;
 }
 
 export interface CreateNormalOrderDto extends Partial<OrderShippingLocationDto> {

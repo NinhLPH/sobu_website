@@ -2,6 +2,7 @@ package com.vn.sodu.product.brand.service;
 
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.nhanh.service.NhanhClient;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.product.brand.Brand;
 import com.vn.sodu.product.brand.BrandRepo;
 import com.vn.sodu.product.brand.dto.NhanhBrandDTO;
@@ -30,6 +31,9 @@ class BrandSyncServiceTest {
     private NhanhService nhanhService;
     @Mock
     private NhanhClient nhanhClient;
+
+    @Mock
+    private NhanhEnabled nhanhEnabled;
 
     @InjectMocks
     private BrandSyncService brandSyncService;
@@ -82,6 +86,7 @@ class BrandSyncServiceTest {
         doReturn(Arrays.asList(childDto, parentDto)).when(spyService).fetchAllBrands();
         when(brandMapper.toEntity(childDto)).thenReturn(childBase, childWithParent);
         when(brandMapper.toEntity(parentDto)).thenReturn(parentBase);
+        when(nhanhEnabled.isEnabled()).thenReturn(true);
 
         spyService.syncBrands();
 

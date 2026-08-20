@@ -77,6 +77,8 @@ class ProductServiceTest {
         testProduct.setName("Test Product");
         testProduct.setRetailPrice(BigDecimal.valueOf(100));
         testProduct.setStockAvailable(10.0);
+        testProduct.setActive(true);
+        testProduct.setStatus("ACTIVE");
 
         testListItemDTO = new ProductListItemDTO();
         testListItemDTO.setId(1L);
@@ -532,6 +534,8 @@ class ProductServiceTest {
         product.setName("Test Product " + id);
         product.setRetailPrice(BigDecimal.valueOf(100));
         product.setStockAvailable(10.0);
+        product.setActive(true);
+        product.setStatus("ACTIVE");
         return product;
     }
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { ApiResponseDTO } from '../interface/api-response';
-import { LocationTreeResponse } from '../interface/location.model';
+import { ProvinceListResponse } from '../interface/location.model';
 import { LocationService } from '../service/location.service';
 import { useLocationStore } from './useLocationStore';
 
@@ -8,26 +8,11 @@ jest.mock('../service/location.service');
 
 const mockedLocationService = jest.mocked(LocationService);
 
-const locationTree: LocationTreeResponse = {
-    provider: 'NHANH',
-    locationVersion: 'v1',
-    cachedAt: '2026-06-13T03:00:00Z',
-    expiresAt: '2026-06-14T03:00:00Z',
-    stale: false,
-    cities: [{
-        cityId: 254,
-        cityName: 'Ha Noi',
-        otherName: null,
-        districts: [{
-            districtId: 331,
-            districtName: 'Ba Dinh',
-            otherName: null,
-            wards: [{
-                wardId: 1116,
-                wardName: 'Phuc Xa',
-                otherName: null
-            }]
-        }]
+const provinceList: ProvinceListResponse = {
+    datasetVersion: 'v2',
+    provinces: [{
+        id: 254,
+        name: 'Ha Noi'
     }]
 };
 
@@ -36,9 +21,13 @@ describe('useLocationStore', () => {
         jest.clearAllMocks();
         useLocationStore.getState().cancelScheduledRetry();
         useLocationStore.setState({
-            locationTree: null,
+            provinces: [],
+            wards: [],
+            selectedProvinceId: null,
+            datasetVersion: null,
             locationsLoaded: false,
             isLoading: false,
+            isLoadingWards: false,
             message: null,
             error: null
         });
@@ -48,51 +37,50 @@ describe('useLocationStore', () => {
         jest.useRealTimers();
     });
 
-    it('caches a successful location response', async () => {
-        mockedLocationService.getLocations.mockResolvedValue({
+    it('caches a successful provinces response', async () => {
+        mockedLocationService.getProvinces.mockResolvedValue({
             success: true,
             statusCode: 200,
-            message: 'Locations retrieved successfully',
-            data: locationTree
+            message: 'Provinces retrieved successfully',
+            data: provinceList
         });
 
-        await useLocationStore.getState().fetchLocations();
-        await useLocationStore.getState().fetchLocations();
+        await useLocationStore.getState().fetchProvinces();
+        await useLocationStore.getState().fetchProvinces();
 
-        expect(mockedLocationService.getLocations).toHaveBeenCalledTimes(1);
-        expect(useLocationStore.getState().locationTree).toEqual(locationTree);
+        expect(mockedLocationService.getProvinces).toHaveBeenCalledTimes(1);
+        expect(useLocationStore.getState().provinces).toEqual(provinceList.provinces);
+        expect(useLocationStore.getState().datasetVersion).toBe('v2');
         expect(useLocationStore.getState().locationsLoaded).toBe(true);
     });
 
-    it('deduplicates concurrent requests and accepts stale cached data', async () => {
+    it('deduplicates concurrent requests and keeps provinces loaded', async () => {
         let resolveRequest:
-            ((response: ApiResponseDTO<LocationTreeResponse>) => void)
+            ((response: ApiResponseDTO<ProvinceListResponse>) => void)
             | undefined;
-        mockedLocationService.getLocations.mockImplementation(() => (
+        mockedLocationService.getProvinces.mockImplementation(() => (
             new Promise((resolve) => {
                 resolveRequest = resolve;
             })
         ));
 
-        const firstRequest = useLocationStore.getState().fetchLocations();
-        const secondRequest = useLocationStore.getState().fetchLocations();
+        const firstRequest = useLocationStore.getState().fetchProvinces();
+        const secondRequest = useLocationStore.getState().fetchProvinces();
         resolveRequest?.({
             success: true,
             statusCode: 200,
-            message: 'Locations retrieved from stale cache',
-            data: { ...locationTree, stale: true }
+            message: 'Provinces retrieved successfully',
+            data: provinceList
         });
         await Promise.all([firstRequest, secondRequest]);
 
-        expect(mockedLocationService.getLocations).toHaveBeenCalledTimes(1);
-        expect(useLocationStore.getState().locationTree?.stale).toBe(true);
-        expect(useLocationStore.getState().message)
-            .toBe('Locations retrieved from stale cache');
+        expect(mockedLocationService.getProvinces).toHaveBeenCalledTimes(1);
+        expect(useLocationStore.getState().locationsLoaded).toBe(true);
     });
 
     it('honors Retry-After and schedules only one cold-start retry', async () => {
         jest.useFakeTimers();
-        mockedLocationService.getLocations
+        mockedLocationService.getProvinces
             .mockRejectedValueOnce({
                 response: {
                     status: 503,
@@ -103,18 +91,45 @@ describe('useLocationStore', () => {
             .mockResolvedValueOnce({
                 success: true,
                 statusCode: 200,
-                message: 'Locations retrieved successfully',
-                data: locationTree
+                message: 'Provinces retrieved successfully',
+                data: provinceList
             });
 
-        await useLocationStore.getState().fetchLocations(true);
-        await useLocationStore.getState().fetchLocations(true);
-        expect(mockedLocationService.getLocations).toHaveBeenCalledTimes(1);
+        await useLocationStore.getState().fetchProvinces(true);
+        await useLocationStore.getState().fetchProvinces(true);
+        expect(mockedLocationService.getProvinces).toHaveBeenCalledTimes(1);
 
         jest.advanceTimersByTime(2_000);
-        expect(mockedLocationService.getLocations).toHaveBeenCalledTimes(2);
-        await mockedLocationService.getLocations.mock.results[1].value;
+        expect(mockedLocationService.getProvinces).toHaveBeenCalledTimes(2);
+        await mockedLocationService.getProvinces.mock.results[1].value;
         await Promise.resolve();
         expect(useLocationStore.getState().locationsLoaded).toBe(true);
+    });
+
+    it('loads wards for a selected province', async () => {
+        mockedLocationService.getWards.mockResolvedValue({
+            success: true,
+            statusCode: 200,
+            message: 'Wards retrieved successfully',
+            data: {
+                datasetVersion: 'v2',
+                wards: [{ id: 1116, name: 'Phuc Xa' }]
+            }
+        });
+
+        await useLocationStore.getState().fetchWards(254);
+
+        expect(mockedLocationService.getWards).toHaveBeenCalledWith(254);
+        expect(useLocationStore.getState().wards).toEqual([{ id: 1116, name: 'Phuc Xa' }]);
+        expect(useLocationStore.getState().selectedProvinceId).toBe(254);
+    });
+
+    it('clears wards when province changes', async () => {
+        await useLocationStore.getState().fetchWards(254);
+
+        useLocationStore.getState().selectProvince(1);
+
+        expect(useLocationStore.getState().wards).toEqual([]);
+        expect(useLocationStore.getState().selectedProvinceId).toBe(1);
     });
 });

@@ -189,11 +189,17 @@ public class ProductMapper {
                 .name(entity.getName())
                 .code(entity.getCode())
                 .price(entity.getRetailPrice())
+                .oldPrice(entity.getOldPrice())
                 .status(entity.getStatus())
                 .avatarImage(entity.getAvatarImage())
                 .brandName(entity.getBrandName())
                 .categoryName(entity.getCategoryName())
                 .stockAvailable(entity.getStockAvailable())
+                .active(entity.getActive())
+                .badgeId(entity.getBadgeId())
+                .badgeName(entity.getBadgeName())
+                .badgeColor(entity.getBadgeColor())
+                .badgeTextColor(entity.getBadgeTextColor())
                 .build();
     }
 
@@ -274,6 +280,11 @@ public class ProductMapper {
                 .attributes(attributeDTOs)
                 .images(imageUrls)
                 .updatedAt(product.getUpdatedAt())
+                .active(product.getActive())
+                .badgeId(product.getBadgeId())
+                .badgeName(product.getBadgeName())
+                .badgeColor(product.getBadgeColor())
+                .badgeTextColor(product.getBadgeTextColor())
                 .build();
     }
 }

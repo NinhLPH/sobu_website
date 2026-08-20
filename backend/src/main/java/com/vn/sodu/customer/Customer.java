@@ -29,6 +29,7 @@ public class Customer {
     private String district;
     private String ward;
     private String street;
+    private String hamlet;
     private Long provinceId;
     private Long districtId;
     private Long wardId;

@@ -1,6 +1,7 @@
 package com.vn.sodu.nhanh.controller;
 
 import com.vn.sodu.nhanh.service.NhanhWebhookService;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -15,6 +16,7 @@ import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class NhanhWebhookControllerTest {
@@ -22,9 +24,13 @@ class NhanhWebhookControllerTest {
     @Mock
     private NhanhWebhookService nhanhWebhookService;
 
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
     @Test
     void callbackReturnsOkAndDelegatesPayload() {
-        NhanhWebhookController controller = new NhanhWebhookController(nhanhWebhookService);
+        when(nhanhEnabled.isEnabled()).thenReturn(true);
+        NhanhWebhookController controller = new NhanhWebhookController(nhanhWebhookService, nhanhEnabled);
         HttpHeaders headers = new HttpHeaders();
         headers.set(HttpHeaders.AUTHORIZATION, "verify-token");
         String payload = "{\"event\":\"webhooksEnabled\"}";

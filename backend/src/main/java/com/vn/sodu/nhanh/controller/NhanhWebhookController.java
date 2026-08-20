@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.controller;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.service.NhanhWebhookService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class NhanhWebhookController {
 
     private final NhanhWebhookService nhanhWebhookService;
+    private final NhanhEnabled nhanhEnabled;
 
     @PostMapping({"", "/", "/callback"})
     @Operation(
@@ -29,6 +31,9 @@ public class NhanhWebhookController {
             @RequestBody(required = false) String body,
             @RequestHeader HttpHeaders headers
     ) {
+        if (!nhanhEnabled.isEnabled()) {
+            return ResponseEntity.ok("Nhanh integration is disabled");
+        }
         nhanhWebhookService.receive(body, headers);
         return ResponseEntity.ok("OK");
     }

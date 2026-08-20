@@ -1,6 +1,11 @@
 package com.vn.sodu.order.services;
 
 import com.vn.sodu.order.*;
+import com.vn.sodu.audit.AuditAction;
+import com.vn.sodu.audit.AuditService;
+import com.vn.sodu.inventory.InventoryService;
+import com.vn.sodu.integration.NhanhEnabled;
+import com.vn.sodu.location.AddressContract;
 import com.vn.sodu.global.exception.ForbiddenOperationException;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
@@ -10,6 +15,8 @@ import com.vn.sodu.payment.PaymentType;
 import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.service.PaymentCheckoutCreationException;
 import com.vn.sodu.payment.service.PaymentService;
+import com.vn.sodu.product.Product;
+import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
 import com.vn.sodu.user.Account;
@@ -46,6 +53,12 @@ public class OrderService {
     private final PaymentService paymentService;
     private final AccountRepo accountRepo;
     private final ApplicationEventPublisher eventPublisher;
+    private final NhanhEnabled nhanhEnabled;
+    private final AuditService auditService;
+    private final com.vn.sodu.location.AddressService addressService;
+    private final ProductRepo productRepo;
+    private final InventoryService inventoryService;
+    private final com.vn.sodu.voucher.service.VoucherService voucherService;
 
     @Transactional
     public Order createFromApprovedRequest(Request request) {
@@ -70,6 +83,9 @@ public class OrderService {
 
         // 5. Save order
         Order savedOrder = orderRepository.save(newOrder);
+        // 6. Reserve local sellable stock for order items that resolve to a local product.
+        //    A failed reservation rolls back the whole order.
+        inventoryService.reserveForOrder(savedOrder);
         createInitialPreorderDepositIfRequired(savedOrder);
         return savedOrder;
     }
@@ -91,12 +107,15 @@ public class OrderService {
                 .customerMobile(trim(dto.getCustomerMobile()))
                 .customerEmail(trim(dto.getCustomerEmail()))
                 .customerAddress(trim(dto.getCustomerAddress()))
+                .customerStreet(trim(dto.getCustomerStreet()))
+                .customerHamlet(trim(dto.getCustomerHamlet()))
                 .customerCityName(trim(dto.getCustomerCityName()))
                 .customerDistrictName(trim(dto.getCustomerDistrictName()))
                 .customerWardName(trim(dto.getCustomerWardName()))
                 .customerCityId(dto.getCustomerCityId())
                 .customerDistrictId(dto.getCustomerDistrictId())
                 .customerWardId(dto.getCustomerWardId())
+                .locationVersion(AddressContract.resolveVersionForWrite(dto.getLocationVersion()))
                 .carrierId(dto.getCarrierId())
                 .carrierServiceId(dto.getCarrierServiceId())
                 .shippingFee(money(dto.getShippingFee()))
@@ -107,7 +126,8 @@ public class OrderService {
 
         BigDecimal total = BigDecimal.ZERO;
         for (CreateNormalOrderItemDto itemDto : dto.getItems()) {
-            BigDecimal price = money(itemDto.getPrice());
+            ResolvedOrderItem resolved = resolveOrderItem(itemDto);
+            BigDecimal price = resolved.price();
             BigDecimal discount = money(itemDto.getDiscount());
             int quantity = itemDto.getQuantity();
             BigDecimal lineTotal = price.subtract(discount).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(quantity));
@@ -115,8 +135,9 @@ public class OrderService {
 
             OrderItem item = OrderItem.builder()
                     .order(order)
-                    .nhanhProductId(trim(itemDto.getNhanhProductId()))
-                    .name(trim(itemDto.getName()))
+                    .productId(resolved.productId())
+                    .nhanhProductId(resolved.nhanhProductId())
+                    .name(resolved.name())
                     .note(trim(itemDto.getNote()))
                     .price(price)
                     .discount(discount)
@@ -125,9 +146,58 @@ public class OrderService {
             order.getItems().add(item);
         }
 
-        order.setTotalAmount(money(total));
+        BigDecimal subtotal = money(total);
+        BigDecimal shippingFee = money(dto.getShippingFee());
+
+        List<com.vn.sodu.voucher.dto.VoucherCartItemDto> voucherItems = order.getItems().stream()
+                .map(it -> com.vn.sodu.voucher.dto.VoucherCartItemDto.builder()
+                        .productId(it.getProductId())
+                        .categoryId(it.getProductId() != null ? productRepo.findById(it.getProductId()).map(Product::getCategoryId).orElse(null) : null)
+                        .name(it.getName())
+                        .price(it.getPrice())
+                        .quantity(it.getQuantity())
+                        .build())
+                .toList();
+
+        com.vn.sodu.voucher.dto.VoucherApplyRequestDto voucherReq = com.vn.sodu.voucher.dto.VoucherApplyRequestDto.builder()
+                .discountVoucherCode(dto.getDiscountVoucherCode())
+                .shippingVoucherCode(dto.getShippingVoucherCode())
+                .subtotal(subtotal)
+                .shippingFee(shippingFee)
+                .items(voucherItems)
+                .customerCityName(order.getCustomerCityName())
+                .customerDistrictName(order.getCustomerDistrictName())
+                .customerWardName(order.getCustomerWardName())
+                .customerCityId(order.getCustomerCityId())
+                .customerDistrictId(order.getCustomerDistrictId())
+                .customerWardId(order.getCustomerWardId())
+                .autoApply(true)
+                .build();
+
+        com.vn.sodu.voucher.dto.VoucherApplyResponseDto voucherResp = voucherService.applyVouchers(voucherReq);
+        if (!voucherResp.isValid()) {
+            throw new IllegalArgumentException(voucherResp.getMessage());
+        }
+
+        order.setDiscountVoucherCode(voucherResp.getDiscountVoucherCode());
+        order.setShippingVoucherCode(voucherResp.getShippingVoucherCode());
+        order.setDiscountAmount(money(voucherResp.getSubtotalDiscount()));
+        order.setShippingDiscountAmount(money(voucherResp.getShippingDiscount()));
+        order.setTotalAmount(money(voucherResp.getFinalTotal()));
+
         paymentService.initializeOrderPaymentState(order);
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+
+        // Record voucher usage counts atomically
+        voucherService.recordVoucherUsage(
+                voucherResp.getItemVoucherCode(),
+                voucherResp.getOrderVoucherCode(),
+                voucherResp.getShippingVoucherCode()
+        );
+
+        // Reserve sellable stock atomically. A failed reservation rolls back the order.
+        inventoryService.reserveForOrder(savedOrder);
+        return savedOrder;
     }
 
     @Transactional
@@ -145,9 +215,21 @@ public class OrderService {
             throw new ForbiddenOperationException("Không thể hủy đơn khi đơn hàng đã chuyển sang trạng thái giao hàng");
         }
 
+        OrderStatus previousStatus = order.getStatus();
         order.setStatus(OrderStatus.CANCELLED);
         Order cancelled = orderRepository.save(order);
-        eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
+        inventoryService.releaseForOrder(cancelled);
+        auditService.record(
+                AuditAction.ORDER_STATUS_OVERRIDE,
+                "ORDER",
+                String.valueOf(cancelled.getId()),
+                previousStatus.name(),
+                cancelled.getStatus().name(),
+                "Customer cancellation"
+        );
+        if (nhanhEnabled.isEnabled()) {
+            eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
+        }
         return cancelled;
     }
 
@@ -162,17 +244,22 @@ public class OrderService {
             if (item == null) {
                 throw new IllegalArgumentException("Order item is required");
             }
+            Long productId = item.getProductId();
             String nhanhProductId = trim(item.getNhanhProductId());
-            if (nhanhProductId == null || nhanhProductId.isBlank()) {
-                throw new IllegalArgumentException("Nhanh product id is required");
+            if (productId == null && (nhanhProductId == null || nhanhProductId.isBlank())) {
+                throw new IllegalArgumentException("Either a product id or a Nhanh product id is required");
             }
-            if (!nhanhProductId.chars().allMatch(Character::isDigit)) {
+            if (productId != null && productId <= 0) {
+                throw new IllegalArgumentException("Product id must be greater than 0");
+            }
+            if (nhanhProductId != null && !nhanhProductId.isBlank()
+                    && !nhanhProductId.chars().allMatch(Character::isDigit)) {
                 throw new IllegalArgumentException("Nhanh product id must be numeric");
             }
             if (item.getQuantity() == null || item.getQuantity() <= 0) {
                 throw new IllegalArgumentException("Item quantity must be at least 1");
             }
-            if (item.getPrice() == null || item.getPrice().signum() < 0) {
+            if (item.getPrice() != null && item.getPrice().signum() < 0) {
                 throw new IllegalArgumentException("Item price must be greater than or equal to 0");
             }
             if (item.getDiscount() != null && item.getDiscount().signum() < 0) {
@@ -180,9 +267,16 @@ public class OrderService {
             }
         }
         if (dto.getCustomerCityId() == null || dto.getCustomerCityId() <= 0
-                || dto.getCustomerDistrictId() == null || dto.getCustomerDistrictId() <= 0
                 || dto.getCustomerWardId() == null || dto.getCustomerWardId() <= 0) {
-            throw new IllegalArgumentException("Customer city, district, and ward ids are required");
+            throw new IllegalArgumentException("Customer city and ward ids are required");
+        }
+        String street = trim(dto.getCustomerStreet());
+        String hamlet = trim(dto.getCustomerHamlet());
+        if (isEmpty(street) && isEmpty(hamlet)) {
+            throw new IllegalArgumentException("Either a street or a hamlet is required");
+        }
+        if (!addressService.isWardInProvince(dto.getCustomerWardId(), dto.getCustomerCityId())) {
+            throw new IllegalArgumentException("Ward does not belong to the selected province");
         }
         if (dto.getCarrierId() == null || dto.getCarrierId() <= 0
                 || dto.getCarrierServiceId() == null || dto.getCarrierServiceId() <= 0) {
@@ -192,6 +286,30 @@ public class OrderService {
             throw new IllegalArgumentException("Shipping fee must be greater than or equal to 0");
         }
     }
+
+    private ResolvedOrderItem resolveOrderItem(CreateNormalOrderItemDto itemDto) {
+        String nhanhProductId = trim(itemDto.getNhanhProductId());
+        if (itemDto.getProductId() != null) {
+            Product product = productRepo.findById(itemDto.getProductId())
+                    .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + itemDto.getProductId()));
+            return new ResolvedOrderItem(product.getId(), null, product.getName(), money(product.getRetailPrice()));
+        }
+        if (nhanhProductId != null && !nhanhProductId.isBlank()) {
+            try {
+                Optional<Product> product = productRepo.findByExternalId(Long.parseLong(nhanhProductId));
+                if (product.isPresent()) {
+                    Product found = product.get();
+                    return new ResolvedOrderItem(found.getId(), nhanhProductId, found.getName(), money(found.getRetailPrice()));
+                }
+            } catch (NumberFormatException ignored) {
+                // fall through to legacy snapshot
+            }
+        }
+        // Legacy path: item does not resolve to a local product; keep the provided snapshot.
+        return new ResolvedOrderItem(null, nhanhProductId, trim(itemDto.getName()), money(itemDto.getPrice()));
+    }
+
+    private record ResolvedOrderItem(Long productId, String nhanhProductId, String name, BigDecimal price) { }
 
     private String generateUniqueOrderCode() {
         for (int i = 0; i < 20; i++) {
@@ -209,6 +327,10 @@ public class OrderService {
 
     private String trim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    private boolean isEmpty(String value) {
+        return value == null || value.isBlank();
     }
 
     private void applyInitialPreorderStatus(Order order) {

@@ -55,18 +55,12 @@ const product = {
     stock: 5
 };
 
-const locationTree = {
-    stale: false,
-    cities: [{
-        cityId: 1,
-        cityName: 'Hà Nội',
-        districts: [{
-            districtId: 2,
-            districtName: 'Ba Đình',
-            wards: [{ wardId: 3, wardName: 'Phúc Xá' }]
-        }]
-    }]
-};
+const provinces = [{
+    id: 1,
+    name: 'Hà Nội'
+}];
+
+const wards = [{ id: 3, name: 'Phúc Xá' }];
 
 const shippingQuote = {
     carrierId: 29,
@@ -167,11 +161,14 @@ describe('Cart payment selection', () => {
             }
         } as ReturnType<typeof useAuthStore>);
         mockedUseLocationStore.mockReturnValue({
-            locationTree,
+            provinces,
+            wards,
             locationsLoaded: true,
             isLoading: false,
+            isLoadingWards: false,
             error: null,
-            fetchLocations: jest.fn(),
+            fetchProvinces: jest.fn(),
+            selectProvince: jest.fn(),
             cancelScheduledRetry: jest.fn()
         } as unknown as ReturnType<typeof useLocationStore>);
         mockedUsePaymentStore.mockReturnValue({
@@ -194,9 +191,11 @@ describe('Cart payment selection', () => {
     };
 
     const selectShippingLocation = () => {
-        selectLocationOption('Tỉnh/Thành phố', locationTree.cities[0].cityName);
-        selectLocationOption('Quận/Huyện', locationTree.cities[0].districts[0].districtName);
-        selectLocationOption('Phường/Xã', locationTree.cities[0].districts[0].wards[0].wardName);
+        selectLocationOption('Tỉnh/Thành phố', provinces[0].name);
+        selectLocationOption('Phường/Xã', wards[0].name);
+        fireEvent.change(screen.getByPlaceholderText(/Tên đường/), {
+            target: { value: '1 Nguyen Trai' }
+        });
     };
 
     const getCheckoutButton = () =>
@@ -218,7 +217,6 @@ describe('Cart payment selection', () => {
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledWith({
             customerCityId: 1,
-            customerDistrictId: 2,
             customerWardId: 3,
             cartSubtotal: 350000,
             codAmount: 0
@@ -401,7 +399,6 @@ describe('Cart payment selection', () => {
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith({
             customerCityId: 1,
-            customerDistrictId: 2,
             customerWardId: 3,
             cartSubtotal: 350000,
             codAmount: 0,

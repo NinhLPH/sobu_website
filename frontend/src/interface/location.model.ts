@@ -1,28 +1,28 @@
-export interface LocationWard {
-    wardId: number;
-    wardName: string;
-    otherName: string | null;
+export interface LocationProvince {
+    id: number;
+    name: string;
 }
 
-export interface LocationDistrict {
-    districtId: number;
-    districtName: string;
-    otherName: string | null;
+export interface LocationWard {
+    id: number;
+    name: string;
+}
+
+export interface ProvinceListResponse {
+    datasetVersion: string;
+    provinces: LocationProvince[];
+}
+
+export interface WardListResponse {
+    datasetVersion: string;
     wards: LocationWard[];
 }
 
-export interface LocationCity {
-    cityId: number;
-    cityName: string;
-    otherName: string | null;
-    districts: LocationDistrict[];
-}
-
-export interface LocationTreeResponse {
-    provider: string;
-    locationVersion: string;
-    cachedAt: string;
-    expiresAt: string;
-    stale: boolean;
-    cities: LocationCity[];
+export interface AddressDatasetResponse {
+    version: string;
+    source?: string | null;
+    importedAt?: string | null;
+    checksum?: string | null;
+    provinceCount: number;
+    wardCount: number;
 }

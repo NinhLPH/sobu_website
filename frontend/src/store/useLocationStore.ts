@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { LocationTreeResponse } from '../interface/location.model';
+import { LocationProvince, LocationWard } from '../interface/location.model';
 import { LocationService } from '../service/location.service';
 
 const getErrorMessage = (error: any, fallback: string) =>
@@ -29,19 +29,29 @@ const retryDelayMs = (error: any): number | null => {
 };
 
 interface LocationState {
-    locationTree: LocationTreeResponse | null;
+    provinces: LocationProvince[];
+    wards: LocationWard[];
+    selectedProvinceId: number | null;
+    datasetVersion: string | null;
     locationsLoaded: boolean;
     isLoading: boolean;
+    isLoadingWards: boolean;
     message: string | null;
     error: string | null;
-    fetchLocations: (autoRetry?: boolean) => Promise<void>;
+    fetchProvinces: (autoRetry?: boolean) => Promise<void>;
+    fetchWards: (provinceId: number) => Promise<void>;
+    selectProvince: (provinceId: number | null) => void;
     cancelScheduledRetry: () => void;
 }
 
 export const useLocationStore = create<LocationState>((set, get) => ({
-    locationTree: null,
+    provinces: [],
+    wards: [],
+    selectedProvinceId: null,
+    datasetVersion: null,
     locationsLoaded: false,
     isLoading: false,
+    isLoadingWards: false,
     message: null,
     error: null,
 
@@ -50,7 +60,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         nextRetryAt = 0;
     },
 
-    fetchLocations: async (autoRetry = false) => {
+    fetchProvinces: async (autoRetry = false) => {
         if (get().locationsLoaded) {
             return;
         }
@@ -64,13 +74,14 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         set({ isLoading: true, error: null });
         inFlightRequest = (async () => {
             try {
-                const response = await LocationService.getLocations();
+                const response = await LocationService.getProvinces();
                 if (!response.success || !response.data) {
-                    throw new Error(response.message || 'Could not load shipping locations.');
+                    throw new Error(response.message || 'Could not load provinces.');
                 }
 
                 set({
-                    locationTree: response.data,
+                    provinces: response.data.provinces ?? [],
+                    datasetVersion: response.data.datasetVersion ?? null,
                     locationsLoaded: true,
                     message: response.message,
                     error: null
@@ -82,7 +93,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
                 set({
                     error: getErrorMessage(
                         error,
-                        'Không thể tải danh sách tỉnh, quận và phường.'
+                        'Không thể tải danh sách tỉnh, thành phố.'
                     )
                 });
                 if (delayMs !== null) {
@@ -91,7 +102,7 @@ export const useLocationStore = create<LocationState>((set, get) => ({
                         retryTimer = setTimeout(() => {
                             retryTimer = null;
                             nextRetryAt = 0;
-                            void get().fetchLocations(true);
+                            void get().fetchProvinces(true);
                         }, delayMs);
                     }
                 }
@@ -102,5 +113,41 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         })();
 
         return inFlightRequest;
+    },
+
+    fetchWards: async (provinceId: number) => {
+        if (!provinceId) {
+            set({ wards: [], selectedProvinceId: null });
+            return;
+        }
+        if (get().selectedProvinceId === provinceId && get().wards.length > 0) {
+            return;
+        }
+
+        set({ isLoadingWards: true, selectedProvinceId: provinceId });
+        try {
+            const response = await LocationService.getWards(provinceId);
+            if (!response.success || !response.data) {
+                throw new Error(response.message || 'Could not load wards.');
+            }
+
+            set({
+                wards: response.data.wards ?? [],
+                datasetVersion: response.data.datasetVersion ?? get().datasetVersion
+            });
+        } catch (error) {
+            set({ error: getErrorMessage(error, 'Không thể tải danh sách phường, xã.') });
+        } finally {
+            set({ isLoadingWards: false });
+        }
+    },
+
+    selectProvince: (provinceId) => {
+        if (provinceId !== get().selectedProvinceId) {
+            set({ wards: [], selectedProvinceId: provinceId });
+            if (provinceId) {
+                void get().fetchWards(provinceId);
+            }
+        }
     }
 }));

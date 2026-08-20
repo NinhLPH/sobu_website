@@ -1,5 +1,6 @@
 package com.vn.sodu.product;
 
+import com.vn.sodu.product.badge.ProductBadge;
 import com.vn.sodu.product.brand.Brand;
 import com.vn.sodu.product.category.Category;
 import jakarta.persistence.*;
@@ -27,6 +28,7 @@ import java.time.LocalDateTime;
 public class Product {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     // external id from Nhanh API (nhanh_id). Nullable; used for upsert mapping.
@@ -61,6 +63,19 @@ public class Product {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "brandId", insertable = false, updatable = false)
     private Brand brand;
+
+    // ===== BADGE =====
+    private Long badgeId;
+
+    private String badgeName;
+
+    private String badgeColor;
+
+    private String badgeTextColor;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "badgeId", insertable = false, updatable = false)
+    private ProductBadge badge;
 
     // ===== TYPE =====
     private Long typeId;

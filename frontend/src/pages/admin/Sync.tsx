@@ -9,12 +9,14 @@ import {
     ListTree,
     Award,
     ShoppingCart,
-    Clock3
+    Clock3,
+    PlugZap
 } from 'lucide-react';
 import {AdminSyncService} from '../../service/sync.service';
 import {ToastService} from '../../service/toast.service';
 import {useProductStore} from '../../store/useProductStore';
 import {useAdminStore} from '../../store/useAdminStore';
+import {useIntegrationStore} from '../../store/useIntegrationStore';
 
 const getOrderSyncStatusStyle = (status?: string) => {
     switch (status) {
@@ -87,6 +89,20 @@ export default function AdminSync() {
         brands: null
     });
 
+    const nhanhEnabled = useIntegrationStore((state) => state.nhanhEnabled);
+    const integrationLoaded = useIntegrationStore((state) => state.loaded);
+    const ensureIntegrationLoaded = useIntegrationStore((state) => state.ensureLoaded);
+
+    useEffect(() => {
+        void ensureIntegrationLoaded();
+    }, [ensureIntegrationLoaded]);
+
+    useEffect(() => {
+        if (integrationLoaded && nhanhEnabled) {
+            void fetchOrderSyncQueue();
+        }
+    }, [fetchOrderSyncQueue, integrationLoaded, nhanhEnabled]);
+
     useEffect(() => {
         const oauth = searchParams.get('oauth');
         const errMsg = searchParams.get('error');
@@ -111,10 +127,6 @@ export default function AdminSync() {
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
     }, []);
-
-    useEffect(() => {
-        void fetchOrderSyncQueue();
-    }, [fetchOrderSyncQueue]);
 
     useEffect(() => {
         const queueIds = new Set(orderSyncQueue.map(order => order.id));
@@ -195,6 +207,37 @@ export default function AdminSync() {
             // The store exposes batch and request errors in the sync queue state.
         }
     };
+
+    if (!integrationLoaded) {
+        return (
+            <div className="pt-6 space-y-6">
+                <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">Trung tâm đồng bộ ERP Nhanh.vn</h1>
+                <div className="flex flex-col items-center justify-center gap-4 rounded-3xl bg-white py-20 border border-outline-variant/30 shadow-sm">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary"/>
+                    <p className="text-xs font-bold text-outline">Đang kiểm tra trạng thái tích hợp...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!nhanhEnabled) {
+        return (
+            <div className="pt-6 space-y-6">
+                <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">Trung tâm đồng bộ ERP Nhanh.vn</h1>
+                <div className="flex flex-col items-center justify-center gap-4 rounded-3xl bg-white py-20 border border-outline-variant/30 shadow-sm text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-outline">
+                        <PlugZap className="h-8 w-8"/>
+                    </div>
+                    <h2 className="text-sm font-black text-on-surface uppercase tracking-wide">Tích hợp Nhanh.vn đang tắt</h2>
+                    <p className="max-w-xl text-xs leading-relaxed font-semibold text-outline">
+                        SOBU đang chạy ở chế độ local: sản phẩm, đơn hàng và phí vận chuyển được xử lý trong hệ thống,
+                        không đồng bộ sang ERP Nhanh.vn. Lịch sử các đơn hàng đã đồng bộ trước đó vẫn được giữ nguyên
+                        và hiển thị ở chế độ chỉ đọc.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="pt-6 space-y-6">

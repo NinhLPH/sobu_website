@@ -1,5 +1,6 @@
 package com.vn.sodu.product.brand.service;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.product.brand.Brand;
 import com.vn.sodu.product.brand.BrandRepo;
@@ -15,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
 import com.vn.sodu.nhanh.service.NhanhClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -26,11 +29,16 @@ public class BrandSyncService {
     private final NhanhService nhanhService;
 
     private final NhanhClient nhanhClient;
+    private final NhanhEnabled nhanhEnabled;
 
     private static final String BRAND_LIST_PATH = "/v3.0/product/brand";
 
     @Scheduled(cron = "${nhanh.sync.cron:0 0 */12 * * *}")
     public synchronized void syncBrands() {
+        if (!nhanhEnabled.isEnabled()) {
+            log.debug("Nhanh integration disabled — skipping brand sync");
+            return;
+        }
         List<NhanhBrandDTO> brands = fetchAllBrands();
 
         if (brands.isEmpty()) {
@@ -89,6 +97,16 @@ public class BrandSyncService {
             log.warn("Skipping brand sync item because mapper returned null for id={}", dto.getId());
             return false;
         }
+
+        // Set external_id for upsert mapping
+        brand.setExternalId(dto.getId());
+
+        // If existing, keep PK; otherwise leave id null for IDENTITY generation
+        java.util.Optional<Brand> existing = brandRepo.findByExternalId(dto.getId());
+        if (existing.isPresent()) {
+            brand.setId(existing.get().getId());
+        }
+
         brand.setParentId(null);
         brand.setParent(null);
         brandRepo.save(brand);
@@ -106,10 +124,18 @@ public class BrandSyncService {
             return true;
         }
 
+        // Try to find parent by external_id if not in synced set and not by PK
+        Long parentPk = parentId;
         if (!syncedBrandIds.contains(parentId) && !brandRepo.existsById(parentId)) {
-            log.warn("Skipping parent assignment for brandId={} because parentId={} is missing",
-                    dto.getId(), parentId);
-            return false;
+            // Parent might have been created with IDENTITY PK, look up by external_id
+            java.util.Optional<Brand> parentByExternal = brandRepo.findByExternalId(parentId);
+            if (parentByExternal.isPresent()) {
+                parentPk = parentByExternal.get().getId();
+            } else {
+                log.warn("Skipping parent assignment for brandId={} because parentId={} is missing",
+                        dto.getId(), parentId);
+                return false;
+            }
         }
 
         Brand brand = brandMapper.toEntity(dto);
@@ -118,7 +144,7 @@ public class BrandSyncService {
             return false;
         }
 
-        brand.setParentId(parentId);
+        brand.setParentId(parentPk);
         brand.setParent(null);
         brandRepo.save(brand);
         return true;

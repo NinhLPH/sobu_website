@@ -54,6 +54,8 @@ public class ProductService {
     private final ProductMapper productMapper;
     private final ReviewRepository reviewRepository;
 
+    private final com.vn.sodu.voucher.service.VoucherService voucherService;
+
     @Transactional(readOnly = true)
     public List<ProductListItemDTO> getAllProducts() {
         return productRepo.findAll()
@@ -88,7 +90,14 @@ public class ProductService {
         List<ProductUnit> productUnitList = productUnitRepo.findByProductId(id);
         List<ProductAttribute> productAttributeList = productAttributeRepo.findByProductId(id);
 
-        return withReviewSummary(productMapper.toDetail(product, productUnitList, productAttributeList, imageList));
+        ProductDetailDTO detailDTO = withReviewSummary(productMapper.toDetail(product, productUnitList, productAttributeList, imageList));
+        if (detailDTO != null) {
+            List<com.vn.sodu.voucher.dto.VoucherSummaryDTO> applicableVouchers =
+                    voucherService.getApplicableVouchersForProduct(product.getId(), product.getCategoryId(), product.getOldPrice(), product.getRetailPrice());
+            detailDTO.setApplicableVouchers(applicableVouchers);
+            detailDTO.setBestVoucher(voucherService.findBestVoucherForProduct(applicableVouchers));
+        }
+        return detailDTO;
     }
 
     private ProductListItemDTO withReviewSummary(ProductListItemDTO dto) {
@@ -137,6 +146,10 @@ public class ProductService {
         return (root, query, cb) -> {
             query.distinct(true);
             Predicate predicate = cb.conjunction();
+
+            // Storefront filtering: only active, non-archived products
+            predicate = cb.and(predicate, cb.isTrue(root.<Boolean>get("active")));
+            predicate = cb.and(predicate, cb.notEqual(root.<String>get("status"), "ARCHIVED"));
 
             if (request.getCategoryId() != null) {
                 predicate = cb.and(predicate, cb.equal(root.<Long>get("categoryId"), request.getCategoryId()));

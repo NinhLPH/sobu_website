@@ -56,6 +56,7 @@ public class CategoryMapper {
         }
         return Category.builder()
                 .id(dto.getId())
+                .externalId(dto.getId())
                 .parentId(dto.getParentId())
                 .code(dto.getCode())
                 .name(dto.getName())

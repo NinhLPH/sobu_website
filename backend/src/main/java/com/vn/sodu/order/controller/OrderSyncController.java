@@ -2,6 +2,7 @@ package com.vn.sodu.order.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.dto.PageResponse;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.services.OrderQueryService;
 import com.vn.sodu.order.dtos.OrderSyncResultDto;
@@ -10,6 +11,7 @@ import com.vn.sodu.order.dtos.OrderResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,8 +31,9 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Admin Orders", description = "Admin endpoints for reading orders and retrying synchronization")
 public class OrderSyncController {
 
-    private final OrderSyncService orderSyncService;
+    private final ObjectProvider<OrderSyncService> orderSyncServiceProvider;
     private final OrderQueryService orderQueryService;
+    private final NhanhEnabled nhanhEnabled;
 
     @GetMapping
     @Operation(
@@ -81,6 +84,11 @@ public class OrderSyncController {
             Authentication authentication
     ) {
         requireStaff(authentication);
+        nhanhEnabled.requireEnabled();
+        OrderSyncService orderSyncService = orderSyncServiceProvider.getIfAvailable();
+        if (orderSyncService == null) {
+            throw new IllegalStateException("Order sync service is unavailable");
+        }
         Order order = orderSyncService.retryOrderSync(orderId);
         return ResponseEntity.ok(ApiResponseDTO.success(
                 OrderSyncResultDto.from(order),

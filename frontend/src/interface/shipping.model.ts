@@ -1,7 +1,7 @@
 export interface ShippingQuoteRequestDto {
     customerAddress?: string;
     customerCityId: number;
-    customerDistrictId: number;
+    customerDistrictId?: number;
     customerWardId: number;
     cartSubtotal: number;
     codAmount?: number;

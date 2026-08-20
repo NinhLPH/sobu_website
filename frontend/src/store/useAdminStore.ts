@@ -10,6 +10,7 @@ import {
 } from '../interface/order.model';
 import { PageResponse } from '../interface/api-response';
 import { AdminWorkflowService } from '../service/admin.service';
+import { useIntegrationStore } from './useIntegrationStore';
 import { mockProducts, mockCategories, mockRequests } from '../data/mockData';
 
 const getErrorMessage = (error: any, fallback: string) =>
@@ -301,6 +302,16 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     },
 
     fetchOrderSyncQueue: async () => {
+        if (!useIntegrationStore.getState().nhanhEnabled) {
+            set({
+                orderSyncQueue: [],
+                pendingOrderSyncCount: 0,
+                isOrderSyncQueueLoading: false,
+                orderSyncQueueError: null
+            });
+            return;
+        }
+
         set({ isOrderSyncQueueLoading: true, orderSyncQueueError: null });
         try {
             const orders: OrderResponseDto[] = [];
@@ -334,6 +345,10 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     },
 
     retryOrderSync: async (id) => {
+        if (!useIntegrationStore.getState().nhanhEnabled) {
+            throw new Error('Tích hợp Nhanh.vn đang tắt.');
+        }
+
         const orderId = Number(id);
         if (get().retryingOrderIds.includes(orderId)) {
             throw new Error('Đơn hàng này đang được đồng bộ.');
@@ -391,6 +406,10 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     },
 
     retryOrderSyncBatch: async (ids) => {
+        if (!useIntegrationStore.getState().nhanhEnabled) {
+            throw new Error('Tích hợp Nhanh.vn đang tắt.');
+        }
+
         if (get().orderSyncBatchProgress?.running) {
             throw new Error('Một lượt đồng bộ đơn hàng đang chạy.');
         }

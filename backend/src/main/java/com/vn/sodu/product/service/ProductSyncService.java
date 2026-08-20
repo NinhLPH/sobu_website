@@ -1,5 +1,6 @@
 package com.vn.sodu.product.service;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.service.NhanhService;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.ProductAttribute;
@@ -21,12 +22,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
 import com.vn.sodu.nhanh.service.NhanhClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -40,11 +43,16 @@ public class ProductSyncService {
     private final NhanhService nhanhService;
 
     private final NhanhClient nhanhClient;
+    private final NhanhEnabled nhanhEnabled;
 
     private static final String PRODUCT_LIST_PATH = "/v3.0/product/list";
 
     @Scheduled(cron = "${nhanh.sync.cron:0 0 */12 * * *}")
     public synchronized void syncProducts() {
+        if (!nhanhEnabled.isEnabled()) {
+            log.debug("Nhanh integration disabled — skipping product sync");
+            return;
+        }
         // Phase 5: Get last sync time for incremental sync
         com.vn.sodu.nhanh.NhanhIntegration integration = nhanhService.getIntegration().orElse(null);
         Long lastSyncTime = (integration != null) ? integration.getLastProductSyncTime() : null;
@@ -116,12 +124,10 @@ public class ProductSyncService {
         if (product == null) return null;
         product.setExternalId(dto.getId());
 
-        // If existing, keep PK
+        // If existing, keep PK; otherwise leave id null for IDENTITY generation
         java.util.Optional<Product> existing = productRepo.findByExternalId(dto.getId());
         if (existing.isPresent()) {
             product.setId(existing.get().getId());
-        } else {
-            product.setId(dto.getId());
         }
         return product;
     }

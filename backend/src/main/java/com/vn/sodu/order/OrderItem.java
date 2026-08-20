@@ -21,6 +21,9 @@ public class OrderItem {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    /** Local product id for stock reservation. Nullable for legacy Nhanh-only items. */
+    private Long productId;
+
     @Column(length = 50)
     private String nhanhProductId;
 

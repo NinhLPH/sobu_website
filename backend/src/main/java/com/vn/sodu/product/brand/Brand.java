@@ -20,7 +20,11 @@ import java.time.LocalDateTime;
 public class Brand {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "external_id", unique = true)
+    private Long externalId;
 
     private String code;
 

@@ -1,6 +1,7 @@
 package com.vn.sodu.product.controller;
 
 import com.vn.sodu.product.service.ProductSyncService;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -23,11 +25,33 @@ class ProductSyncControllerTest {
     @Mock
     private ProductSyncService productSyncService;
 
+    @Mock
+    private ObjectProvider<ProductSyncService> productSyncServiceProvider;
+
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
     @InjectMocks
     private ProductSyncController productSyncController;
 
     @BeforeEach
     void setUp() {
+        lenient().when(productSyncServiceProvider.getIfAvailable()).thenReturn(productSyncService);
+        lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("Should reject sync when Nhanh integration is disabled (local mode)")
+    void testSyncProductsRejectsWhenNhanhDisabled() {
+        doThrow(new com.vn.sodu.integration.NhanhIntegrationDisabledException())
+                .when(nhanhEnabled).requireEnabled();
+
+        assertThrows(
+                com.vn.sodu.integration.NhanhIntegrationDisabledException.class,
+                () -> productSyncController.syncProducts()
+        );
+        verify(nhanhEnabled).requireEnabled();
+        verify(productSyncService, never()).syncProducts();
     }
 
     // ──── Test syncProducts() ────────────────────────────────────────────────

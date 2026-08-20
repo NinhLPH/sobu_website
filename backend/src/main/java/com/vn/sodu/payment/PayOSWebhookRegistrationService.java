@@ -26,7 +26,8 @@ public class PayOSWebhookRegistrationService implements ApplicationRunner {
             confirmationClient.confirmWebhook(webhookUrl, properties.getClientId(), properties.getApiKey());
             log.info("Confirmed PayOS webhook URL: {}", webhookUrl);
         } catch (RuntimeException ex) {
-            throw new IllegalStateException("Unable to confirm PayOS webhook URL: " + webhookUrl, ex);
+            log.error("Unable to confirm PayOS webhook URL: {} ({}). The webhook can be confirmed manually in the PayOS dashboard.",
+                    webhookUrl, ex.getMessage());
         }
     }
 

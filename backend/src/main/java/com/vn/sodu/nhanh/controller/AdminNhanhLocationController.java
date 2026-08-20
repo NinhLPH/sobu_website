@@ -1,10 +1,12 @@
 package com.vn.sodu.nhanh.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.service.NhanhLocationSyncCoordinator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -20,7 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Admin Nhanh Locations", description = "Admin endpoints for Nhanh location synchronization")
 public class AdminNhanhLocationController {
 
-    private final NhanhLocationSyncCoordinator locationSyncCoordinator;
+    private final ObjectProvider<NhanhLocationSyncCoordinator> locationSyncCoordinatorProvider;
+    private final NhanhEnabled nhanhEnabled;
 
     @PostMapping("/sync")
     @Operation(
@@ -29,6 +32,11 @@ public class AdminNhanhLocationController {
     )
     public ResponseEntity<ApiResponseDTO<Void>> triggerSync(Authentication authentication) {
         requireStaff(authentication);
+        nhanhEnabled.requireEnabled();
+        NhanhLocationSyncCoordinator locationSyncCoordinator = locationSyncCoordinatorProvider.getIfAvailable();
+        if (locationSyncCoordinator == null) {
+            throw new IllegalStateException("Nhanh location sync service is unavailable");
+        }
         locationSyncCoordinator.triggerManualSync();
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponseDTO.success(
                 null,

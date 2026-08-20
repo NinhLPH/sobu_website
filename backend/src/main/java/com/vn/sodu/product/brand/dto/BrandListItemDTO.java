@@ -17,4 +17,5 @@ public class BrandListItemDTO {
     private String code;
     private String name;
     private Integer status;
+    private Long externalId;
 }

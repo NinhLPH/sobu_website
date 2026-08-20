@@ -20,6 +20,7 @@ public class ProductListItemDTO {
     private String name;
     private String code;
     private BigDecimal price;
+    private BigDecimal oldPrice;
     private String status;
     private String avatarImage;
     private String brandName;
@@ -27,4 +28,9 @@ public class ProductListItemDTO {
     private Double stockAvailable;
     private Double averageRating;
     private Long reviewsCount;
+    private Boolean active;
+    private Long badgeId;
+    private String badgeName;
+    private String badgeColor;
+    private String badgeTextColor;
 }
