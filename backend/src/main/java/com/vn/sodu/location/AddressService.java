@@ -7,6 +7,7 @@ import com.vn.sodu.location.dto.WardListResponseDTO;
 import com.vn.sodu.location.dto.WardResponseDTO;
 import com.vn.sodu.nhanh.location.LocationDataUnavailableException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ public class AddressService {
     private final WardRepository wardRepository;
     private final AdministrativeDatasetReleaseRepository releaseRepository;
 
+    @Cacheable(value = "address:provinces", key = "'all'")
     @Transactional(readOnly = true)
     public ProvinceListResponseDTO listProvinces() {
         String version = currentDatasetVersion();
@@ -43,6 +45,7 @@ public class AddressService {
                 .build();
     }
 
+    @Cacheable(value = "address:wards", key = "#provinceId")
     @Transactional(readOnly = true)
     public WardListResponseDTO listWards(Long provinceId) {
         if (provinceId == null) {
@@ -59,6 +62,7 @@ public class AddressService {
                 .build();
     }
 
+    @Cacheable(value = "address:dataset", key = "'current'")
     @Transactional(readOnly = true)
     public AddressDatasetDTO currentDataset() {
         String version = currentDatasetVersion();
@@ -84,6 +88,7 @@ public class AddressService {
      * Backend validation that a submitted ward id exists, is active, and belongs
      * to the submitted province id. Returns true only when every check passes.
      */
+    @Cacheable(value = "address:validation", key = "#wardId + '_' + #provinceId")
     @Transactional(readOnly = true)
     public boolean isWardInProvince(Long wardId, Long provinceId) {
         if (wardId == null || provinceId == null) {

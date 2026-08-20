@@ -16,9 +16,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/admin/vouchers")
+@RequestMapping({"/api/admin/vouchers", "/api/v1/admin/vouchers"})
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_STAFF')")
+@PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
 public class AdminVoucherController {
 
     private final VoucherService voucherService;

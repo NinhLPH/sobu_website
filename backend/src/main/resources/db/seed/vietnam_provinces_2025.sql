@@ -5,6 +5,9 @@
 -- Idempotent: upsert by stable code + version. Never hard-deletes.
 -- ============================================================
 
+SET NAMES 'utf8mb4';
+SET CHARACTER SET utf8mb4;
+
 INSERT INTO provinces (id, name, dataset_version, active) VALUES
 (1, 'Thành phố Hà Nội', '2025.1', true),
 (4, 'Tỉnh Cao Bằng', '2025.1', true),
@@ -39,7 +42,7 @@ INSERT INTO provinces (id, name, dataset_version, active) VALUES
 (86, 'Tỉnh Vĩnh Long', '2025.1', true),
 (91, 'Tỉnh An Giang', '2025.1', true),
 (92, 'Thành phố Cần Thơ', '2025.1', true),
-(96, 'Tỉnh Cà Mau', '2025.1', true);
+(96, 'Tỉnh Cà Mau', '2025.1', true)
 ON DUPLICATE KEY UPDATE
 name = VALUES(name),
 dataset_version = VALUES(dataset_version),
@@ -3366,7 +3369,7 @@ INSERT INTO wards (id, province_id, name, dataset_version, active) VALUES
 (32227, 96, 'Xã Nguyễn Việt Khái', '2025.1', true),
 (32236, 96, 'Xã Tân Ân', '2025.1', true),
 (32244, 96, 'Xã Phan Ngọc Hiển', '2025.1', true),
-(32248, 96, 'Xã Đất Mũi', '2025.1', true);
+(32248, 96, 'Xã Đất Mũi', '2025.1', true)
 ON DUPLICATE KEY UPDATE
 province_id = VALUES(province_id),
 name = VALUES(name),

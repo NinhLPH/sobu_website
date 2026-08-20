@@ -1,36 +1,29 @@
--- ========================
--- MIGRATION: IDENTITY columns for local catalog management
--- Run once in production; safe to run multiple times in dev (idempotent where possible)
--- ========================
--- MySQL: convert id columns to AUTO_INCREMENT (IDENTITY)
--- Note: If tables already have AUTO_INCREMENT, these are no-ops or will error; adjust for your env.
--- For production, run these manually before deploying the new code.
--- ALTER TABLE products MODIFY id BIGINT NOT NULL AUTO_INCREMENT;
--- ALTER TABLE categories MODIFY id BIGINT NOT NULL AUTO_INCREMENT;
--- ALTER TABLE brands MODIFY id BIGINT NOT NULL AUTO_INCREMENT;
--- ALTER TABLE categories ADD COLUMN external_id BIGINT NULL, ADD UNIQUE KEY uk_categories_external_id (external_id);
--- ALTER TABLE brands ADD COLUMN external_id BIGINT NULL, ADD UNIQUE KEY uk_brands_external_id (external_id);
+-- ========================================================
+-- SOBU DEVELOPMENT & TEST SAMPLE DATA
+-- Purpose: Complete seed data for local development & testing
+-- Safe & Idempotent: Uses ON DUPLICATE KEY UPDATE / INSERT IGNORE
+-- ========================================================
 
--- Backfill active column for existing products (default true)
-UPDATE products SET active = TRUE WHERE active IS NULL;
+SET NAMES 'utf8mb4';
+SET CHARACTER SET utf8mb4;
 
 -- ========================
--- ROLE
+-- 1. ROLES
 -- ========================
 INSERT INTO role (name, description) VALUES 
 ('ADMIN', 'Quản trị viên hệ thống'),
 ('USER', 'Khách hàng mua sắm'),
-('MANAGER','Quản lý'),
+('MANAGER', 'Quản lý'),
 ('STAFF', 'Nhân viên kho và đơn hàng')
 ON DUPLICATE KEY UPDATE description = VALUES(description);
 
 -- ========================
--- LOYALTY
+-- 2. LOYALTY TIERS & RULES
 -- ========================
 INSERT INTO loyalty_tiers (id, name, min_total_money, discount_rate) VALUES
-(1, 0, 0, 0),
-(2, 1, 5000000, 3),
-(3, 2, 15000000, 7)
+(1, 0, 0, 0),          -- Đồng
+(2, 1, 5000000, 3),    -- Bạc
+(3, 2, 15000000, 7)    -- Vàng
 ON DUPLICATE KEY UPDATE
 name = VALUES(name),
 min_total_money = VALUES(min_total_money),
@@ -46,13 +39,13 @@ code = VALUES(code),
 active = VALUES(active);
 
 -- ========================
--- ACCOUNT / CUSTOMER
--- password for all sample accounts: password
+-- 3. ACCOUNTS & CUSTOMERS
+-- Default password for all sample accounts: "password"
 -- ========================
 INSERT INTO account (id, role_id, email, phone, password_hash, full_name, status) VALUES
-(1, (SELECT id FROM role WHERE name = 'ADMIN'), 'admin@sodu.vn', '0901000001', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Quản trị Sodu', 'ACTIVE'),
-(2, (SELECT id FROM role WHERE name = 'MANAGER'), 'manager@sodu.vn', '0901000002', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Nguyễn Minh Quản', 'ACTIVE'),
-(3, (SELECT id FROM role WHERE name = 'STAFF'), 'staff@sodu.vn', '0901000003', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Trần Thu Kho', 'ACTIVE'),
+(1, (SELECT id FROM role WHERE name = 'ADMIN'), 'admin@sobu.vn', '0901000001', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Quản trị viên SOBU', 'ACTIVE'),
+(2, (SELECT id FROM role WHERE name = 'MANAGER'), 'manager@sobu.vn', '0901000002', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Nguyễn Minh Quản', 'ACTIVE'),
+(3, (SELECT id FROM role WHERE name = 'STAFF'), 'staff@sobu.vn', '0901000003', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Trần Thu Kho', 'ACTIVE'),
 (4, (SELECT id FROM role WHERE name = 'USER'), 'linh.nguyen@example.com', '0912000001', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Nguyễn Hoàng Linh', 'ACTIVE'),
 (5, (SELECT id FROM role WHERE name = 'USER'), 'minh.tran@example.com', '0912000002', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Trần Gia Minh', 'ACTIVE'),
 (6, (SELECT id FROM role WHERE name = 'USER'), 'ha.pham@example.com', '0912000003', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Phạm Ngọc Hà', 'INACTIVE')
@@ -92,69 +85,80 @@ note = VALUES(note),
 created_at = VALUES(created_at);
 
 -- ========================
--- CATEGORY / BRAND
+-- 4. CATEGORIES & BRANDS
 -- ========================
-INSERT INTO categories (id, parent_id, code, name, sort_order, image, content, status) VALUES
-(100, NULL, 'SKINCARE', 'Chăm sóc da', 1, '/images/categories/skincare.jpg', 'Sản phẩm chăm sóc da mặt và cơ thể.', 1),
-(101, 100, 'CLEANSER', 'Sữa rửa mặt', 1, '/images/categories/cleanser.jpg', 'Làm sạch dịu nhẹ hằng ngày.', 1),
-(102, 100, 'SUNSCREEN', 'Kem chống nắng', 2, '/images/categories/sunscreen.jpg', 'Bảo vệ da trước tia UV.', 1),
-(200, NULL, 'MAKEUP', 'Trang điểm', 2, '/images/categories/makeup.jpg', 'Sản phẩm trang điểm cá nhân.', 1),
-(201, 200, 'LIPSTICK', 'Son môi', 1, '/images/categories/lipstick.jpg', 'Son môi nhiều tông màu.', 1)
+INSERT INTO categories (id, parent_id, code, name, slug, seo_title, meta_description, sort_order, image, image_alt, content, status) VALUES
+(100, NULL, 'SKINCARE', 'Chăm sóc da', 'cham-soc-da', 'Sản Phẩm Chăm Sóc Da Chính Hãng | Sobu Store', 'Khám phá bộ sưu tập chăm sóc da mặt và toàn thân chính hãng tại Sobu.', 1, '/images/categories/skincare.jpg', 'Danh mục chăm sóc da', 'Sản phẩm chăm sóc da mặt và cơ thể.', 1),
+(101, 100, 'CLEANSER', 'Sữa rửa mặt', 'sua-rua-mat', 'Sữa Rửa Mặt Dịu Nhẹ Cho Mọi Loại Da | Sobu Store', 'Sữa rửa mặt làm sạch sâu, không khô căng, an toàn cho da nhạy cảm.', 1, '/images/categories/cleanser.jpg', 'Danh mục sữa rửa mặt', 'Làm sạch dịu nhẹ hằng ngày.', 1),
+(102, 100, 'SUNSCREEN', 'Kem chống nắng', 'kem-chong-nang', 'Kem Chống Nắng Phổ Rộng SPF50+ | Sobu Store', 'Kem chống nắng bảo vệ da toàn diện trước tia UVA, UVB.', 2, '/images/categories/sunscreen.jpg', 'Danh mục kem chống nắng', 'Bảo vệ da trước tia UV.', 1),
+(200, NULL, 'MAKEUP', 'Trang điểm', 'trang-diem', 'Mỹ Phẩm Trang Điểm Cao Cấp | Sobu Store', 'Bộ sưu tập đồ trang điểm cá nhân xu hướng mới nhất.', 2, '/images/categories/makeup.jpg', 'Danh mục trang điểm', 'Sản phẩm trang điểm cá nhân.', 1),
+(201, 200, 'LIPSTICK', 'Son môi', 'son-moi', 'Son Môi Cao Cấp Lên Màu Chuẩn | Sobu Store', 'Son lì, son bóng, son dưỡng chính hãng bền màu lâu trôi.', 1, '/images/categories/lipstick.jpg', 'Danh mục son môi', 'Son môi nhiều tông màu.', 1)
 ON DUPLICATE KEY UPDATE
 parent_id = VALUES(parent_id),
 code = VALUES(code),
 name = VALUES(name),
+slug = VALUES(slug),
+seo_title = VALUES(seo_title),
+meta_description = VALUES(meta_description),
 sort_order = VALUES(sort_order),
 image = VALUES(image),
+image_alt = VALUES(image_alt),
 content = VALUES(content),
 status = VALUES(status);
 
-INSERT INTO brands (id, code, name, status, parent_id, created_at) VALUES
-(10, 'SODU', 'Sodu Beauty', 1, NULL, '2026-05-01 08:00:00'),
-(11, 'SODU-LAB', 'Sodu Lab', 1, 10, '2026-05-01 08:05:00'),
-(20, 'AURORA', 'Aurora Skincare', 1, NULL, '2026-05-02 09:00:00'),
-(30, 'MELIA', 'Melia Cosmetics', 1, NULL, '2026-05-03 10:00:00')
+INSERT INTO brands (id, code, name, slug, seo_title, meta_description, status, parent_id, created_at) VALUES
+(10, 'SODU', 'Sodu Beauty', 'sodu-beauty', 'Mỹ Phẩm Sodu Beauty Chính Hãng | Sobu Store', 'Thương hiệu mỹ phẩm thiên nhiên Sodu Beauty cao cấp.', 1, NULL, '2026-05-01 08:00:00'),
+(11, 'SODU-LAB', 'Sodu Lab', 'sodu-lab', 'Dược Mỹ Phẩm Sodu Lab | Sobu Store', 'Dòng dược mỹ phẩm phục hồi chuyên sâu Sodu Lab.', 1, 10, '2026-05-01 08:05:00'),
+(20, 'AURORA', 'Aurora Skincare', 'aurora-skincare', 'Aurora Skincare Hàn Quốc | Sobu Store', 'Dưỡng da chuyên sâu từ Aurora Skincare.', 1, NULL, '2026-05-02 09:00:00'),
+(30, 'MELIA', 'Melia Cosmetics', 'melia-cosmetics', 'Melia Cosmetics Ý | Sobu Store', 'Trang điểm phong cách châu Âu cùng Melia Cosmetics.', 1, NULL, '2026-05-03 10:00:00')
 ON DUPLICATE KEY UPDATE
 code = VALUES(code),
 name = VALUES(name),
+slug = VALUES(slug),
+seo_title = VALUES(seo_title),
+meta_description = VALUES(meta_description),
 status = VALUES(status),
 parent_id = VALUES(parent_id),
 created_at = VALUES(created_at);
 
 -- ========================
--- PRODUCT
+-- 5. PRODUCTS & DETAILS
 -- ========================
 INSERT INTO products (
-id, external_id, parent_id, code, barcode, name, other_name, status,
+id, external_id, parent_id, code, barcode, name, slug, seo_title, meta_description, h1_title, other_name, status,
 category_id, category_name, internal_category_id, internal_category_name,
 brand_id, brand_name, type_id, type_name, supplier_id, supplier_name, supplier_phone,
-retail_price, import_price, wholesale_price, old_price, avg_cost, vat,
+retail_price, import_price, wholesale_price, old_price, sale_price, currency, condition_type, availability, avg_cost, vat,
 avatar_image, length, width, height, weight, country_name,
-stock_remain, stock_available, description, content, created_at, updated_at, raw_data
+stock_remain, stock_available, description, content, created_at, updated_at, raw_data, active
 ) VALUES
-(1001, 9001001, NULL, 'SD-CLEANSER-120', '8938500000011', 'Sữa rửa mặt Sodu Gentle 120ml', 'Gentle Cleanser', 'ACTIVE',
+(1001, 9001001, NULL, 'SD-CLEANSER-120', '8938500000011', 'Sữa rửa mặt Sodu Gentle 120ml', 'sua-rua-mat-sodu-gentle-120ml', 'Sữa Rửa Mặt Sodu Gentle 120ml Dịu Nhẹ | Sobu Store', 'Sữa rửa mặt Sodu Gentle 120ml dịu nhẹ làm sạch sâu, giữ ẩm, an toàn cho da nhạy cảm.', 'Sữa Rửa Mặt Sodu Gentle 120ml Chính Hãng', 'Gentle Cleanser', 'ACTIVE',
 101, 'Sữa rửa mặt', 101, 'Sữa rửa mặt',
 10, 'Sodu Beauty', 1, 'Sản phẩm thường', 501, 'Sodu Distribution', '02873000001',
-189000, 98000, 155000, 229000, 102000, 8,
+189000, 98000, 155000, 229000, 189000, 'VND', 'NEW', 'IN_STOCK', 102000, 8,
 '/images/products/sd-cleanser-120.jpg', 12, 5, 5, 180, 'Việt Nam',
-120, 110, 'Sữa rửa mặt dịu nhẹ cho da thường và da nhạy cảm.', 'Làm sạch bụi bẩn, dầu thừa mà không gây khô căng.', '2026-05-10 09:00:00', '2026-05-20 11:00:00', '{"source":"sample"}'),
-(1002, 9001002, NULL, 'AR-SUNSCREEN-50', '8938500000028', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', 'Aurora Sunscreen', 'ACTIVE',
+120, 110, 'Sữa rửa mặt dịu nhẹ cho da thường và da nhạy cảm.', 'Làm sạch bụi bẩn, dầu thừa mà không gây khô căng.', '2026-05-10 09:00:00', '2026-05-20 11:00:00', '{"source":"sample"}', TRUE),
+(1002, 9001002, NULL, 'AR-SUNSCREEN-50', '8938500000028', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', 'kem-chong-nang-aurora-spf50-pa-50ml', 'Kem Chống Nắng Aurora SPF50+ PA++++ 50ml | Sobu Store', 'Kem chống nắng Aurora bảo vệ da toàn diện, kiềm dầu, không nhờn rít suốt ngày dài.', 'Kem Chống Nắng Aurora SPF50+ PA++++ 50ml', 'Aurora Sunscreen', 'ACTIVE',
 102, 'Kem chống nắng', 102, 'Kem chống nắng',
 20, 'Aurora Skincare', 1, 'Sản phẩm thường', 502, 'Aurora Việt Nam', '02873000002',
-329000, 190000, 285000, 389000, 198000, 8,
+329000, 190000, 285000, 389000, 329000, 'VND', 'NEW', 'IN_STOCK', 198000, 8,
 '/images/products/ar-sunscreen-50.jpg', 14, 4, 4, 120, 'Hàn Quốc',
-75, 70, 'Kem chống nắng phổ rộng, kết cấu mỏng nhẹ.', 'Phù hợp dùng hằng ngày dưới lớp trang điểm.', '2026-05-11 10:00:00', '2026-05-20 11:05:00', '{"source":"sample"}'),
-(1003, 9001003, NULL, 'ML-LIP-M01', '8938500000035', 'Son lì Melia Velvet màu Rose Mood', 'Melia Velvet Rose Mood', 'ACTIVE',
+75, 70, 'Kem chống nắng phổ rộng, kết cấu mỏng nhẹ.', 'Phù hợp dùng hằng ngày dưới lớp trang điểm.', '2026-05-11 10:00:00', '2026-05-20 11:05:00', '{"source":"sample"}', TRUE),
+(1003, 9001003, NULL, 'ML-LIP-M01', '8938500000035', 'Son lì Melia Velvet màu Rose Mood', 'son-li-melia-velvet-mau-rose-mood', 'Son Lì Melia Velvet Màu Rose Mood | Sobu Store', 'Son lì Melia Velvet màu Rose Mood quyến rũ, mềm môi, bền màu đến 8 tiếng.', 'Son Lì Melia Velvet Màu Rose Mood Chính Hãng', 'Melia Velvet Rose Mood', 'ACTIVE',
 201, 'Son môi', 201, 'Son môi',
 30, 'Melia Cosmetics', 1, 'Sản phẩm thường', 503, 'Melia Official', '02873000003',
-249000, 120000, 210000, 299000, 128000, 8,
+249000, 120000, 210000, 299000, 249000, 'VND', 'NEW', 'IN_STOCK', 128000, 8,
 '/images/products/ml-lip-m01.jpg', 9, 2, 2, 60, 'Ý',
-210, 205, 'Son lì mềm môi, màu rose mood dễ dùng.', 'Chất son mịn, bám màu tốt trong nhiều giờ.', '2026-05-12 13:30:00', '2026-05-20 11:10:00', '{"source":"sample"}')
+210, 205, 'Son lì mềm môi, màu rose mood dễ dùng.', 'Chất son mịn, bám màu tốt trong nhiều giờ.', '2026-05-12 13:30:00', '2026-05-20 11:10:00', '{"source":"sample"}', TRUE)
 ON DUPLICATE KEY UPDATE
 external_id = VALUES(external_id),
 code = VALUES(code),
 barcode = VALUES(barcode),
 name = VALUES(name),
+slug = VALUES(slug),
+seo_title = VALUES(seo_title),
+meta_description = VALUES(meta_description),
+h1_title = VALUES(h1_title),
 other_name = VALUES(other_name),
 status = VALUES(status),
 category_id = VALUES(category_id),
@@ -167,6 +171,10 @@ retail_price = VALUES(retail_price),
 import_price = VALUES(import_price),
 wholesale_price = VALUES(wholesale_price),
 old_price = VALUES(old_price),
+sale_price = VALUES(sale_price),
+currency = VALUES(currency),
+condition_type = VALUES(condition_type),
+availability = VALUES(availability),
 avg_cost = VALUES(avg_cost),
 vat = VALUES(vat),
 avatar_image = VALUES(avatar_image),
@@ -175,7 +183,8 @@ stock_available = VALUES(stock_available),
 description = VALUES(description),
 content = VALUES(content),
 updated_at = VALUES(updated_at),
-raw_data = VALUES(raw_data);
+raw_data = VALUES(raw_data),
+active = VALUES(active);
 
 INSERT INTO product_units (id, product_id, name, quantity, price, wholesale_price) VALUES
 (1, 1001, 'Chai', 1, 189000, 155000),
@@ -199,14 +208,17 @@ product_id = VALUES(product_id),
 name = VALUES(name),
 value = VALUES(value);
 
-INSERT INTO product_images (id, product_id, url) VALUES
-(1, 1001, '/images/products/sd-cleanser-120-1.jpg'),
-(2, 1001, '/images/products/sd-cleanser-120-2.jpg'),
-(3, 1002, '/images/products/ar-sunscreen-50-1.jpg'),
-(4, 1003, '/images/products/ml-lip-m01-1.jpg')
+INSERT INTO product_images (id, product_id, url, alt_text, sort_order, is_avatar) VALUES
+(1, 1001, '/images/products/sd-cleanser-120-1.jpg', 'Sữa rửa mặt Sodu Gentle 120ml mặt trước', 1, true),
+(2, 1001, '/images/products/sd-cleanser-120-2.jpg', 'Sữa rửa mặt Sodu Gentle 120ml mặt sau', 2, false),
+(3, 1002, '/images/products/ar-sunscreen-50-1.jpg', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', 1, true),
+(4, 1003, '/images/products/ml-lip-m01-1.jpg', 'Son lì Melia Velvet màu Rose Mood', 1, true)
 ON DUPLICATE KEY UPDATE
 product_id = VALUES(product_id),
-url = VALUES(url);
+url = VALUES(url),
+alt_text = VALUES(alt_text),
+sort_order = VALUES(sort_order),
+is_avatar = VALUES(is_avatar);
 
 INSERT INTO product_videos (id, product_id, title, src) VALUES
 (1, 1001, 'Hướng dẫn dùng Sodu Gentle Cleanser', '/videos/products/sd-cleanser-demo.mp4'),
@@ -217,7 +229,7 @@ title = VALUES(title),
 src = VALUES(src);
 
 -- ========================
--- REQUEST / ORDER
+-- 6. REQUESTS & DETAILS
 -- ========================
 INSERT INTO requests (
 id, request_code, customer_phone, version, status, type, total_amount, deposit_amount,
@@ -268,8 +280,8 @@ created_at = VALUES(created_at);
 
 INSERT INTO request_timelines (id, request_id, action, from_status, to_status, actor, note, created_at) VALUES
 (1, 1, 'CREATE_REQUEST', NULL, 'PENDING', 'linh.nguyen@example.com', 'Khách tạo yêu cầu mua hàng.', '2026-05-18 09:00:00'),
-(2, 1, 'APPROVE_REQUEST', 'REVIEWING', 'APPROVED', 'manager@sodu.vn', 'Đã xác nhận tồn kho và duyệt yêu cầu.', '2026-05-18 09:20:00'),
-(3, 3, 'START_REVIEW', 'PENDING', 'REVIEWING', 'staff@sodu.vn', 'Nhân viên bắt đầu tìm sản phẩm phù hợp.', '2026-05-20 09:00:00')
+(2, 1, 'APPROVE_REQUEST', 'REVIEWING', 'APPROVED', 'manager@sobu.vn', 'Đã xác nhận tồn kho và duyệt yêu cầu.', '2026-05-18 09:20:00'),
+(3, 3, 'START_REVIEW', 'PENDING', 'REVIEWING', 'staff@sobu.vn', 'Nhân viên bắt đầu tìm sản phẩm phù hợp.', '2026-05-20 09:00:00')
 ON DUPLICATE KEY UPDATE
 request_id = VALUES(request_id),
 action = VALUES(action),
@@ -289,6 +301,9 @@ snapshot_type = VALUES(snapshot_type),
 snapshot_json = VALUES(snapshot_json),
 captured_at = VALUES(captured_at);
 
+-- ========================
+-- 7. ORDERS & PAYMENTS
+-- ========================
 INSERT INTO orders (
 id, order_code, app_order_id, request_id, type, status, sync_status, nhanh_sync_stage, total_amount, deposit_amount, shipping_fee,
 paid_amount, remaining_amount, payment_status, description, customer_name, customer_mobile, customer_email, customer_address, customer_city_name,
@@ -304,7 +319,12 @@ location_version, nhanh_order_id, nhanh_order_code, sync_error, last_sync_messag
 100000, 398000, 'PENDING', 'Đơn đặt trước từ yêu cầu SOBU-REQ-0002.',
 'Trần Gia Minh', '0912000002', 'minh.tran@example.com', '26 Tràng Thi', 'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Hàng Trống',
 1, 1, 1, 8, 1, 'v1', 'NH-10002', 'NH-SODU-10002', NULL, 'Nhanh preorder deposit order created successfully.', '2026-05-19 14:30:00',
-0, '2026-05-19 14:10:00', '2026-05-20 09:10:00')
+0, '2026-05-19 14:10:00', '2026-05-20 09:10:00'),
+(3, 'SOBU-ORD-0003', 'SOBU-ORD-0003', NULL, 'NORMAL', 'DELIVERED', 'SYNCED', 'NORMAL_ORDER_CREATED', 518000, 0, 35000,
+518000, 0, 'PAID', 'Đơn hàng mẫu đã giao thành công — dùng để test review.',
+'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé',
+79, 760, 26734, 8, 1, 'v1', NULL, NULL, NULL, NULL, NULL,
+0, '2026-06-15 09:00:00', '2026-06-20 15:30:00')
 ON DUPLICATE KEY UPDATE
 app_order_id = VALUES(app_order_id),
 request_id = VALUES(request_id),
@@ -342,7 +362,9 @@ updated_at = VALUES(updated_at);
 INSERT INTO order_items (id, order_id, nhanh_product_id, name, note, price, discount, quantity) VALUES
 (1, 1, '9001001', 'Sữa rửa mặt Sodu Gentle 120ml', 'Combo 2 chai', 360000, 0, 1),
 (2, 1, '9001002', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', NULL, 329000, 0, 1),
-(3, 2, '9001003', 'Son lì Melia Velvet màu Rose Mood', 'Gói quà', 249000, 0, 2)
+(3, 2, '9001003', 'Son lì Melia Velvet màu Rose Mood', 'Gói quà', 249000, 0, 2),
+(4, 3, '9001001', 'Sữa rửa mặt Sodu Gentle 120ml', 'Đơn hàng giao thành công', 189000, 0, 1),
+(5, 3, '9001002', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', 'Đơn hàng giao thành công', 329000, 0, 1)
 ON DUPLICATE KEY UPDATE
 order_id = VALUES(order_id),
 nhanh_product_id = VALUES(nhanh_product_id),
@@ -379,46 +401,23 @@ paid_at = VALUES(paid_at),
 updated_at = VALUES(updated_at);
 
 -- ========================
--- UI / CONFIGURATION
+-- 8. STATIC PAGES
 -- ========================
 INSERT INTO static_pages (
 id, slug, title, html_content, is_published, created_at, updated_at
 ) VALUES
-(1, 'about', 'About', '<h1>About SOBU</h1><p>SOBU Studio serves collectors with model products, preorder support, sourcing, and custom services.</p>', true, NOW(), NOW()),
-(2, 'privacy-policy', 'Privacy Policy', '<h1>Privacy Policy</h1><p>SOBU collects only the information needed to process orders, support requests, and improve customer service.</p>', true, NOW(), NOW()),
-(3, 'terms', 'Terms', '<h1>Terms</h1><p>By using SOBU services, customers agree to provide accurate order information and follow the published payment and delivery policies.</p>', true, NOW(), NOW())
+(1, 'about', 'Giới thiệu', '<h1>Về SOBU Studio</h1><p>SOBU Studio chuyên cung cấp mô hình sưu tầm chính hãng, dịch vụ đặt trước (pre-order), tìm kiếm mô hình hiếm và custom theo yêu cầu.</p>', true, NOW(), NOW()),
+(2, 'privacy-policy', 'Chính sách bảo mật', '<h1>Chính sách bảo mật</h1><p>SOBU cam kết bảo mật thông tin cá nhân của khách hàng và chỉ sử dụng cho mục đích xử lý đơn hàng và hỗ trợ khách hàng.</p>', true, NOW(), NOW()),
+(3, 'terms', 'Điều khoản dịch vụ', '<h1>Điều khoản dịch vụ</h1><p>Bằng việc sử dụng website và dịch vụ của SOBU Studio, quý khách đồng ý tuân thủ các quy định đặt hàng, thanh toán và vận chuyển được công bố công khai.</p>', true, NOW(), NOW())
 ON DUPLICATE KEY UPDATE
-slug = slug;
+title = VALUES(title),
+html_content = VALUES(html_content),
+is_published = VALUES(is_published),
+updated_at = NOW();
 
-INSERT INTO banners (
-id, title, image_url, link_url, display_order, position, is_active,
-start_date, end_date, device_type, created_at, updated_at
-) VALUES
-(1, 'SOBU STUDIO', 'https://images.unsplash.com/photo-1614200187524-dc4b892acf16?q=80&w=2000&auto=format&fit=crop', '/products', 1, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
-(2, 'HOT WHEELS', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 2, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:10:00', '2026-05-01 08:10:00'),
-(3, 'MECHA & GUNDAM', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 3, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:20:00', '2026-05-01 08:20:00'),
-(4, 'Sidebar left promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_left_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:30:00', '2026-05-01 08:30:00'),
-(5, 'Sidebar right promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_right_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:40:00', '2026-05-01 08:40:00'),
-(6, 'Ban chay section banner', 'https://i0.wp.com/www.comicbookrevolution.com/wp-content/uploads/2023/12/transformers-4-previw-banner.jpg', '/products', 1, 'home_section_01_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:50:00', '2026-05-01 08:50:00'),
-(7, 'Custom service primary', 'https://images.unsplash.com/photo-1730110206448-10297c1902bd?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_primary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:00:00', '2026-05-01 09:00:00'),
-(8, 'Custom service secondary', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_secondary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:10:00', '2026-05-01 09:10:00'),
-(9, 'Custom service tertiary', 'https://images.unsplash.com/photo-1532581140115-3e355d1ed1de?q=80&w=600&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_tertiary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:20:00', '2026-05-01 09:20:00'),
-(10, 'Marvel category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/marvel', 1, 'home_category_card_01', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:30:00', '2026-05-01 09:30:00'),
-(11, 'DC category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/dc', 1, 'home_category_card_02', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:40:00', '2026-05-01 09:40:00'),
-(12, 'Hot Wheels category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/hot wheels', 1, 'home_category_card_03', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:50:00', '2026-05-01 09:50:00'),
-(13, 'Transformer category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/transformer', 1, 'home_category_card_04', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:00:00', '2026-05-01 10:00:00'),
-(14, 'Naruto category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/naruto', 1, 'home_category_card_05', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:10:00', '2026-05-01 10:10:00'),
-(15, 'Pacific Rim category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/pacific rim', 1, 'home_category_card_06', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:20:00', '2026-05-01 10:20:00'),
-(16, 'Dung Cu section banner', 'https://tooltechvietnam.com/wp-content/uploads/2023/03/handtools.jpg', '/products', 1, 'home_section_02_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:30:00', '2026-05-01 10:30:00'),
-(17, 'Promo grid top left', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_top_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:40:00', '2026-05-01 10:40:00'),
-(18, 'Promo grid bottom left', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_bottom_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:50:00', '2026-05-01 10:50:00'),
-(19, 'Promo grid top right', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_top_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:00:00', '2026-05-01 11:00:00'),
-(20, 'Promo grid bottom right', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_bottom_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:10:00', '2026-05-01 11:10:00'),
-(21, 'Hotwheels section banner', 'https://images.unsplash.com/photo-1551522435-a13afa10f103?q=80&w=1600&auto=format&fit=crop', '/products', 1, 'home_section_03_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:20:00', '2026-05-01 11:20:00'),
-(22, 'Sale section banner', 'https://img.magnific.com/free-vector/modern-black-friday-holiday-sale-offer-banner-get-30-percent-price-drop-vector_1017-47794.jpg?semt=ais_hybrid&w=740&q=80', '/products', 1, 'home_section_04_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:30:00', '2026-05-01 11:30:00')
-ON DUPLICATE KEY UPDATE
-id = id;
-
+-- ========================
+-- 9. WEBSITE CONFIGURATIONS
+-- ========================
 INSERT INTO website_configurations (
 config_key, config_value, type, group_name, description, is_public, is_active, created_at, updated_at
 ) VALUES
@@ -444,51 +443,51 @@ config_key, config_value, type, group_name, description, is_public, is_active, c
 ('support_email', 'support@sobu.vn', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('company_name', 'SOBU Studio', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('company_address', 'Hà Nam, Việt Nam', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
-('working_hours', '09:00 - 21:00, Thứ 2 - Chủ nhật', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('working_hours', '09:00 - 21:00, T2 - CN', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('footer_greeting_text', 'SOBU đồng hành cùng cộng đồng collector trong từng đơn hàng và yêu cầu đặc biệt.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
-('copyright_text', '(c) 2026 SOBU Studio. All rights reserved.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('copyright_text', '© 2026 SOBU Studio. All rights reserved.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('newsletter_enabled', 'false', 'boolean_type', 'GENERAL', NULL, true, true, NOW(), NOW()),
-('newsletter_description', 'Nhan thong tin ve san pham moi, hang sap ve va uu dai rieng cho collector.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
-('newsletter_submit_label', 'Dang ky', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
-('footer_company_links', '[{"label":"Gioi thieu","href":"/about"},{"label":"Dich vu","href":"/services"},{"label":"Blog","href":"/blog"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
-('footer_help_links', '[{"label":"San pham","href":"/products"},{"label":"Yeu cau tim hang","href":"/request"},{"label":"Lien he","href":"/contact"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
-('legal_links', '[{"label":"Dieu khoan","href":"/terms"},{"label":"Bao mat","href":"/privacy"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
-('home_section_01_title', 'BAN CHAY', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_01_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_01_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('newsletter_description', 'Nhận thông tin về sản phẩm mới, hàng sắp về và ưu đãi riêng cho collector.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('newsletter_submit_label', 'Đăng ký', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('footer_company_links', '[{"label":"Giới thiệu","href":"/about"},{"label":"Dịch vụ","href":"/services"},{"label":"Tin tức","href":"/blog"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
+('footer_help_links', '[{"label":"Sản phẩm","href":"/products"},{"label":"Yêu cầu tìm hàng","href":"/request"},{"label":"Liên hệ","href":"/contact"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
+('legal_links', '[{"label":"Điều khoản","href":"/terms"},{"label":"Bảo mật","href":"/privacy"}]', 'json', 'FOOTER', NULL, true, true, NOW(), NOW()),
+('home_section_01_title', 'BÁN CHẠY', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_01_subtitle', 'Giao Hàng Toàn Quốc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_01_label', 'Xem thêm', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_01_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_custom_service_title', 'DICH VU DO MO HINH SO 1 VIET NAM', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_custom_service_badges', '["Do Led cam ung","Son mo hinh chuan phim","Custom theo y thich"]', 'json', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_custom_service_title', 'DỊCH VỤ ĐỘ MÔ HÌNH SỐ 1 VIỆT NAM', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_custom_service_badges', '["Độ Led cảm ứng","Sơn mô hình chuẩn phim","Custom theo ý thích"]', 'json', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_custom_service_cta_label', 'CUSTOM NGAY', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_custom_service_cta_url', '/services', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_02_title', 'MO HINH CUSTOM', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_02_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_02_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_02_title', 'MÔ HÌNH CUSTOM', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_02_subtitle', 'Giao Hàng Toàn Quốc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_02_cta_label', 'Xem thêm', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_02_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_category_title', 'The loai mo hinh', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_category_title', 'Thể loại mô hình', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_category_cards', '[{"label":"Marvel","href":"/category/marvel","bannerPosition":"home_category_card_01"},{"label":"DC","href":"/category/dc","bannerPosition":"home_category_card_02"},{"label":"Hot Wheels","href":"/category/hot wheels","bannerPosition":"home_category_card_03"},{"label":"Transformer","href":"/category/transformer","bannerPosition":"home_category_card_04"},{"label":"Naruto","href":"/category/naruto","bannerPosition":"home_category_card_05"},{"label":"Pacific Rim","href":"/category/pacific rim","bannerPosition":"home_category_card_06"}]', 'json', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_03_title', 'Dung Cu', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_03_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_03_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_03_title', 'Dụng Cụ', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_03_subtitle', 'Giao Hàng Toàn Quốc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_03_cta_label', 'Xem thêm', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_03_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_04_title', 'Hotwheels', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_04_subtitle', 'Giao Hang Toan Quoc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_04_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_04_title', 'Hot Wheels', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_04_subtitle', 'Giao Hàng Toàn Quốc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_04_cta_label', 'Xem thêm', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_04_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_05_title', 'Giam gia cuc manh', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_05_subtitle', '', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_section_05_cta_label', 'Xem them', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_05_title', 'Giảm giá cực mạnh', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_05_subtitle', 'Ưu Đãi Có Hạn', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_section_05_cta_label', 'Xem thêm', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_section_05_cta_url', '/products', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_news_title', 'Tin Tuc', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_news_more_label', 'MORE', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_news_title', 'Tin Tức', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_news_more_label', 'XEM TẤT CẢ', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_news_more_url', '/blog', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
-('home_testimonials_title', 'Danh gia tu khach hang', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
+('home_testimonials_title', 'Đánh giá từ khách hàng', 'text', 'HOME_SECTION', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_top_left_title', 'HOT WHEELS', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
-('home_promo_grid_top_left_description', 'KHAM PHA NHUNG MAU XE MO HINH HOT NHAT DANH CHO NGUOI DAM ME TOC DO.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
-('home_promo_grid_top_left_cta_label', 'Xem them', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_left_description', 'KHÁM PHÁ NHỮNG MẪU XE MÔ HÌNH HOT NHẤT DÀNH CHO NGƯỜI ĐAM MÊ TỐC ĐỘ.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_top_left_cta_label', 'Xem thêm', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_top_left_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
-('home_promo_grid_bottom_left_title', 'Suu tam huyen thoai', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
-('home_promo_grid_bottom_left_description', 'SUU TAM NHUNG MAU XE HUYEN THOAI - TU SIEU XE HIEN DAI DEN CLASSIC CO DIEN.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_left_title', 'Sưu tầm huyền thoại', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_left_description', 'SƯU TẦM NHỮNG MẪU XE HUYỀN THOẠI - TỪ SIÊU XE HIỆN ĐẠI ĐẾN CLASSIC CỔ ĐIỂN.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_bottom_left_cta_label', '', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_bottom_left_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_top_right_title', 'Limited Edition Cars', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
@@ -496,13 +495,14 @@ config_key, config_value, type, group_name, description, is_public, is_active, c
 ('home_promo_grid_top_right_cta_label', '', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_top_right_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_bottom_right_title', 'GIFT FOR COLLECTORS', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
-('home_promo_grid_bottom_right_description', 'MON QUA HOAN HAO CHO NGUOI YEU XE VA DAM ME MO HINH.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
-('home_promo_grid_bottom_right_cta_label', 'Xem them', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_right_description', 'MÓN QUÀ HOÀN HẢO CHO NGƯỜI YÊU XE VÀ ĐAM MÊ MÔ HÌNH.', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
+('home_promo_grid_bottom_right_cta_label', 'Xem thêm', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
 ('home_promo_grid_bottom_right_cta_url', '/products', 'text', 'HOME_PROMO', NULL, true, true, NOW(), NOW()),
-('home_partners_title', 'Doi tac chien luoc & Thuong hieu dong hanh', 'text', 'HOME_PARTNER', NULL, true, true, NOW(), NOW()),
-('home_partner_brands', '[{"name":"BANDAI","logoUrl":"https://placehold.co/180x60/e60012/ffffff?text=BANDAI"},{"name":"HOT TOYS","logoUrl":"https://placehold.co/180x60/111111/f1b82d?text=HOT+TOYS"},{"name":"TAMIYA","logoUrl":"https://placehold.co/180x60/0054a6/ffffff?text=TAMIYA"},{"name":"LEGO","logoUrl":"https://placehold.co/180x60/ffd500/000000?text=LEGO"},{"name":"MATTEL","logoUrl":"https://placehold.co/180x60/e5142a/ffffff?text=MATTEL"},{"name":"HASBRO","logoUrl":"https://placehold.co/180x60/0072ce/ffffff?text=HASBRO"}]', 'json', 'HOME_PARTNER', NULL, true, true, NOW(), NOW()),('maintenance_mode_enabled', 'false', 'boolean_type', 'GENERAL', NULL, true, true, NOW(), NOW()),
+('home_partners_title', 'Đối tác chiến lược & Thương hiệu đồng hành', 'text', 'HOME_PARTNER', NULL, true, true, NOW(), NOW()),
+('home_partner_brands', '[{"name":"BANDAI","logoUrl":"https://placehold.co/180x60/e60012/ffffff?text=BANDAI"},{"name":"HOT TOYS","logoUrl":"https://placehold.co/180x60/111111/f1b82d?text=HOT+TOYS"},{"name":"TAMIYA","logoUrl":"https://placehold.co/180x60/0054a6/ffffff?text=TAMIYA"},{"name":"LEGO","logoUrl":"https://placehold.co/180x60/ffd500/000000?text=LEGO"},{"name":"MATTEL","logoUrl":"https://placehold.co/180x60/e5142a/ffffff?text=MATTEL"},{"name":"HASBRO","logoUrl":"https://placehold.co/180x60/0072ce/ffffff?text=HASBRO"}]', 'json', 'HOME_PARTNER', NULL, true, true, NOW(), NOW()),
+('maintenance_mode_enabled', 'false', 'boolean_type', 'GENERAL', NULL, true, true, NOW(), NOW()),
 ('maintenance_message', 'Website đang được bảo trì. Vui lòng quay lại sau.', 'text', 'GENERAL', NULL, true, true, NOW(), NOW()),
-('social_links', '{"facebook":"","instagram":"","tiktok":"","youtube":"","zalo":""}', 'json', 'SOCIAL', NULL, true, true, NOW(), NOW()),
+('social_links', '{"facebook":"https://facebook.com","instagram":"","tiktok":"","youtube":"","zalo":""}', 'json', 'SOCIAL', NULL, true, true, NOW(), NOW()),
 ('social_share_enabled', 'true', 'boolean_type', 'SOCIAL', NULL, true, true, NOW(), NOW()),
 ('social_chat_widget_enabled', 'false', 'boolean_type', 'SOCIAL', NULL, true, true, NOW(), NOW()),
 ('social_chat_config', '{"provider":"zalo","pageId":"","greetingText":"SOBU có thể hỗ trợ gì cho bạn?"}', 'json', 'SOCIAL', NULL, true, true, NOW(), NOW()),
@@ -525,38 +525,46 @@ ON DUPLICATE KEY UPDATE
 config_key = VALUES(config_key);
 
 -- ========================
--- REVIEW
--- Requires order with status DELIVERED containing matching products
+-- 10. BANNERS
 -- ========================
-
--- Add a DELIVERED order for customer Nguyen Hoang Linh (account_id=4)
-INSERT INTO orders (
-id, order_code, app_order_id, request_id, type, status, sync_status, nhanh_sync_stage, total_amount, deposit_amount, shipping_fee,
-paid_amount, remaining_amount, payment_status, description, customer_name, customer_mobile, customer_email, customer_address, customer_city_name,
-customer_district_name, customer_ward_name, customer_city_id, customer_district_id, customer_ward_id, carrier_id, carrier_service_id,
-location_version, version, created_at, updated_at
+INSERT INTO banners (
+id, title, image_url, link_url, display_order, position, is_active,
+start_date, end_date, device_type, created_at, updated_at
 ) VALUES
-(3, 'SOBU-ORD-0003', 'SOBU-ORD-0003', NULL, 'NORMAL', 'DELIVERED', 'SYNCED', 'NORMAL_ORDER_CREATED', 518000, 0, 35000,
-518000, 0, 'PAID', 'Đơn hàng mẫu đã giao thành công — dùng để test review.',
-'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé',
-79, 760, 26734, 8, 1, 'v1',
-0, '2026-06-15 09:00:00', '2026-06-20 15:30:00')
+(1, 'SOBU STUDIO', 'https://images.unsplash.com/photo-1614200187524-dc4b892acf16?q=80&w=2000&auto=format&fit=crop', '/products', 1, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:00:00', '2026-05-01 08:00:00'),
+(2, 'HOT WHEELS', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 2, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:10:00', '2026-05-01 08:10:00'),
+(3, 'MECHA & GUNDAM', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 3, 'home_hero_carousel', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:20:00', '2026-05-01 08:20:00'),
+(4, 'Sidebar left promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_left_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:30:00', '2026-05-01 08:30:00'),
+(5, 'Sidebar right promotion', '/images/banners/sidebar-best-seller.jpg', '/products', 1, 'site_right_sidebar_banner', true, '2026-05-01 00:00:00', NULL, 'WEB', '2026-05-01 08:40:00', '2026-05-01 08:40:00'),
+(6, 'Bán chạy section banner', 'https://i0.wp.com/www.comicbookrevolution.com/wp-content/uploads/2023/12/transformers-4-previw-banner.jpg', '/products', 1, 'home_section_01_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 08:50:00', '2026-05-01 08:50:00'),
+(7, 'Custom service primary', 'https://images.unsplash.com/photo-1730110206448-10297c1902bd?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_primary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:00:00', '2026-05-01 09:00:00'),
+(8, 'Custom service secondary', 'https://images.unsplash.com/photo-1618331835717-801e976710b2?q=80&w=800&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_secondary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:10:00', '2026-05-01 09:10:00'),
+(9, 'Custom service tertiary', 'https://images.unsplash.com/photo-1532581140115-3e355d1ed1de?q=80&w=600&auto=format&fit=crop', '/services', 1, 'home_custom_service_image_tertiary', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:20:00', '2026-05-01 09:20:00'),
+(10, 'Marvel category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/marvel', 1, 'home_category_card_01', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:30:00', '2026-05-01 09:30:00'),
+(11, 'DC category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/dc', 1, 'home_category_card_02', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:40:00', '2026-05-01 09:40:00'),
+(12, 'Hot Wheels category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/hot wheels', 1, 'home_category_card_03', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 09:50:00', '2026-05-01 09:50:00'),
+(13, 'Transformer category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/transformer', 1, 'home_category_card_04', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:00:00', '2026-05-01 10:00:00'),
+(14, 'Naruto category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/naruto', 1, 'home_category_card_05', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:10:00', '2026-05-01 10:10:00'),
+(15, 'Pacific Rim category card', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/category/pacific rim', 1, 'home_category_card_06', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:20:00', '2026-05-01 10:20:00'),
+(16, 'Dụng Cụ section banner', 'https://tooltechvietnam.com/wp-content/uploads/2023/03/handtools.jpg', '/products', 1, 'home_section_02_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:30:00', '2026-05-01 10:30:00'),
+(17, 'Promo grid top left', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_top_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:40:00', '2026-05-01 10:40:00'),
+(18, 'Promo grid bottom left', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_bottom_left', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 10:50:00', '2026-05-01 10:50:00'),
+(19, 'Promo grid top right', 'https://images-na.ssl-images-amazon.com/images/I/71NGNYdc2NL.jpg', '/products', 1, 'home_promo_grid_top_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:00:00', '2026-05-01 11:00:00'),
+(20, 'Promo grid bottom right', 'https://storage.ghost.io/c/81/4f/814f42c9-9554-47a0-a5c0-499b2f9606cf/content/images/2024/09/2024-hot-wheels-poster-4-0.jpg', '/products', 1, 'home_promo_grid_bottom_right', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:10:00', '2026-05-01 11:10:00'),
+(21, 'Hotwheels section banner', 'https://images.unsplash.com/photo-1551522435-a13afa10f103?q=80&w=1600&auto=format&fit=crop', '/products', 1, 'home_section_03_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:20:00', '2026-05-01 11:20:00'),
+(22, 'Sale section banner', 'https://img.magnific.com/free-vector/modern-black-friday-holiday-sale-offer-banner-get-30-percent-price-drop-vector_1017-47794.jpg?semt=ais_hybrid&w=740&q=80', '/products', 1, 'home_section_04_banner', true, '2026-05-01 00:00:00', NULL, 'ALL', '2026-05-01 11:30:00', '2026-05-01 11:30:00')
 ON DUPLICATE KEY UPDATE
-app_order_id = VALUES(app_order_id),
-status = VALUES(status),
-customer_email = VALUES(customer_email),
-updated_at = VALUES(updated_at);
+title = VALUES(title),
+image_url = VALUES(image_url),
+link_url = VALUES(link_url),
+display_order = VALUES(display_order),
+position = VALUES(position),
+is_active = VALUES(is_active),
+device_type = VALUES(device_type);
 
-INSERT INTO order_items (id, order_id, nhanh_product_id, name, note, price, discount, quantity) VALUES
-(4, 3, '9001001', 'Sữa rửa mặt Sodu Gentle 120ml', 'Đơn hàng giao thành công', 189000, 0, 1),
-(5, 3, '9001002', 'Kem chống nắng Aurora SPF50 PA++++ 50ml', 'Đơn hàng giao thành công', 329000, 0, 1)
-ON DUPLICATE KEY UPDATE
-order_id = VALUES(order_id),
-name = VALUES(name),
-price = VALUES(price),
-quantity = VALUES(quantity);
-
--- Reviews for product 1001 (externalId=9001001) in order 3
+-- ========================
+-- 11. REVIEWS
+-- ========================
 INSERT INTO reviews (id, account_id, product_id, order_id, rating, content, image_urls, status, admin_reply, replied_by, replied_at, created_at, updated_at) VALUES
 (1, 4, 1001, 3, 5, 'Sản phẩm rất tuyệt! Da mịn màng, sạch sâu mà không bị khô. Mùi hương dễ chịu, tạo bọt tốt. Đã dùng được 2 tuần và thấy hiệu quả rõ rệt.', '["https://placehold.co/600x400/00618e/ffffff?text=Review+Sodu+Gentle+1","https://placehold.co/600x400/005f9c/ffffff?text=Review+Sodu+Gentle+2"]', 'PUBLISHED', 'Cảm ơn bạn đã tin dùng sản phẩm của Sodu! Chúng tôi rất vui vì bạn hài lòng với trải nghiệm.', 1, '2026-06-21 10:00:00', '2026-06-20 18:00:00', '2026-06-21 10:00:00'),
 (2, 5, 1001, 3, 4, 'Sản phẩm dùng tốt, sạch và thơm. Mình thuộc da dầu nên hơi lo nhưng dùng ổn. Giá cả hợp lý.', '[]', 'PUBLISHED', NULL, NULL, NULL, '2026-06-22 09:30:00', '2026-06-22 09:30:00'),
@@ -576,7 +584,7 @@ replied_at = VALUES(replied_at),
 updated_at = VALUES(updated_at);
 
 -- ========================
--- VOUCHERS
+-- 12. VOUCHERS
 -- ========================
 INSERT INTO vouchers (id, code, name, type, slot, scope, geo_scope, value, max_discount_amount, min_order_value, usage_limit, used_count, auto_apply, active, deleted, start_date, end_date, created_at, updated_at) VALUES
 (1, 'SOBUAUTO5', 'Tự động giảm 5% toàn đơn từ 200k', 'DISCOUNT_PERCENT', 'ORDER', 'ALL', 'ALL', 5.00, 50000.00, 200000.00, 1000, 0, true, true, false, '2026-01-01 00:00:00', '2026-12-31 23:59:59', NOW(), NOW()),
@@ -598,14 +606,30 @@ active = VALUES(active),
 deleted = VALUES(deleted),
 updated_at = VALUES(updated_at);
 
--- Link category voucher to category 1 (if exists)
 INSERT IGNORE INTO voucher_category_ids (voucher_id, category_id) VALUES
-(3, 1),
-(3, 2);
+(3, 100);
 
--- Link product voucher to product 1001 / 1
 INSERT IGNORE INTO voucher_product_ids (voucher_id, product_id) VALUES
-(4, 1001),
-(4, 1);
+(4, 1001);
 
+-- ========================
+-- 13. ARTICLES / BLOG (SEO)
+-- ========================
+INSERT INTO articles (id, title, slug, seo_title, meta_description, thumbnail_url, thumbnail_alt, excerpt, content, author_name, category, status, published_at, created_at, updated_at) VALUES
+(1, 'Bí quyết chăm sóc da nhạy cảm vào mùa hè đúng cách', 'bi-quyet-cham-soc-da-nhay-cam-vao-mua-he-dung-cach', 'Bí Quyết Chăm Sóc Da Nhạy Cảm Mùa Hè 2026 | Sobu Blog', 'Hướng dẫn chi tiết các bước skincare cho làn da nhạy cảm khi thời tiết nắng nóng, giúp da luôn thông thoáng và khỏe mạnh.', 'https://placehold.co/800x450/00618e/ffffff?text=Skincare+Mua+He', 'Bí quyết chăm sóc da nhạy cảm mùa hè', 'Làn da nhạy cảm rất dễ bị kích ứng khi thời tiết nắng gắt. Hãy cùng Sobu tìm hiểu các bước chăm sóc chuẩn khoa học.', '<p>Mùa hè mang đến ánh nắng gay gắt và nhiệt độ cao, khiến tuyến bã nhờn hoạt động mạnh mẽ...</p>', 'Chuyên gia Da liễu Sobu', 'Chăm sóc da', 'PUBLISHED', '2026-06-01 08:00:00', '2026-06-01 08:00:00', '2026-06-01 08:00:00'),
+(2, 'Top 5 loại kem chống nắng phổ rộng tốt nhất 2026', 'top-5-loai-kem-chong-nang-pho-rong-tot-nhat-2026', 'Top 5 Kem Chống Nắng Phổ Rộng Tốt Nhất 2026 | Sobu Blog', 'Đánh giá top 5 kem chống nắng phổ rộng bảo vệ da tối ưu, không để lại vệt trắng và kiềm dầu hiệu quả.', 'https://placehold.co/800x450/5a4bb4/ffffff?text=Top+Kem+Chong+Nang', 'Top 5 kem chống nắng phổ rộng 2026', 'Tổng hợp đánh giá chi tiết top 5 dòng kem chống nắng phổ rộng được tin dùng nhất năm 2026.', '<p>Kem chống nắng phổ rộng là vật bất ly thân giúp bảo vệ da trước cả tia UVA và UVB...</p>', 'Ban Biên Tập Sobu', 'Kinh nghiệm', 'PUBLISHED', '2026-06-05 09:30:00', '2026-06-05 09:30:00', '2026-06-05 09:30:00')
+ON DUPLICATE KEY UPDATE
+title = VALUES(title),
+slug = VALUES(slug),
+seo_title = VALUES(seo_title),
+meta_description = VALUES(meta_description),
+thumbnail_url = VALUES(thumbnail_url),
+thumbnail_alt = VALUES(thumbnail_alt),
+excerpt = VALUES(excerpt),
+content = VALUES(content),
+author_name = VALUES(author_name),
+category = VALUES(category),
+status = VALUES(status),
+published_at = VALUES(published_at),
+updated_at = VALUES(updated_at);
 

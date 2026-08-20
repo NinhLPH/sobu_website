@@ -1,6 +1,6 @@
 package com.vn.sodu.product.service;
 
-
+import com.vn.sodu.global.exception.NotFoundException;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.ProductAttribute;
 import com.vn.sodu.product.ProductImage;
@@ -15,6 +15,7 @@ import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.product.repo.ProductUnitRepo;
 import com.vn.sodu.review.ReviewRepository;
 import com.vn.sodu.review.ReviewStatus;
+import com.vn.sodu.seo.SlugHistoryService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,10 +26,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -53,7 +55,7 @@ public class ProductService {
     private final ProductUnitRepo productUnitRepo;
     private final ProductMapper productMapper;
     private final ReviewRepository reviewRepository;
-
+    private final SlugHistoryService slugHistoryService;
     private final com.vn.sodu.voucher.service.VoucherService voucherService;
 
     @Transactional(readOnly = true)
@@ -85,7 +87,47 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ProductDetailDTO getProductDetailById(long id) {
-        Product product = productRepo.findById(id).orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+        return buildProductDetail(product);
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDetailDTO getProductDetailBySlug(String slugOrId) {
+        if (slugOrId == null || slugOrId.isBlank()) {
+            throw new NotFoundException("Slug hoặc ID sản phẩm không hợp lệ");
+        }
+
+        String input = slugOrId.trim();
+
+        // 1. Try finding directly by slug
+        Optional<Product> productOpt = productRepo.findBySlug(input);
+
+        // 2. If not found, check if it's an old slug from SlugHistory
+        if (productOpt.isEmpty()) {
+            Optional<String> currentSlugOpt = slugHistoryService.findCurrentSlug("PRODUCT", input);
+            if (currentSlugOpt.isPresent()) {
+                productOpt = productRepo.findBySlug(currentSlugOpt.get());
+            }
+        }
+
+        // 3. If still not found and input is numeric, fallback to ID lookup
+        if (productOpt.isEmpty() && input.matches("^\\d+$")) {
+            try {
+                long id = Long.parseLong(input);
+                productOpt = productRepo.findById(id);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        Product product = productOpt.orElseThrow(() ->
+                new NotFoundException("Không tìm thấy sản phẩm với slug/ID: " + slugOrId));
+
+        return buildProductDetail(product);
+    }
+
+    private ProductDetailDTO buildProductDetail(Product product) {
+        long id = product.getId();
         List<ProductImage> imageList = productImageRepo.findByProductId(id);
         List<ProductUnit> productUnitList = productUnitRepo.findByProductId(id);
         List<ProductAttribute> productAttributeList = productAttributeRepo.findByProductId(id);

@@ -13,8 +13,10 @@ public class CategoryListItemDTO {
     private Long parentId;
     private String code;
     private String name;
+    private String slug;
     private Integer order;
     private String image;
+    private String imageAlt;
     private Integer status;
     private List<CategoryListItemDTO> children;
 }

@@ -15,6 +15,11 @@ import java.util.Optional;
 @Repository
 public interface ProductRepo extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
     Optional<Product> findByExternalId(Long externalId);
+    Optional<Product> findFirstBySlug(String slug);
+    default Optional<Product> findBySlug(String slug) {
+        return findFirstBySlug(slug);
+    }
+    boolean existsBySlug(String slug);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Product p where p.id = :id")

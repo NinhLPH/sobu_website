@@ -15,7 +15,7 @@ public class SitemapController {
 
     private final SitemapService sitemapService;
 
-    @Value("${app.frontend.base-url}")
+    @Value("${app.frontend.base-url:https://sobu.vn}")
     private String baseUrl;
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
@@ -37,6 +37,21 @@ public class SitemapController {
 
         xml.append("</urlset>\n");
         return ResponseEntity.ok(xml.toString());
+    }
+
+    @GetMapping(value = "/robots.txt", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> getRobotsTxt() {
+        String site = baseUrl.replaceAll("/$", "");
+        String robots = "User-agent: *\n" +
+                "Allow: /\n" +
+                "Disallow: /api/\n" +
+                "Disallow: /admin/\n" +
+                "Disallow: /cart\n" +
+                "Disallow: /checkout\n" +
+                "Disallow: /my-account/\n" +
+                "\n" +
+                "Sitemap: " + site + "/sitemap.xml\n";
+        return ResponseEntity.ok(robots);
     }
 
     private String escapeXml(String value) {

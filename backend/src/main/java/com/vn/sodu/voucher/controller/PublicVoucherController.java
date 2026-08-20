@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/vouchers")
+@RequestMapping({"/api/v1/vouchers", "/api/vouchers", "/api/public/vouchers", "/api/v1/public/vouchers"})
 @RequiredArgsConstructor
 public class PublicVoucherController {
 
