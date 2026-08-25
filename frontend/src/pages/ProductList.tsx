@@ -100,7 +100,7 @@ export default function ProductList() {
         }
     }, [searchParams, apiCategories, apiBrands]);
 
-    const toggleFilter = (item: string, list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>) => {
+    const toggleFilter = (item: string, setList: React.Dispatch<React.SetStateAction<string[]>>) => {
         setList(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
     };
 
@@ -194,7 +194,7 @@ export default function ProductList() {
                                             {/* Parent Category Row */}
                                             <div className="flex items-center justify-between group">
                                                 <div 
-                                                    onClick={() => toggleFilter(parent.name, selectedCategories, setSelectedCategories)} 
+                                                    onClick={() => toggleFilter(parent.name, setSelectedCategories)}
                                                     className="flex items-center gap-3 cursor-pointer select-none flex-1"
                                                 >
                                                     <div
@@ -236,7 +236,7 @@ export default function ProductList() {
                                                         return (
                                                             <div 
                                                                 key={child.id}
-                                                                onClick={() => toggleFilter(child.name, selectedCategories, setSelectedCategories)}
+                                                                onClick={() => toggleFilter(child.name, setSelectedCategories)}
                                                                 className="flex items-center gap-3 cursor-pointer group/child select-none"
                                                             >
                                                                 <div
@@ -266,7 +266,7 @@ export default function ProductList() {
                                 hiệu</h3>
                             <div className="max-h-[160px] overflow-y-auto custom-scrollbar pr-2 space-y-3">
                                 {brands.map(brand => (
-                                    <label key={brand} onClick={() => toggleFilter(brand, selectedBrands, setSelectedBrands)} className="flex items-center gap-3 cursor-pointer group select-none">
+                                    <label key={brand} onClick={() => toggleFilter(brand, setSelectedBrands)} className="flex items-center gap-3 cursor-pointer group select-none">
                                         <div
                                             className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors ${selectedBrands.includes(brand) ? 'bg-primary' : 'bg-surface-container group-hover:bg-outline-variant'}`}>
                                             {selectedBrands.includes(brand) &&
@@ -286,7 +286,7 @@ export default function ProductList() {
                                 {scales.map(scale => (
                                     <button
                                         key={scale}
-                                        onClick={() => toggleFilter(scale, selectedScales, setSelectedScales)}
+                                        onClick={() => toggleFilter(scale, setSelectedScales)}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${selectedScales.includes(scale) ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container text-on-surface hover:bg-surface-container-high'}`}
                                     >
                                         {scale}

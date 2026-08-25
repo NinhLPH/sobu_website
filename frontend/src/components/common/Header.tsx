@@ -476,7 +476,7 @@ export default function Header() {
                                                 {user?.role && (
                                                     <span
                                                         className="inline-block mt-2 text-[9px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
-                                                        {user.role.name === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
+                                                        {user.role.name === 'ADMIN' ? 'Quản trị viên' : user.role.name === 'STAFF' ? 'Nhân viên' : 'Thành viên'}
                                                     </span>
                                                 )}
                                             </div>
@@ -512,7 +512,7 @@ export default function Header() {
                                         {/* Đã tháo renderThemeMenuButton() ở đây */}
                                         {isAuthenticated ? (
                                             <>
-                                                {user?.role?.name === 'ADMIN' && (
+                                                {(user?.role?.name === 'ADMIN' || user?.role?.name === 'STAFF') && (
                                                     <Link
                                                         to="/admin"
                                                         onClick={() => setIsUserMenuOpen(false)}

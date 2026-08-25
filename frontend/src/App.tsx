@@ -11,6 +11,9 @@ import AdminLayout from "./components/admin/AdminLayout";
 import AdminProducts from "./pages/admin/Products";
 import AdminCategories from "./pages/admin/Categories";
 import AdminBrands from "./pages/admin/Brands";
+import AdminBadges from "./pages/admin/Badges";
+import AdminVouchers from "./pages/admin/Vouchers";
+import AdminInventory from "./pages/admin/Inventory";
 import AdminOrders from "./pages/admin/Orders";
 import AdminRequests from "./pages/admin/Requests";
 import AdminRequestDetail from "./pages/admin/RequestDetails";
@@ -99,6 +102,9 @@ export default function App() {
                             <Route path="products" element={<AdminProducts/>}/>
                             <Route path="categories" element={<AdminCategories/>}/>
                             <Route path="brands" element={<AdminBrands/>}/>
+                            <Route path="badges" element={<AdminBadges/>}/>
+                            <Route path="vouchers" element={<AdminVouchers/>}/>
+                            <Route path="inventory" element={<AdminInventory/>}/>
                             <Route path="orders" element={<AdminOrders/>}/>
                             <Route path="orders/:id" element={<AdminOrderDetail/>}/>
                             <Route path="requests" element={<AdminRequests/>}/>
@@ -106,9 +112,11 @@ export default function App() {
                             <Route path="reviews" element={<AdminReviews/>}/>
                             <Route path="support" element={<AdminSupport/>}/>
                             <Route path="shipping" element={<AdminShipping/>}/>
-                            <Route path="banners" element={<AdminBanners/>}/>
-                            <Route path="configs" element={<AdminConfigs/>}/>
-                            <Route path="static-pages" element={<AdminStaticPages/>}/>
+                            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+                                <Route path="banners" element={<AdminBanners/>}/>
+                                <Route path="configs" element={<AdminConfigs/>}/>
+                                <Route path="static-pages" element={<AdminStaticPages/>}/>
+                            </Route>
                             <Route path="sync" element={<AdminSync/>}/>
                             <Route path="nhanh/callback" element={<AdminNhanhCallback/>}/>
                         </Route>

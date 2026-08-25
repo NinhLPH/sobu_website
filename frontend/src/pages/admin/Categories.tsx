@@ -1,313 +1,177 @@
-import {useState, useEffect, useMemo} from 'react';
-import {Plus, Edit, Trash2, ChevronRight, ChevronDown, X} from 'lucide-react';
+import {FormEvent, useCallback, useEffect, useMemo, useState} from 'react';
+import {Edit3, Plus, Power, Trash2} from 'lucide-react';
+import {AdminCategory, CategoryWriteRequest} from '../../interface/admin-catalog.model';
+import {AdminCatalogService} from '../../service/admin-catalog.service';
+import {ToastService} from '../../service/toast.service';
+import {
+    AdminButton,
+    AdminCard,
+    AdminEmpty,
+    AdminError,
+    AdminLoading,
+    AdminModal,
+    AdminPage,
+    AdminSearch,
+    AdminStatus,
+    Field,
+    getApiError,
+    inputClass
+} from '../../components/admin/AdminUi';
 
-import {useProductStore} from '../../store/useProductStore';
-import {CategoryModel, mapCategoryDtoToModel} from "../../interface/category.model";
-
-const collectCategoryTreeIds = (categories: CategoryModel[], rootId: string) => {
-    const ids = new Set<string>([rootId]);
-    const pending = [rootId];
-
-    while (pending.length > 0) {
-        const parentId = pending.shift()!;
-        for (const category of categories) {
-            if (category.parentId === parentId && !ids.has(category.id)) {
-                ids.add(category.id);
-                pending.push(category.id);
-            }
-        }
-    }
-
-    return ids;
+const initial: CategoryWriteRequest = {code: '', name: '', parentId: null, order: 0, image: '', content: '', status: 1};
+const flattenHierarchy = (items: AdminCategory[]): Array<AdminCategory & { level: number }> => {
+    const visit = (parentId: number | null, level: number): Array<AdminCategory & { level: number }> => items
+        .filter(item => (item.parentId ?? null) === parentId)
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .flatMap(item => [{...item, level}, ...visit(item.id, level + 1)]);
+    const tree = visit(null, 0);
+    const included = new Set(tree.map(item => item.id));
+    return [...tree, ...items.filter(item => !included.has(item.id)).map(item => ({...item, level: 0}))];
 };
 
-function CategoryNode({category, level = 0, onEdit, onAddChild, onDelete}: { category: CategoryModel, level?: number, onEdit: (category?: CategoryModel, parentId?: string) => void, onAddChild: (parentId: string) => void, onDelete: (id: string) => void }) {
-    const [expanded, setExpanded] = useState(true);
-
-    const hasChildren = category.children && category.children.length > 0;
-
-    const handleDelete = () => {
-        if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?\n' +
-            'Các danh mục con cũng sẽ bị xóa và sản phẩm có thể bị ảnh hưởng.')) {
-            onDelete(category.id);
-        }
-    }
-
-    return (
-        <div className="w-full">
-            <div
-                className="flex items-center justify-between p-3 border-b border-outline-variant/20 hover:bg-surface-variant/30 transition-colors group"
-                style={{paddingLeft: `${level * 2 + 1}rem`}}
-            >
-                <div className="flex items-center gap-2">
-                    {hasChildren ? (
-                        <button onClick={() => setExpanded(!expanded)}
-                                className="p-1 hover:bg-surface-container rounded cursor-pointer">
-                            {expanded ? <ChevronDown className="w-4 h-4 text-outline"/> :
-                                <ChevronRight className="w-4 h-4 text-outline"/>}
-                        </button>
-                    ) : (
-                        <span className="w-6"/> // spacer
-                    )}
-                    <span className="font-bold text-on-surface">{category.name}</span>
-                    <span
-                        className="text-xs text-outline px-2 py-0.5 bg-surface-container rounded-md">{category.id}</span>
-                </div>
-
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onAddChild(category.id)}
-                            className="p-1.5 text-secondary hover:bg-surface-container rounded transition-colors text-xs font-semibold flex items-center gap-1 cursor-pointer">
-                        <Plus className="w-3 h-3"/> Thêm nhánh con
-                    </button>
-                    <button onClick={() => onEdit(category)}
-                            className="p-1.5 text-secondary hover:bg-surface-container rounded transition-colors cursor-pointer">
-                        <Edit className="w-4 h-4"/>
-                    </button>
-                    <button onClick={handleDelete}
-                            className="p-1.5 text-error-dim hover:bg-error-container hover:text-error rounded transition-colors cursor-pointer">
-                        <Trash2 className="w-4 h-4"/>
-                    </button>
-                </div>
-            </div>
-
-            {expanded && hasChildren && (
-                <div className="w-full">
-                    {category.children!.map(child => (
-                        <CategoryNode
-                            key={child.id}
-                            category={child}
-                            level={level + 1}
-                            onEdit={onEdit}
-                            onAddChild={onAddChild}
-                            onDelete={onDelete}
-                        />
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
 export default function AdminCategories() {
-    const { categories: dbCategories, fetchCategories } = useProductStore();
-
-    const [localCategories, setLocalCategories] = useState<CategoryModel[]>([]);
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingCategory, setEditingCategory] = useState<Partial<CategoryModel> | null>(null);
-    const [isEditing, setIsEditing] = useState(false);
-
-    useEffect(() => {
-        fetchCategories();
-    }, [fetchCategories]);
-
-    useEffect(() => {
-        if (dbCategories && dbCategories.length > 0) {
-            const flatList: CategoryModel[] = [];
-
-            const extractToFlat = (cats: any[]) => {
-                cats.forEach(cat => {
-                    const model = mapCategoryDtoToModel(cat);
-                    const { children, ...flatModel } = model;
-                    flatList.push(flatModel);
-
-                    if (cat.children && cat.children.length > 0) {
-                        extractToFlat(cat.children);
-                    }
-                });
-            };
-
-            extractToFlat(dbCategories);
-            setLocalCategories(flatList);
+    const [items, setItems] = useState<AdminCategory[]>([]);
+    const [query, setQuery] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [open, setOpen] = useState(false);
+    const [id, setId] = useState<number | null>(null);
+    const [form, setForm] = useState<CategoryWriteRequest>(initial);
+    const [saving, setSaving] = useState(false);
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            setItems(await AdminCatalogService.getCategories());
+        } catch (e) {
+            setError(getApiError(e));
+        } finally {
+            setLoading(false);
         }
-    }, [dbCategories]);
-
-    const hierarchicalCategories = useMemo(() => {
-        const map = new Map<string, CategoryModel>();
-        const roots: CategoryModel[] = [];
-
-        localCategories.forEach(cat => {
-            map.set(cat.id, { ...cat, children: [] });
-        });
-
-        localCategories.forEach(cat => {
-            if (cat.parentId && map.has(cat.parentId)) {
-                map.get(cat.parentId)!.children!.push(map.get(cat.id)!);
-            } else {
-                roots.push(map.get(cat.id)!);
-            }
-        });
-
-        return roots;
-    }, [localCategories]);
-   const flatCategoriesForDropdown = useMemo(() => {
-        const getFullName = (cat: CategoryModel): string => {
-            if (!cat.parentId) return cat.name;
-            const parent = localCategories.find(c => c.id === cat.parentId);
-            return parent ? `${getFullName(parent)} > ${cat.name}` : cat.name;
-        };
-
-        return localCategories.map(cat => ({
-            id: cat.id,
-            name: getFullName(cat)
-        })).sort((a, b) => a.name.localeCompare(b.name));
-    }, [localCategories]);
-    const getInvalidParentIds = () => {
-        if (!editingCategory?.id) return [];
-        return Array.from(collectCategoryTreeIds(localCategories, editingCategory.id));
+    }, []);
+    useEffect(() => {
+        void load();
+    }, [load]);
+    const all = useMemo(() => flattenHierarchy(items || []), [items]);
+    const visible = all.filter(x => `${x.name} ${x.code}`.toLowerCase().includes(query.toLowerCase()));
+    const edit = (x?: AdminCategory, parentId?: number) => {
+        setId(x?.id ?? null);
+        setForm(x ? {
+            code: x.code,
+            name: x.name,
+            parentId: x.parentId,
+            order: x.order,
+            image: x.image || '',
+            content: x.content || '',
+            status: x.status
+        } : {...initial, parentId: parentId ?? null});
+        setOpen(true);
     };
-
-    const handleOpenModal = (category?: CategoryModel, parentId?: string) => {
-        if (category) {
-            const { children, ...rest } = category;
-            setIsEditing(true);
-            setEditingCategory(rest);
-        } else {
-            setIsEditing(false);
-            setEditingCategory({
-                id: `CAT_${Math.floor(Math.random() * 10000)}`,
-                name: '',
-                parentId: parentId || null
-            });
-        }
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setEditingCategory(null);
-        setIsEditing(false);
-    };
-
-    const handleSave = (e: React.FormEvent) => {
+    const submit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!editingCategory) return;
-
-        if (isEditing) {
-            setLocalCategories(prev => prev.map(c =>
-                c.id === editingCategory.id ? { ...c, name: editingCategory.name! } : c
-            ));
-        } else {
-            if (localCategories.some(c => c.id === editingCategory.id)) {
-                alert('Mã danh mục đã tồn tại, vui lòng chọn mã khác!');
-                return;
-            }
-            const newCat = editingCategory as CategoryModel;
-            setLocalCategories(prev => [...prev, newCat]);
+        setSaving(true);
+        try {
+            id ? await AdminCatalogService.updateCategory(id, form) : await AdminCatalogService.createCategory(form);
+            ToastService.success(id ? 'Đã cập nhật danh mục.' : 'Đã tạo danh mục.');
+            setOpen(false);
+            await load();
+        } catch (err) {
+            ToastService.error(getApiError(err));
+        } finally {
+            setSaving(false);
         }
-        handleCloseModal();
     };
-
-    const handleDeleteCategory = (id: string) => {
-        const idsToDelete = collectCategoryTreeIds(localCategories, id);
-
-         setLocalCategories(prev => prev.filter(c => !idsToDelete.has(c.id)));
+    const remove = async (x: AdminCategory) => {
+        if (!window.confirm(`Xóa danh mục “${x.name}”?`)) return;
+        try {
+            await AdminCatalogService.deleteCategory(x.id);
+            ToastService.success('Đã xóa danh mục.');
+            await load();
+        } catch (e) {
+            ToastService.error(getApiError(e, 'Không thể xóa danh mục đang có sản phẩm hoặc danh mục con.'));
+        }
     };
-
-    const invalidParentIds = getInvalidParentIds();
-
-    return (
-        <div className="pt-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-on-surface">Quản lý Danh mục</h1>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="bg-primary text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:brightness-110 cursor-pointer"
-                >
-                    <Plus className="w-5 h-5"/> Thêm danh mục gốc
-                </button>
-            </div>
-
-            <div className="bg-white rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm">
-                {/* Dùng hierarchicalCategories để render dạng cây */}
-                {hierarchicalCategories.map(category => (
-                    <CategoryNode
-                        key={category.id}
-                        category={category}
-                        onEdit={handleOpenModal}
-                        onAddChild={(parentId) => handleOpenModal(undefined, parentId)}
-                        onDelete={handleDeleteCategory}
-                    />
-                ))}
-                {hierarchicalCategories.length === 0 && (
-                    <div className="p-8 text-center text-on-surface-variant">
-                        Chưa có danh mục nào.
-                    </div>
-                )}
-            </div>
-
-            {/* Modal */}
-            {isModalOpen && editingCategory && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-                        <div className="flex justify-between items-center p-6 border-b border-outline-variant/30">
-                            <h2 className="text-xl font-bold text-on-surface">
-                                {isEditing ? 'Cập nhật Danh mục' : 'Thêm Danh mục mới'}
-                            </h2>
-                            <button onClick={handleCloseModal}
-                                    className="text-outline hover:text-error transition-colors cursor-pointer">
-                                <X className="w-6 h-6"/>
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSave} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Mã danh mục</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editingCategory.id || ''}
-                                    onChange={e => setEditingCategory({...editingCategory, id: e.target.value})}
-                                    disabled={isEditing}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Tên danh mục</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editingCategory.name || ''}
-                                    onChange={e => setEditingCategory({...editingCategory, name: e.target.value})}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Danh mục cha</label>
-                                <select
-                                    value={editingCategory.parentId || ''}
-                                    onChange={e => setEditingCategory({
-                                        ...editingCategory,
-                                        parentId: e.target.value || null
-                                    })}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant cursor-pointer"
-                                    disabled={isEditing}
-                                >
-                                    <option value="">-- Là danh mục gốc --</option>
-                                    {flatCategoriesForDropdown
-                                        .filter(c => !invalidParentIds.includes(c.id)) // Ẩn các danh mục con để tránh bị loop logic
-                                        .map(cat => (
-                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                        ))}
-                                </select>
-                                <p className="text-[10px] text-outline mt-1">*Chỉ định khi thêm mới. Không thể di chuyển danh mục sau khi đã tạo dữ liệu gốc.</p>
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/30 mt-6">
-                                <button type="button" onClick={handleCloseModal}
-                                        className="px-4 py-2 font-bold text-on-surface-variant hover:text-on-surface cursor-pointer">
-                                    Hủy bỏ
-                                </button>
-                                <button type="submit"
-                                        className="px-6 py-2 bg-primary text-white font-bold rounded hover:brightness-110 cursor-pointer">
-                                    Lưu danh mục
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+    const toggle = async (x: AdminCategory) => {
+        try {
+            await AdminCatalogService.setCategoryStatus(x.id, x.status === 1 ? 0 : 1);
+            await load();
+        } catch (e) {
+            ToastService.error(getApiError(e));
+        }
+    };
+    return <AdminPage title="Danh mục"
+                      description="Tổ chức cây danh mục dùng chung cho điều hướng và phân loại sản phẩm."
+                      actions={<AdminButton onClick={() => edit()}><Plus className="h-4 w-4"/>Thêm danh
+                          mục</AdminButton>}><AdminCard>
+        <div className="border-b border-outline-variant/30 p-4"><AdminSearch value={query} onChange={setQuery}
+                                                                             placeholder="Tìm danh mục theo tên hoặc mã"/>
         </div>
-    );
+        {loading ? <AdminLoading/> : error ?
+            <AdminError message={error} onRetry={() => void load()}/> : !visible.length ?
+                <AdminEmpty title="Không có danh mục"/> :
+                <div className="divide-y divide-outline-variant/25">{visible.map(x => <div key={x.id}
+                                                                                           className="flex items-center gap-3 px-4 py-3 hover:bg-surface-container-low"
+                                                                                           style={{paddingLeft: `${16 + x.level * 24}px`}}>
+                    <div className="min-w-0 flex-1"><p className="font-bold">{x.name}</p><p
+                        className="text-xs text-outline">{x.code}{x.parentId ? ' · Danh mục con' : ' · Danh mục gốc'}</p>
+                    </div>
+                    <AdminStatus active={x.status === 1}/>
+                    <div className="flex">
+                        <button onClick={() => edit(undefined, x.id)}
+                                className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-primary"
+                                title="Thêm danh mục con"><Plus className="h-4 w-4"/></button>
+                        <button onClick={() => edit(x)}
+                                className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-primary"
+                                title="Sửa"><Edit3 className="h-4 w-4"/></button>
+                        <button onClick={() => void toggle(x)}
+                                className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-primary"
+                                title="Đổi trạng thái"><Power className="h-4 w-4"/></button>
+                        <button onClick={() => void remove(x)}
+                                className="rounded-lg p-2 text-outline hover:bg-error/10 hover:text-error" title="Xóa">
+                            <Trash2 className="h-4 w-4"/></button>
+                    </div>
+                </div>)}</div>}</AdminCard>
+        <AdminModal open={open} onClose={() => setOpen(false)} title={id ? 'Cập nhật danh mục' : 'Thêm danh mục'}
+                    size="md">
+            <form onSubmit={submit} className="space-y-4 p-5">
+                <div className="grid gap-4 sm:grid-cols-2"><Field label="Mã danh mục"><input required
+                                                                                             className={inputClass}
+                                                                                             value={form.code}
+                                                                                             onChange={e => setForm({
+                                                                                                 ...form,
+                                                                                                 code: e.target.value.toUpperCase()
+                                                                                             })}/></Field><Field
+                    label="Tên danh mục"><input required className={inputClass} value={form.name}
+                                                onChange={e => setForm({...form, name: e.target.value})}/></Field><Field
+                    label="Danh mục cha"><select className={inputClass} value={form.parentId ?? ''}
+                                                 onChange={e => setForm({
+                                                     ...form,
+                                                     parentId: e.target.value ? Number(e.target.value) : null
+                                                 })}>
+                    <option value="">Danh mục gốc</option>
+                    {all.filter(x => x.id !== id).map(x => <option key={x.id}
+                                                                   value={x.id}>{'— '.repeat(x.level)}{x.name}</option>)}
+                </select></Field><Field label="Thứ tự"><input type="number" min={0} className={inputClass}
+                                                              value={form.order ?? 0} onChange={e => setForm({
+                    ...form,
+                    order: Number(e.target.value)
+                })}/></Field></div>
+                <Field label="Đường dẫn ảnh"><input className={inputClass} value={form.image || ''}
+                                                    onChange={e => setForm({
+                                                        ...form,
+                                                        image: e.target.value
+                                                    })}/></Field><Field label="Nội dung"><textarea
+                className={`${inputClass} min-h-20 py-2`} value={form.content || ''}
+                onChange={e => setForm({...form, content: e.target.value})}/></Field><label
+                className="flex gap-2 text-sm font-bold"><input type="checkbox" checked={form.status === 1}
+                                                                onChange={e => setForm({
+                                                                    ...form,
+                                                                    status: e.target.checked ? 1 : 0
+                                                                })}/>Hoạt động</label>
+                <div className="flex justify-end gap-2 border-t border-outline-variant/30 pt-4"><AdminButton
+                    type="button" variant="secondary" onClick={() => setOpen(false)}>Hủy</AdminButton><AdminButton
+                    type="submit" disabled={saving}>Lưu danh mục</AdminButton></div>
+            </form>
+        </AdminModal>
+    </AdminPage>;
 }
