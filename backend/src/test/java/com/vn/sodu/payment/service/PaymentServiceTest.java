@@ -89,17 +89,36 @@ class PaymentServiceTest {
     }
 
     @Test
-    void initializeOrderPaymentStateSetsPendingBalanceFromTotalAmount() {
+    void initializeOrderPaymentStateUsesTotalAmountThatAlreadyIncludesShipping() {
         Order order = Order.builder()
                 .type(OrderType.NORMAL)
-                .totalAmount(new BigDecimal("250.5"))
+                // Checkout persisted finalTotal: 1,000 item subtotal + 30,000 shipping.
+                .totalAmount(new BigDecimal("31000"))
+                .shippingFee(new BigDecimal("30000"))
                 .build();
 
         paymentService.initializeOrderPaymentState(order);
 
         assertThat(order.getPaidAmount()).isEqualByComparingTo("0.00");
-        assertThat(order.getRemainingAmount()).isEqualByComparingTo("250.50");
+        assertThat(order.getRemainingAmount()).isEqualByComparingTo("31000.00");
         assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+    }
+
+    @Test
+    void paymentCalculationsDoNotAddShippingAlreadyIncludedInTotalAmount() {
+        Order order = Order.builder()
+                .type(OrderType.NORMAL)
+                // Checkout persisted finalTotal: 1,000 item subtotal + 30,000 shipping.
+                .totalAmount(new BigDecimal("31000"))
+                .shippingFee(new BigDecimal("30000"))
+                .build();
+
+        assertThat(paymentCalculationService.calculateOrderGrandTotal(order))
+                .isEqualByComparingTo("31000.00");
+        assertThat(paymentCalculationService.calculatePaymentAmount(order, PaymentType.FULL))
+                .isEqualByComparingTo("31000.00");
+        assertThat(paymentCalculationService.calculateRemainingAmount(order, List.of()))
+                .isEqualByComparingTo("31000.00");
     }
 
     @Test
