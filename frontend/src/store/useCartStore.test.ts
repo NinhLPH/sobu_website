@@ -3,10 +3,13 @@ import { CustomerService } from '../service/custom.service';
 import { ProductModel } from '../interface/product.model';
 import { useCartStore } from './useCartStore';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
+import { PublicCatalogService } from '../service/public-catalog.service';
 
 jest.mock('../service/custom.service');
+jest.mock('../service/public-catalog.service');
 
 const mockedCustomerService = jest.mocked(CustomerService);
+const mockedPublicCatalogService = jest.mocked(PublicCatalogService);
 
 const product: ProductModel = {
     id: '10',
@@ -95,6 +98,8 @@ describe('useCartStore order submission', () => {
             isUsingFallback: false,
             isLoading: false,
             isSubmitting: false,
+            isHydratingProducts: false,
+            hydrationError: null,
             checkoutError: null,
             lastCreatedOrder: null,
             pendingOrderKey: null,
@@ -136,6 +141,45 @@ describe('useCartStore order submission', () => {
             quantity: 3
         }]);
         expect(useCartStore.getState().isLoading).toBe(false);
+    });
+
+    it('hydrates cart products with current database price, category, and stock', async () => {
+        useCartStore.setState({ items: [{ product, quantity: 2 }] });
+        mockedPublicCatalogService.getProductDetail.mockResolvedValue({
+            id: 10,
+            name: 'Ao hoodie updated',
+            code: 'HD-10',
+            description: 'Updated',
+            content: '',
+            price: 320000,
+            avatarImage: '/updated.png',
+            brandName: 'SOBU',
+            categoryId: 7,
+            categoryName: 'Áo',
+            stockAvailable: 4,
+            stockRemain: 4,
+            units: [],
+            attributes: [],
+            images: ['/updated.png'],
+            updatedAt: '2026-08-25T10:00:00'
+        });
+
+        await useCartStore.getState().hydrateProducts();
+
+        expect(useCartStore.getState()).toEqual(expect.objectContaining({
+            isHydratingProducts: false,
+            hydrationError: null,
+            items: [expect.objectContaining({
+                quantity: 2,
+                product: expect.objectContaining({
+                    id: '10',
+                    name: 'Ao hoodie updated',
+                    price: 320000,
+                    categoryId: '7',
+                    stock: 4
+                })
+            })]
+        }));
     });
 
     it('restores the account-scoped fallback cart without requesting the server', async () => {
@@ -295,7 +339,7 @@ describe('useCartStore order submission', () => {
                 ...shippingLocation,
                 ...shippingQuote,
                 items: [{
-                    nhanhProductId: '10001',
+                    productId: 10,
                     name: 'Ao hoodie',
                     price: 350000,
                     discount: 0,

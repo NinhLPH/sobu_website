@@ -8,6 +8,23 @@ export interface LocationWard {
     name: string;
 }
 
+export type LocationSource = 'external-v2' | 'backend-address' | 'backend-fallback';
+
+export interface ExternalLocationProvince {
+    code: number;
+    name: string;
+    codename?: string | null;
+    division_type?: string | null;
+}
+
+export interface ExternalLocationWard {
+    code: number;
+    name: string;
+    province_code: number;
+    codename?: string | null;
+    division_type?: string | null;
+}
+
 export interface ProvinceListResponse {
     datasetVersion: string;
     provinces: LocationProvince[];

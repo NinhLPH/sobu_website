@@ -60,6 +60,7 @@ export interface ProductListItemDTO {
     badgeTextColor?: string | null;
     avatarImage?: string;
     brandName?: string;
+    categoryId?: number | null;
     categoryName?: string;
     stockAvailable?: number;
     averageRating?: number;
@@ -86,6 +87,7 @@ export interface ProductDetailDTO {
     badgeTextColor?: string | null;
     avatarImage: string;
     brandName: string;
+    categoryId?: number | null;
     categoryName: string;
     stockAvailable: number;
     stockRemain: number;
@@ -135,6 +137,7 @@ export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel
         price,
         originalPrice,
         category: dto.categoryName || '',
+        categoryId: dto.categoryId == null ? undefined : String(dto.categoryId),
         brand: dto.brandName || '',
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
         description: '',
@@ -161,6 +164,7 @@ export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => 
         price: dto.price,
         originalPrice,
         category: dto.categoryName || '',
+        categoryId: dto.categoryId == null ? undefined : String(dto.categoryId),
         brand: dto.brandName || '',
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
         description: dto.description || dto.content || '',
