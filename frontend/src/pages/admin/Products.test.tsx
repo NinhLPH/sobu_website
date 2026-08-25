@@ -33,4 +33,36 @@ describe('AdminProducts API catalog', () => {
         fireEvent.change(screen.getByLabelText('Tìm kiếm sản phẩm quản trị'), {target: {value: 'serum'}});
         await waitFor(() => expect(AdminCatalogService.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({search: 'serum'})), {timeout: 1000});
     });
+
+    it('sends the configured sale window and one manual tag when updating', async () => {
+        (AdminCatalogService.getBadges as any).mockResolvedValue([
+            {id: 3, name: 'HOT', color: '#dc2626', textColor: '#ffffff', status: 1}
+        ]);
+        (AdminCatalogService.getProduct as any).mockResolvedValue({
+            ...products[0],
+            retailPrice: 350000,
+            oldPrice: 500000,
+            saleValidFrom: '2026-08-25T08:00:00',
+            saleValidThrough: '2026-08-31T23:59:00',
+            badgeId: 3,
+            images: []
+        });
+        (AdminCatalogService.updateProduct as any).mockResolvedValue({});
+
+        render(<AdminProducts/>);
+        await screen.findByText('Serum phục hồi');
+        fireEvent.click(screen.getAllByTitle('Chỉnh sửa')[0]);
+        await screen.findByDisplayValue('2026-08-25T08:00');
+        fireEvent.click(screen.getByRole('button', {name: 'Lưu sản phẩm'}));
+
+        await waitFor(() => expect(AdminCatalogService.updateProduct).toHaveBeenCalledWith(
+            10,
+            expect.objectContaining({
+                oldPrice: 500000,
+                saleValidFrom: '2026-08-25T08:00',
+                saleValidThrough: '2026-08-31T23:59',
+                badgeId: 3
+            })
+        ));
+    });
 });

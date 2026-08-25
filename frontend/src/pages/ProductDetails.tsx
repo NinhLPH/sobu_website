@@ -9,7 +9,13 @@ import ProductSlider from "../components/common/ProductSlider";
 import {useProductStore} from '../store/useProductStore';
 import {usePublicUiStore} from '../store/usePublicUiStore';
 import {PublicCatalogService} from '../service/public-catalog.service';
-import {mapListItemToProductModel, mapDetailToProductModel, ProductModel} from '../interface/product.model';
+import {
+    getDiscountPercent,
+    isSaleProduct,
+    mapListItemToProductModel,
+    mapDetailToProductModel,
+    ProductModel
+} from '../interface/product.model';
 import ProductReviewSection from '../components/reviews/ProductReviewSection';
 import {parseJsonConfig} from '../utils/website-config';
 
@@ -73,6 +79,9 @@ export default function ProductDetail() {
         }
     };
 
+    const isSale = product ? isSaleProduct(product) : false;
+    const discountPercent = product ? getDiscountPercent(product) : 0;
+
     if (loadingDetail || !product) {
         return (
             <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
@@ -98,11 +107,20 @@ export default function ProductDetail() {
                     <div
                         className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface-container-lowest p-4 shadow-[0_20px_50px_-15px_rgba(14,48,78,0.12)] sm:aspect-[4/3] sm:p-8">
                         <img className="w-full h-full object-contain" src={mainImage} alt={product.name}/>
-                        <div className="absolute top-6 left-6 flex flex-col gap-2">
-                            {product.isNew && (
+                        <div className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] flex-wrap gap-2 sm:left-6 sm:top-6">
+                            {product.manualTag && (
                                 <span
-                                    className="rounded-full bg-primary px-3 py-1 text-[9px] font-black uppercase tracking-widest text-on-primary shadow-md sm:px-3.5 sm:py-1.5 sm:text-[10px]">
-                                    Mới
+                                    className="rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest shadow-md sm:px-3.5 sm:py-1.5 sm:text-[10px]"
+                                    style={{
+                                        backgroundColor: product.manualTag.backgroundColor,
+                                        color: product.manualTag.textColor
+                                    }}>
+                                    {product.manualTag.label}
+                                </span>
+                            )}
+                            {isSale && (
+                                <span className="rounded-full bg-error px-3 py-1 text-[9px] font-black uppercase tracking-widest text-on-error shadow-md sm:px-3.5 sm:py-1.5 sm:text-[10px]">
+                                    SALE -{discountPercent}%
                                 </span>
                             )}
                         </div>
@@ -142,9 +160,14 @@ export default function ProductDetail() {
                         <span className="text-2xl font-black leading-none tracking-tight text-primary sm:text-3xl">
                             {formatCurrency(product.price)}
                         </span>
-                        {product.originalPrice && (
+                        {isSale && product.originalPrice != null && (
                             <span className="text-sm text-outline line-through font-bold">
                                 {formatCurrency(product.originalPrice)}
+                            </span>
+                        )}
+                        {isSale && (
+                            <span className="rounded-full bg-error/10 px-2.5 py-1 text-xs font-black text-error">
+                                Tiết kiệm {discountPercent}%
                             </span>
                         )}
                     </div>

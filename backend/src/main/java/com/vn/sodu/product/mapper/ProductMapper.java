@@ -6,6 +6,7 @@ import com.vn.sodu.product.ProductImage;
 import com.vn.sodu.product.ProductUnit;
 import com.vn.sodu.product.dto.*;
 import com.vn.sodu.seo.dto.SeoMetadataDTO;
+import com.vn.sodu.product.service.ProductPricing;
 import com.vn.sodu.utilites.SlugUtils;
 import org.springframework.stereotype.Component;
 
@@ -230,6 +231,20 @@ public class ProductMapper {
                 .build();
     }
 
+    public ProductListItemDTO toPublicListItem(Product entity) {
+        ProductListItemDTO dto = toListItem(entity);
+        return applyPublicPricing(dto, entity);
+    }
+
+    public ProductListItemDTO applyPublicPricing(ProductListItemDTO dto, Product entity) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(entity);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
+    }
+
     public ProductDetailDTO toDetail(
             Product product,
             List<ProductUnit> units,
@@ -368,5 +383,24 @@ public class ProductMapper {
                 .badgeTextColor(product.getBadgeTextColor())
                 .seo(seo)
                 .build();
+    }
+
+    public ProductDetailDTO toPublicDetail(
+            Product product,
+            List<ProductUnit> units,
+            List<ProductAttribute> attributes,
+            List<ProductImage> images
+    ) {
+        ProductDetailDTO dto = toDetail(product, units, attributes, images);
+        return applyPublicPricing(dto, product);
+    }
+
+    public ProductDetailDTO applyPublicPricing(ProductDetailDTO dto, Product product) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(product);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
     }
 }

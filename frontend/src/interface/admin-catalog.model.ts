@@ -39,6 +39,8 @@ export interface AdminProductDetail extends AdminProductListItem {
     width?: number | null;
     height?: number | null;
     weight?: number | null;
+    saleValidFrom?: string | null;
+    saleValidThrough?: string | null;
 }
 
 export interface ProductWriteRequest {
@@ -53,6 +55,8 @@ export interface ProductWriteRequest {
     importPrice?: number | null;
     wholesalePrice?: number | null;
     oldPrice?: number | null;
+    saleValidFrom?: string | null;
+    saleValidThrough?: string | null;
     vat?: number | null;
     avatarImage?: string;
     images?: string[];

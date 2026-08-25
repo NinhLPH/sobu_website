@@ -36,4 +36,16 @@ describe('ProductCard', () => {
         expect(screen.getByText('4.5')).toBeTruthy();
         expect(screen.getByText('(12)')).toBeTruthy();
     });
+
+    it('shows the system SALE badge together with the single manual tag', () => {
+        render(<ProductCard product={{
+            ...product,
+            price: 80000,
+            originalPrice: 100000,
+            manualTag: {label: 'HOT', backgroundColor: '#dc2626', textColor: '#ffffff'}
+        }} />);
+
+        expect(screen.getByText('HOT')).toBeTruthy();
+        expect(screen.getByText('SALE -20%')).toBeTruthy();
+    });
 });

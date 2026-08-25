@@ -47,6 +47,10 @@ export default function AdminBadges() {
     };
     const submit = async (e: FormEvent) => {
         e.preventDefault();
+        if (form.name.trim().toUpperCase() === 'SALE') {
+            ToastService.error('SALE là tag hệ thống, được tự động tạo từ giá sản phẩm.');
+            return;
+        }
         setSaving(true);
         try {
             id ? await AdminCatalogService.updateBadge(id, form) : await AdminCatalogService.createBadge(form);
@@ -78,7 +82,7 @@ export default function AdminBadges() {
         }
     };
     return <AdminPage title="Tag sản phẩm"
-                      description="Thiết kế và quản lý nhãn Hot, New, Sale off hiển thị nhất quán trên catalog."
+                      description="Thiết kế tag thủ công HOT, NEW hoặc tùy chỉnh. SALE là tag hệ thống, tự sinh từ giá."
                       actions={<AdminButton onClick={() => edit()}><Plus className="h-4 w-4"/>Thêm
                           tag</AdminButton>}><AdminCard>{loading ? <AdminLoading/> : error ?
         <AdminError message={error} onRetry={() => void load()}/> : !items.length ?
@@ -107,7 +111,7 @@ export default function AdminBadges() {
             <form onSubmit={submit} className="space-y-4 p-5"><Field label="Tên tag"><input required
                                                                                             className={inputClass}
                                                                                             value={form.name}
-                                                                                            placeholder="HOT, NEW, SALE OFF"
+                                                                                            placeholder="HOT, NEW hoặc tên tùy chỉnh"
                                                                                             onChange={e => setForm({
                                                                                                 ...form,
                                                                                                 name: e.target.value

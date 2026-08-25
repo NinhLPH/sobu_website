@@ -3,7 +3,7 @@ import {ShoppingCart} from 'lucide-react';
 import {useNavigate} from 'react-router-dom';
 
 import {useCartStore} from "../../store/useCartStore";
-import {ProductModel} from "../../interface/product.model";
+import {getDiscountPercent, isSaleProduct, ProductModel} from "../../interface/product.model";
 import {formatCurrency} from "../../utils/format";
 import ProductRatingSummary from './ProductRatingSummary';
 
@@ -15,6 +15,8 @@ interface ProductCardProps {
 export default function ProductCard({product}: ProductCardProps) {
     const addToCart = useCartStore(state => state.addToCart);
     const navigate = useNavigate();
+    const isSale = isSaleProduct(product);
+    const discountPercent = getDiscountPercent(product);
 
     const handleAddToCart = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -25,6 +27,15 @@ export default function ProductCard({product}: ProductCardProps) {
     return (
         <div
             onClick={() => navigate(`/product/${product.id}`)}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/product/${product.id}`);
+                }
+            }}
+            role="link"
+            tabIndex={0}
+            aria-label={`Xem ${product.name}`}
             className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-1.5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/20 hover:shadow-[0_12px_34px_-16px_rgba(14,48,78,0.28)] sm:rounded-[2rem] sm:p-2"
         >
             <div
@@ -34,16 +45,24 @@ export default function ProductCard({product}: ProductCardProps) {
                     src={product.imageUrl}
                     alt={product.name}
                 />
-                {product.isNew && (
-                    <div
-                        className="absolute right-1.5 top-1.5 rounded-full bg-tertiary-container px-2 py-0.5 text-[8px] font-black uppercase leading-4 tracking-wider text-on-tertiary-container shadow-sm sm:right-2.5 sm:top-2.5 sm:px-2.5 sm:py-1 sm:text-[9px]">
-                        Mới
-                    </div>
-                )}
-                {product.isHot && (
-                    <div
-                        className="absolute left-1.5 top-1.5 rounded-full bg-error px-2 py-0.5 text-[8px] font-black uppercase leading-4 tracking-wider text-on-error shadow-sm sm:left-2.5 sm:top-2.5 sm:px-2.5 sm:py-1 sm:text-[9px]">
-                        Hot
+                {(product.manualTag || isSale) && (
+                    <div className="absolute left-1.5 top-1.5 flex max-w-[calc(100%-0.75rem)] flex-wrap gap-1 sm:left-2.5 sm:top-2.5 sm:max-w-[calc(100%-1.25rem)]">
+                        {product.manualTag && (
+                            <span
+                                className="rounded-full px-2 py-0.5 text-[8px] font-black uppercase leading-4 tracking-wider shadow-sm sm:px-2.5 sm:py-1 sm:text-[9px]"
+                                style={{
+                                    backgroundColor: product.manualTag.backgroundColor,
+                                    color: product.manualTag.textColor
+                                }}
+                            >
+                                {product.manualTag.label}
+                            </span>
+                        )}
+                        {isSale && (
+                            <span className="rounded-full bg-error px-2 py-0.5 text-[8px] font-black uppercase leading-4 tracking-wider text-on-error shadow-sm sm:px-2.5 sm:py-1 sm:text-[9px]">
+                                SALE -{discountPercent}%
+                            </span>
+                        )}
                     </div>
                 )}
             </div>
@@ -61,7 +80,7 @@ export default function ProductCard({product}: ProductCardProps) {
                     className="mb-2 text-[10px] font-black text-on-surface sm:text-xs"
                     starClassName="h-2.5 w-2.5 sm:h-3 sm:w-3"
                 />
-                {product.originalPrice && (
+                {isSale && product.originalPrice != null && (
                     <div className="mb-0.5 flex items-baseline gap-2">
                         <span className="text-[10px] leading-none text-outline line-through sm:text-xs">
                             {formatCurrency(product.originalPrice)}

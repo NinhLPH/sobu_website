@@ -96,6 +96,33 @@ describe('useProductStore request guards', () => {
         expect(useProductStore.getState().allProductsLoaded).toBe(false);
     });
 
+    it('keeps the latest forced product filter response when requests overlap', async () => {
+        let resolveFirst: ((value: any) => void) | undefined;
+        mockedCatalogService.getProducts
+            .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }))
+            .mockResolvedValueOnce({
+                content: [{id: 2, name: 'Latest sale result', price: 80, oldPrice: 100}],
+                pageNumber: 0,
+                pageSize: 20,
+                totalElements: 1,
+                totalPages: 1
+            });
+
+        const first = useProductStore.getState().fetchProducts({sortBy: 'createdAt'}, true);
+        const second = useProductStore.getState().fetchProducts({onSale: true}, true);
+        await second;
+        resolveFirst?.({
+            content: [{id: 1, name: 'Stale result', price: 100}],
+            pageNumber: 0,
+            pageSize: 20,
+            totalElements: 1,
+            totalPages: 1
+        });
+        await first;
+
+        expect(useProductStore.getState().products.map(product => product.id)).toEqual([2]);
+    });
+
     it('exposes sync errors and clears the loading state', async () => {
         mockedSyncService.syncBrands.mockRejectedValue(new Error('Sync failed'));
 

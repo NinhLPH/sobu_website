@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -62,7 +63,7 @@ public class ProductService {
     public List<ProductListItemDTO> getAllProducts() {
         return productRepo.findAll()
                 .stream()
-                .map(productMapper::toListItem)
+                .map(product -> applyPublicPricing(productMapper.toListItem(product), product))
                 .map(this::withReviewSummary)
                 .toList();
     }
@@ -74,7 +75,7 @@ public class ProductService {
         Specification<Product> specification = buildSpecification(safeRequest);
 
         return productRepo.findAll(specification, pageable)
-                .map(productMapper::toListItem)
+                .map(product -> applyPublicPricing(productMapper.toListItem(product), product))
                 .map(this::withReviewSummary);
     }
 
@@ -132,10 +133,17 @@ public class ProductService {
         List<ProductUnit> productUnitList = productUnitRepo.findByProductId(id);
         List<ProductAttribute> productAttributeList = productAttributeRepo.findByProductId(id);
 
-        ProductDetailDTO detailDTO = withReviewSummary(productMapper.toDetail(product, productUnitList, productAttributeList, imageList));
+        ProductDetailDTO detailDTO = withReviewSummary(applyPublicPricing(
+                productMapper.toDetail(product, productUnitList, productAttributeList, imageList), product));
         if (detailDTO != null) {
+            ProductPricing.PriceView pricing = ProductPricing.resolve(product);
             List<com.vn.sodu.voucher.dto.VoucherSummaryDTO> applicableVouchers =
-                    voucherService.getApplicableVouchersForProduct(product.getId(), product.getCategoryId(), product.getOldPrice(), product.getRetailPrice());
+                    voucherService.getApplicableVouchersForProduct(
+                            product.getId(),
+                            product.getCategoryId(),
+                            pricing.oldPrice(),
+                            pricing.price()
+                    );
             detailDTO.setApplicableVouchers(applicableVouchers);
             detailDTO.setBestVoucher(voucherService.findBestVoucherForProduct(applicableVouchers));
         }
@@ -160,8 +168,25 @@ public class ProductService {
         return dto;
     }
 
+    private ProductListItemDTO applyPublicPricing(ProductListItemDTO dto, Product product) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(product);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
+    }
+
+    private ProductDetailDTO applyPublicPricing(ProductDetailDTO dto, Product product) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(product);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
+    }
+
     private Pageable toPageable(ProductFilterRequest request) {
-        String sortBy = resolveSortBy(request.getSortBy());
         Sort.Direction direction;
         try {
             direction = Sort.Direction.fromString(
@@ -173,6 +198,10 @@ public class ProductService {
 
         int page = Math.max(request.getPage(), 0);
         int pageSize = request.getPageSize() > 0 ? Math.min(request.getPageSize(), 100) : 20;
+        if (ProductSaleCriteria.isComputedSort(request.getSortBy())) {
+            return PageRequest.of(page, pageSize);
+        }
+        String sortBy = resolveSortBy(request.getSortBy());
         return PageRequest.of(page, pageSize, Sort.by(direction, sortBy));
     }
 
@@ -188,6 +217,7 @@ public class ProductService {
         return (root, query, cb) -> {
             query.distinct(true);
             Predicate predicate = cb.conjunction();
+            LocalDateTime now = LocalDateTime.now();
 
             // Storefront filtering: only active, non-archived products
             predicate = cb.and(predicate, cb.isTrue(root.<Boolean>get("active")));
@@ -200,10 +230,12 @@ public class ProductService {
                 predicate = cb.and(predicate, cb.equal(root.<Long>get("brandId"), request.getBrandId()));
             }
             if (request.getMinPrice() != null) {
-                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.<BigDecimal>get("retailPrice"), request.getMinPrice()));
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(
+                        ProductSaleCriteria.effectivePrice(root, cb, now), request.getMinPrice()));
             }
             if (request.getMaxPrice() != null) {
-                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.<BigDecimal>get("retailPrice"), request.getMaxPrice()));
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(
+                        ProductSaleCriteria.effectivePrice(root, cb, now), request.getMaxPrice()));
             }
             if (request.getInStock() != null) {
                 if (request.getInStock()) {
@@ -211,6 +243,10 @@ public class ProductService {
                 } else {
                     predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.<Double>get("stockAvailable"), 0d));
                 }
+            }
+            if (request.getOnSale() != null) {
+                Predicate activeSale = ProductSaleCriteria.activeSale(root, cb, now);
+                predicate = cb.and(predicate, request.getOnSale() ? activeSale : cb.not(activeSale));
             }
 
             String search = request.getSearch();
@@ -228,6 +264,14 @@ public class ProductService {
                 predicate = cb.and(predicate, searchPredicate);
             }
 
+            Sort.Direction direction;
+            try {
+                direction = Sort.Direction.fromString(
+                        request.getSortDirection() == null ? "DESC" : request.getSortDirection());
+            } catch (IllegalArgumentException ex) {
+                direction = Sort.Direction.DESC;
+            }
+            ProductSaleCriteria.applyComputedSort(root, query, cb, request.getSortBy(), direction, now);
             return predicate;
         };
     }

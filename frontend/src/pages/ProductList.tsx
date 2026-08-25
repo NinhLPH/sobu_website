@@ -4,7 +4,14 @@ import {ChevronRight, ChevronDown, SlidersHorizontal, X} from 'lucide-react';
 
 import ProductCard from "../components/common/ProductCard";
 import {useProductStore} from '../store/useProductStore';
-import {mapListItemToProductModel} from '../interface/product.model';
+import {getDiscountPercent, isSaleProduct, mapListItemToProductModel} from '../interface/product.model';
+
+type SortOption = 'NEWEST' | 'PRICE_ASC' | 'PRICE_DESC' | 'DISCOUNT_DESC';
+
+const normalizeSearchText = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 
 export default function ProductList() {
     const navigate = useNavigate();
@@ -14,6 +21,8 @@ export default function ProductList() {
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
     const [selectedScales, setSelectedScales] = useState<string[]>([]);
     const [inStockOnly, setInStockOnly] = useState<boolean>(false);
+    const [saleOnly, setSaleOnly] = useState<boolean>(false);
+    const [sortOption, setSortOption] = useState<SortOption>('NEWEST');
     const [priceRange, setPriceRange] = useState<number>(10000000);
     const [expandedParents, setExpandedParents] = useState<number[]>([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -21,10 +30,23 @@ export default function ProductList() {
     const { products, categories: apiCategories, brands: apiBrands, fetchProducts, fetchCategories, fetchBrands } = useProductStore();
 
     useEffect(() => {
-        fetchProducts();
         fetchCategories();
         fetchBrands();
-    }, [fetchProducts, fetchCategories, fetchBrands]);
+    }, [fetchCategories, fetchBrands]);
+
+    useEffect(() => {
+        const sortParams = sortOption === 'PRICE_ASC'
+            ? {sortBy: 'price', sortDirection: 'ASC'}
+            : sortOption === 'PRICE_DESC'
+                ? {sortBy: 'price', sortDirection: 'DESC'}
+                : sortOption === 'DISCOUNT_DESC'
+                    ? {sortBy: 'discountPercent', sortDirection: 'DESC'}
+                    : {sortBy: 'createdAt', sortDirection: 'DESC'};
+        void fetchProducts({
+            ...sortParams,
+            onSale: saleOnly || undefined
+        }, true);
+    }, [fetchProducts, saleOnly, sortOption]);
 
     const mappedProducts = useMemo(() => {
         return products.map(mapListItemToProductModel);
@@ -126,20 +148,33 @@ export default function ProductList() {
             const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(p.brand);
             const scaleMatch = selectedScales.length === 0 || (p.scale && selectedScales.includes(p.scale));
             const stockMatch = !inStockOnly || p.stock > 0;
+            const saleMatch = !saleOnly || isSaleProduct(p);
             const priceMatch = p.price <= priceRange;
-            const searchMatch = !searchQuery || 
-                p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
+            const searchTerms = normalizeSearchText(searchQuery).split(/\s+/).filter(Boolean);
+            const searchHaystack = normalizeSearchText(`${p.name} ${p.brand} ${p.category || ''} ${p.description || ''}`);
+            const searchMatch = searchTerms.length === 0 || searchTerms.every(term => searchHaystack.includes(term));
 
-            return catMatch && brandMatch && scaleMatch && stockMatch && priceMatch && searchMatch;
+            return catMatch && brandMatch && scaleMatch && stockMatch && saleMatch && priceMatch && searchMatch;
         });
-    }, [mappedProducts, selectedCategories, selectedBrands, selectedScales, inStockOnly, priceRange, categoryTree, searchQuery]);
+    }, [mappedProducts, selectedCategories, selectedBrands, selectedScales, inStockOnly, saleOnly, priceRange, categoryTree, searchQuery]);
+
+    const displayedProducts = useMemo(() => {
+        const result = [...filteredProducts];
+        if (sortOption === 'PRICE_ASC') return result.sort((a, b) => a.price - b.price);
+        if (sortOption === 'PRICE_DESC') return result.sort((a, b) => b.price - a.price);
+        if (sortOption === 'DISCOUNT_DESC') {
+            return result.sort((a, b) => getDiscountPercent(b) - getDiscountPercent(a));
+        }
+        return result;
+    }, [filteredProducts, sortOption]);
 
     const clearFilters = () => {
         setSelectedCategories([]);
         setSelectedBrands([]);
         setSelectedScales([]);
         setInStockOnly(false);
+        setSaleOnly(false);
+        setSortOption('NEWEST');
         setPriceRange(10000000);
         setExpandedParents([]);
         navigate('/products');
@@ -297,14 +332,26 @@ export default function ProductList() {
                         <div className="mb-6 sm:mb-8">
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Tình
                                 trạng</h3>
-                            <label className="flex items-center gap-3 cursor-pointer group">
+                            <button type="button" aria-pressed={inStockOnly}
+                                    aria-label="Chỉ hiện hàng có sẵn"
+                                    onClick={() => setInStockOnly(value => !value)}
+                                    className="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent p-0 text-left group">
                                 <div
                                     className={`w-10 h-6 rounded-full p-1 transition-colors ${inStockOnly ? 'bg-primary' : 'bg-surface-container'}`}>
                                     <div
                                         className={`h-4 w-4 rounded-full bg-on-primary transition-transform ${inStockOnly ? 'translate-x-4' : 'translate-x-0'}`}></div>
                                 </div>
                                 <span className="text-sm font-medium text-on-surface">Chỉ hiện hàng có sẵn</span>
-                            </label>
+                            </button>
+                            <button type="button" aria-pressed={saleOnly}
+                                    aria-label="Chỉ hiện sản phẩm đang sale"
+                                    onClick={() => setSaleOnly(value => !value)}
+                                    className="mt-3 flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent p-0 text-left group">
+                                <div className={`h-6 w-10 rounded-full p-1 transition-colors ${saleOnly ? 'bg-error' : 'bg-surface-container'}`}>
+                                    <div className={`h-4 w-4 rounded-full bg-on-error transition-transform ${saleOnly ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
+                                <span className="text-sm font-medium text-on-surface">Đang sale</span>
+                            </button>
                         </div>
                         <div>
                             <h3 className="text-xs font-black uppercase tracking-widest text-outline mb-4">Khoảng
@@ -325,9 +372,9 @@ export default function ProductList() {
                         className="mb-5 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-outline-variant/20 bg-surface-container-lowest px-4 py-3 shadow-[0_10px_30px_-15px_rgba(14,48,78,0.12)] sm:mb-8 sm:flex-row sm:items-center sm:gap-4 sm:rounded-2xl sm:px-6 sm:py-4">
                         <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm text-on-surface-variant font-bold">
-                                Hiển thị <span className="text-base font-black leading-none text-primary">{filteredProducts.length}</span> kết quả
+                                Hiển thị <span className="text-base font-black leading-none text-primary">{displayedProducts.length}</span> kết quả
                             </p>
-                            {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedScales.length > 0 || searchQuery) && (
+                            {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedScales.length > 0 || saleOnly || searchQuery) && (
                                 <button onClick={clearFilters}
                                         className="flex cursor-pointer items-center gap-1 rounded-full bg-error/10 px-3 py-1 text-xs font-bold text-error hover:bg-error/20 sm:ml-4">
                                     <X className="w-3 h-3"/> Xóa lọc
@@ -339,18 +386,21 @@ export default function ProductList() {
                             <div className="relative inline-flex">
                                 <select
                                     aria-label="Sắp xếp sản phẩm cửa hàng"
+                                    value={sortOption}
+                                    onChange={event => setSortOption(event.target.value as SortOption)}
                                     className="w-[10.75rem] cursor-pointer appearance-none rounded-full bg-surface-container px-4 py-2 pr-9 text-xs font-bold text-on-surface outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 sm:w-[11.75rem] sm:px-5 sm:pr-10 sm:text-sm">
-                                    <option>Hàng Mới Nhất</option>
-                                    <option>Giá tăng dần</option>
-                                    <option>Giá giảm dần</option>
+                                    <option value="NEWEST">Hàng mới nhất</option>
+                                    <option value="PRICE_ASC">Giá tăng dần</option>
+                                    <option value="PRICE_DESC">Giá giảm dần</option>
+                                    <option value="DISCOUNT_DESC">Giảm giá nhiều nhất</option>
                                 </select>
                                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface sm:right-4" aria-hidden="true"/>
                             </div>
                         </div>
                     </div>
-                    {filteredProducts.length > 0 ? (
+                    {displayedProducts.length > 0 ? (
                         <div className="grid grid-cols-2 gap-3 sm:gap-6 min-[1536px]:grid-cols-3">
-                            {filteredProducts.map(product => (
+                            {displayedProducts.map(product => (
                                 <ProductCard key={product.id} product={product}/>
                             ))}
                         </div>

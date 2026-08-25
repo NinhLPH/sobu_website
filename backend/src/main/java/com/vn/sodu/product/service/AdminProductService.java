@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Locale;
 
 @Service
@@ -99,6 +100,11 @@ public class AdminProductService {
 
     @Transactional
     public ProductDetailDTO createProduct(ProductCreateRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Product payload is required");
+        }
+        validateSaleConfiguration(request.getRetailPrice(), request.getOldPrice(),
+                request.getSaleValidFrom(), request.getSaleValidThrough());
         Product product = adminProductMapper.toEntity(request);
         resolveReferences(product, request.getCategoryId(), request.getBrandId(), request.getBadgeId());
         product = productRepo.save(product);
@@ -115,8 +121,18 @@ public class AdminProductService {
 
     @Transactional
     public ProductDetailDTO updateProduct(Long id, ProductUpdateRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Product payload is required");
+        }
         Product existing = productRepo.findById(id)
                 .orElseThrow(() -> new NotFoundException("Product not found with id: " + id));
+        BigDecimal effectiveConfiguredPrice = request.getRetailPrice() != null
+                ? request.getRetailPrice()
+                : existing.getRetailPrice();
+        if (effectiveConfiguredPrice != null) {
+            validateSaleConfiguration(effectiveConfiguredPrice, request.getOldPrice(),
+                    request.getSaleValidFrom(), request.getSaleValidThrough());
+        }
 
         String beforeJson = toJson(existing);
         adminProductMapper.updateEntity(existing, request);
@@ -219,6 +235,12 @@ public class AdminProductService {
         if (badgeId != null) {
             productBadgeRepo.findById(badgeId).ifPresentOrElse(
                     badge -> {
+                        if ("SALE".equalsIgnoreCase(badge.getName())) {
+                            throw new BadRequestException("SALE is a system tag and cannot be assigned manually");
+                        }
+                        if (badge.getStatus() == null || badge.getStatus() != 1) {
+                            throw new BadRequestException("Inactive product badges cannot be assigned");
+                        }
                         product.setBadgeId(badge.getId());
                         product.setBadgeName(badge.getName());
                         product.setBadgeColor(badge.getColor());
@@ -250,7 +272,6 @@ public class AdminProductService {
     }
 
     private Pageable toPageable(ProductFilterRequest request) {
-        String sortBy = resolveSortBy(request.getSortBy());
         Sort.Direction direction;
         try {
             direction = Sort.Direction.fromString(
@@ -262,6 +283,10 @@ public class AdminProductService {
 
         int page = Math.max(request.getPage(), 0);
         int pageSize = request.getPageSize() > 0 ? Math.min(request.getPageSize(), 100) : 20;
+        if (ProductSaleCriteria.isComputedSort(request.getSortBy())) {
+            return PageRequest.of(page, pageSize);
+        }
+        String sortBy = resolveSortBy(request.getSortBy());
         return PageRequest.of(page, pageSize, Sort.by(direction, sortBy));
     }
 
@@ -276,6 +301,7 @@ public class AdminProductService {
         return (root, query, cb) -> {
             query.distinct(true);
             Predicate predicate = cb.conjunction();
+            LocalDateTime now = LocalDateTime.now();
 
             if (request.getCategoryId() != null) {
                 predicate = cb.and(predicate, cb.equal(root.<Long>get("categoryId"), request.getCategoryId()));
@@ -284,10 +310,12 @@ public class AdminProductService {
                 predicate = cb.and(predicate, cb.equal(root.<Long>get("brandId"), request.getBrandId()));
             }
             if (request.getMinPrice() != null) {
-                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.<BigDecimal>get("retailPrice"), request.getMinPrice()));
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(
+                        ProductSaleCriteria.effectivePrice(root, cb, now), request.getMinPrice()));
             }
             if (request.getMaxPrice() != null) {
-                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.<BigDecimal>get("retailPrice"), request.getMaxPrice()));
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(
+                        ProductSaleCriteria.effectivePrice(root, cb, now), request.getMaxPrice()));
             }
             if (request.getInStock() != null) {
                 if (request.getInStock()) {
@@ -295,6 +323,10 @@ public class AdminProductService {
                 } else {
                     predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.<Double>get("stockAvailable"), 0d));
                 }
+            }
+            if (request.getOnSale() != null) {
+                Predicate activeSale = ProductSaleCriteria.activeSale(root, cb, now);
+                predicate = cb.and(predicate, request.getOnSale() ? activeSale : cb.not(activeSale));
             }
             if (request.getActive() != null) {
                 predicate = cb.and(predicate, cb.equal(root.<Boolean>get("active"), request.getActive()));
@@ -318,8 +350,36 @@ public class AdminProductService {
                 predicate = cb.and(predicate, searchPredicate);
             }
 
+            Sort.Direction direction;
+            try {
+                direction = Sort.Direction.fromString(
+                        request.getSortDirection() == null ? "DESC" : request.getSortDirection());
+            } catch (IllegalArgumentException ex) {
+                direction = Sort.Direction.DESC;
+            }
+            ProductSaleCriteria.applyComputedSort(root, query, cb, request.getSortBy(), direction, now);
             return predicate;
         };
+    }
+
+    private void validateSaleConfiguration(
+            BigDecimal price,
+            BigDecimal oldPrice,
+            LocalDateTime saleValidFrom,
+            LocalDateTime saleValidThrough
+    ) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException("Product price must be greater than or equal to 0");
+        }
+        if (oldPrice != null && oldPrice.compareTo(price) <= 0) {
+            throw new BadRequestException("oldPrice must be greater than price");
+        }
+        if ((saleValidFrom != null || saleValidThrough != null) && oldPrice == null) {
+            throw new BadRequestException("A sale validity period requires oldPrice");
+        }
+        if (saleValidFrom != null && saleValidThrough != null && saleValidThrough.isBefore(saleValidFrom)) {
+            throw new BadRequestException("saleValidThrough must not be before saleValidFrom");
+        }
     }
 
     private String toJson(Product product) {

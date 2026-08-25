@@ -30,6 +30,7 @@ public class AdminProductBadgeService {
     public List<ProductBadgeDTO> getAllBadges() {
         return productBadgeRepo.findAll()
                 .stream()
+                .filter(badge -> !"SALE".equalsIgnoreCase(badge.getName()))
                 .map(this::toDto)
                 .toList();
     }
@@ -132,6 +133,9 @@ public class AdminProductBadgeService {
             throw new BadRequestException("Product badge name is required");
         }
         String name = request.getName().trim();
+        if ("SALE".equalsIgnoreCase(name)) {
+            throw new BadRequestException("SALE is a system tag generated from product pricing");
+        }
         productBadgeRepo.findByNameIgnoreCase(name)
                 .filter(existing -> !existing.getId().equals(currentId))
                 .ifPresent(existing -> {

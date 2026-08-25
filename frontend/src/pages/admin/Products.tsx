@@ -33,6 +33,8 @@ const emptyForm: ProductWriteRequest = {
     name: '',
     retailPrice: 0,
     oldPrice: null,
+    saleValidFrom: null,
+    saleValidThrough: null,
     categoryId: null,
     brandId: null,
     badgeId: null,
@@ -106,6 +108,8 @@ export default function AdminProducts() {
                 importPrice: p.importPrice,
                 wholesalePrice: p.wholesalePrice,
                 oldPrice: p.oldPrice,
+                saleValidFrom: p.saleValidFrom?.slice(0, 16) || null,
+                saleValidThrough: p.saleValidThrough?.slice(0, 16) || null,
                 vat: p.vat,
                 avatarImage: p.avatarImage || '',
                 images: p.images || [],
@@ -140,6 +144,11 @@ export default function AdminProducts() {
         event.preventDefault();
         if (form.oldPrice != null && form.oldPrice <= form.retailPrice) {
             ToastService.error('Giá cũ phải lớn hơn giá bán mới.');
+            return;
+        }
+        if (form.saleValidFrom && form.saleValidThrough
+            && new Date(form.saleValidThrough) < new Date(form.saleValidFrom)) {
+            ToastService.error('Thời điểm kết thúc sale không được trước thời điểm bắt đầu.');
             return;
         }
         setSaving(true);
@@ -216,16 +225,16 @@ export default function AdminProducts() {
                                             <img src={getPublicImageUrl(item.avatarImage)} alt=""
                                                  className="h-full w-full object-contain"/> : null}</div>
                                         <div><p className="max-w-xs font-bold text-on-surface">{item.name}</p><p
-                                            className="text-xs text-outline">{item.code || `#${item.id}`}{item.badgeName ? ` · ${item.badgeName}` : ''}</p>
+                                            className="text-xs text-outline">{item.code || `#${item.id}`}{item.badgeName && item.badgeName.toUpperCase() !== 'SALE' ? ` · ${item.badgeName}` : ''}</p>
                                         </div>
                                     </div>
                                 </td>
                                 <td className="px-4 py-3 text-outline">{item.categoryName || '—'}<br/><span
                                     className="text-xs">{item.brandName || 'Chưa có thương hiệu'}</span></td>
                                 <td className="px-4 py-3 text-right"><strong
-                                    className="text-primary">{formatCurrency(item.retailPrice ?? item.price ?? 0)}</strong>{item.oldPrice ?
+                                    className="text-primary">{formatCurrency(item.retailPrice ?? item.price ?? 0)}</strong>{item.oldPrice != null && item.oldPrice > (item.retailPrice ?? item.price ?? 0) ?
                                     <div
-                                        className="text-xs text-outline line-through">{formatCurrency(item.oldPrice)}</div> : null}
+                                        className="text-xs text-outline"><span className="line-through">{formatCurrency(item.oldPrice)}</span><span className="ml-1 font-black text-error">SALE</span></div> : null}
                                 </td>
                                 <td className="px-4 py-3 text-right font-bold">{item.stockAvailable ?? item.stockRemain ?? '—'}</td>
                                 <td className="px-4 py-3"><AdminStatus active={item.active !== false}/></td>
@@ -272,17 +281,42 @@ export default function AdminProducts() {
                     label="Giá bán mới"><input required min={0} type="number" className={inputClass}
                                                value={form.retailPrice}
                                                onChange={e => set('retailPrice', Number(e.target.value))}/></Field><Field
-                    label="Giá cũ" hint="Để trống nếu sản phẩm không giảm giá"><input min={0} type="number"
+                    label="Giá thường (giá cũ)" hint="SALE tự hiển thị khi giá thường lớn hơn giá bán"><input min={0} type="number"
                                                                                       className={inputClass}
                                                                                       value={form.oldPrice ?? ''}
-                                                                                      onChange={e => set('oldPrice', numberOrNull(e.target.value))}/></Field><Field
-                    label="Tag hiển thị"><select className={inputClass} value={form.badgeId ?? ''}
+                                                                                      onChange={e => {
+                                                                                          const value = numberOrNull(e.target.value);
+                                                                                          set('oldPrice', value);
+                                                                                          if (value == null) {
+                                                                                              set('saleValidFrom', null);
+                                                                                              set('saleValidThrough', null);
+                                                                                          }
+                                                                                      }}/></Field><Field
+                    label="Tag thủ công" hint="Tối đa một tag HOT, NEW hoặc tùy chỉnh"><select className={inputClass} value={form.badgeId ?? ''}
                                                  onChange={e => set('badgeId', numberOrNull(e.target.value))}>
                     <option value="">Không có tag</option>
-                    {badges.filter(x => x.status === 1).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    {badges.filter(x => x.status === 1 && x.name.toUpperCase() !== 'SALE').map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select></Field><Field label="Ảnh đại diện (URL hoặc path)"><input className={inputClass}
                                                                                     value={form.avatarImage || ''}
                                                                                     onChange={e => set('avatarImage', e.target.value)}/></Field>
+                </div>
+                <div className="rounded-xl border border-outline-variant/35 bg-surface-container-low p-4">
+                    <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                        <div><p className="text-sm font-black text-on-surface">Thời hạn sale</p><p className="mt-1 text-xs text-outline">Bỏ trống một đầu để không giới hạn thời điểm bắt đầu hoặc kết thúc.</p></div>
+                        {form.oldPrice != null && form.oldPrice > form.retailPrice && form.retailPrice >= 0 &&
+                            <span className="w-fit rounded-full bg-error px-3 py-1 text-[10px] font-black uppercase tracking-wider text-on-error">SALE tự động</span>}
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <Field label="Bắt đầu sale"><input type="datetime-local" className={inputClass}
+                                                           disabled={form.oldPrice == null}
+                                                           value={form.saleValidFrom || ''}
+                                                           onChange={e => set('saleValidFrom', e.target.value || null)}/></Field>
+                        <Field label="Kết thúc sale"><input type="datetime-local" className={inputClass}
+                                                            disabled={form.oldPrice == null}
+                                                            min={form.saleValidFrom || undefined}
+                                                            value={form.saleValidThrough || ''}
+                                                            onChange={e => set('saleValidThrough', e.target.value || null)}/></Field>
+                    </div>
                 </div>
                 <details className="rounded-xl border border-outline-variant/35 bg-surface-container-low p-4">
                     <summary className="cursor-pointer text-sm font-black text-on-surface">Thông tin nâng cao</summary>
@@ -340,14 +374,16 @@ export default function AdminProducts() {
             <div><h3 className="text-xl font-black">{detail.name}</h3><p
                 className="mt-1 text-sm text-outline">{detail.code} · {detail.categoryName || 'Chưa phân loại'} · {detail.brandName || 'Chưa có thương hiệu'}</p>
                 <div className="mt-4 flex items-end gap-3"><span
-                    className="text-xl font-black text-primary">{formatCurrency(detail.retailPrice ?? detail.price ?? 0)}</span>{detail.oldPrice ?
+                    className="text-xl font-black text-primary">{formatCurrency(detail.retailPrice ?? detail.price ?? 0)}</span>{detail.oldPrice != null && detail.oldPrice > (detail.retailPrice ?? detail.price ?? 0) ?
                     <span className="text-sm text-outline line-through">{formatCurrency(detail.oldPrice)}</span> : null}
                 </div>
-                <div className="mt-4"><AdminStatus active={detail.active !== false}/>{detail.badgeName &&
+                {(detail.saleValidFrom || detail.saleValidThrough) && <p className="mt-2 text-xs font-medium text-outline">Hiệu lực sale: {detail.saleValidFrom ? new Date(detail.saleValidFrom).toLocaleString('vi-VN') : 'không giới hạn'} – {detail.saleValidThrough ? new Date(detail.saleValidThrough).toLocaleString('vi-VN') : 'không giới hạn'}</p>}
+                <div className="mt-4 flex flex-wrap items-center gap-2"><AdminStatus active={detail.active !== false}/>{detail.badgeName && detail.badgeName.toUpperCase() !== 'SALE' &&
                     <span className="ml-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold" style={{
                         backgroundColor: detail.badgeColor || '#00618e',
                         color: detail.badgeTextColor || '#ffffff'
-                    }}>{detail.badgeName}</span>}</div>
+                    }}>{detail.badgeName}</span>}{detail.oldPrice != null && detail.oldPrice > (detail.retailPrice ?? detail.price ?? 0) &&
+                    <span className="inline-flex rounded-full bg-error px-2.5 py-1 text-xs font-black text-on-error">SALE hệ thống</span>}</div>
                 <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-on-surface-variant">{detail.description || 'Chưa có mô tả.'}</p>
             </div>
         </div>}</AdminModal>

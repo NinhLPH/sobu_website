@@ -27,6 +27,7 @@ type ProductParams = {
     brandId?: number;
     status?: string;
     active?: boolean;
+    onSale?: boolean;
     sortBy?: string;
     sortDirection?: 'ASC' | 'DESC';
 };

@@ -26,6 +26,8 @@ public class ProductFilterRequest {
     private BigDecimal minPrice;
     private BigDecimal maxPrice;
     private Boolean inStock;
+    @JsonAlias({"sale", "isOnSale"})
+    private Boolean onSale;
     private Boolean active;
     private String status;
 }

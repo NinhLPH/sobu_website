@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProductListItemDTO } from '../interface/product.model';
 import ProductList from './ProductList';
 
@@ -8,7 +8,7 @@ const mockSetSearchParams = jest.fn();
 const mockNavigate = jest.fn();
 
 const mockProducts: ProductListItemDTO[] = [
-    { id: 10, nhanhProductId: 90010, code: 'SD-SERUM', name: 'Serum phục hồi', price: 350000, categoryName: 'Serum', brandName: 'Sodu', stockAvailable: 10, status: 'ACTIVE' },
+    { id: 10, nhanhProductId: 90010, code: 'SD-SERUM', name: 'Serum phục hồi', price: 350000, oldPrice: 500000, categoryName: 'Serum', brandName: 'Sodu', stockAvailable: 10, status: 'ACTIVE' },
     { id: 11, nhanhProductId: 90011, code: 'ML-LIP', name: 'Son lì', price: 249000, categoryName: 'Son môi', brandName: 'Melia', stockAvailable: 0, status: 'ACTIVE' },
     { id: 12, nhanhProductId: 90012, code: 'SD-CREAM', name: 'Kem dưỡng', price: 450000, categoryName: 'Kem dưỡng', brandName: 'Sodu', stockAvailable: 4, status: 'ACTIVE' },
 ];
@@ -51,6 +51,7 @@ describe('ProductList storefront filters', () => {
         mockSearchString = '';
         mockSetSearchParams.mockClear();
         mockNavigate.mockClear();
+        mockFetchProducts.mockClear();
     });
 
     it('applies the URL keyword without Vietnamese accents and submits a new keyword', () => {
@@ -89,5 +90,20 @@ describe('ProductList storefront filters', () => {
             'Kem dưỡng',
             'Serum phục hồi',
         ]);
+    });
+
+    it('filters active sale products and requests discount sorting from the API', async () => {
+        render(<ProductList/>);
+
+        fireEvent.click(screen.getByRole('button', { name: /chỉ hiện sản phẩm đang sale/i }));
+        fireEvent.change(screen.getByLabelText('Sắp xếp sản phẩm cửa hàng'), {target: {value: 'DISCOUNT_DESC'}});
+
+        expect(screen.getByText('Serum phục hồi')).toBeTruthy();
+        expect(screen.queryByText('Son lì')).toBeNull();
+        expect(screen.queryByText('Kem dưỡng')).toBeNull();
+        await waitFor(() => expect(mockFetchProducts).toHaveBeenLastCalledWith(
+            expect.objectContaining({onSale: true, sortBy: 'discountPercent', sortDirection: 'DESC'}),
+            true
+        ));
     });
 });
