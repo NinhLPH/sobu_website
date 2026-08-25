@@ -92,6 +92,25 @@ describe('PaymentResult', () => {
         expect(sessionStorage.getItem('sobu.pendingPayment')).toBeNull();
     });
 
+    it.each(['FAILED', 'EXPIRED'] as const)('renders backend %s as a retryable payment failure', async status => {
+        fetchPayments.mockResolvedValue([{
+            id: 21,
+            orderId: 12,
+            paymentCode: 'SOBU-PAY-001',
+            type: 'FULL',
+            paymentMethod: 'ONLINE',
+            status,
+            amount: 500000,
+            createdAt: '2026-06-14T10:00:00',
+            updatedAt: '2026-06-14T10:05:00'
+        }]);
+
+        render(<PaymentResult/>);
+
+        expect(await screen.findByText('Thanh toán chưa thành công')).toBeTruthy();
+        expect(screen.getByText(/tạo phiên thanh toán mới/)).toBeTruthy();
+    });
+
     it('restores a pending online cart snapshot on mount', async () => {
         fetchPayments.mockResolvedValue([]);
 

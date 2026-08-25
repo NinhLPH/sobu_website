@@ -19,7 +19,7 @@ import {
     VoucherWriteRequest
 } from '../interface/admin-catalog.model';
 
-type ProductParams = {
+export type ProductParams = {
     page?: number;
     pageSize?: number;
     search?: string;
@@ -28,6 +28,7 @@ type ProductParams = {
     status?: string;
     active?: boolean;
     onSale?: boolean;
+    inStock?: boolean;
     sortBy?: string;
     sortDirection?: 'ASC' | 'DESC';
 };
@@ -44,8 +45,8 @@ type VoucherParams = {
 };
 
 export const AdminCatalogService = {
-    getProducts: (params?: ProductParams): Promise<AdminProductPage> =>
-        apiClient.get('/api/admin/products', { params }),
+    getProducts: (params?: ProductParams, signal?: AbortSignal): Promise<AdminProductPage> =>
+        apiClient.get('/api/admin/products', { params, signal }),
     getProduct: (id: number): Promise<AdminProductDetail> =>
         apiClient.get(`/api/admin/products/${id}`),
     createProduct: (data: ProductWriteRequest): Promise<AdminProductDetail> =>
@@ -87,19 +88,25 @@ export const AdminCatalogService = {
     setBadgeStatus: (id: number, status: number): Promise<ProductBadge> =>
         apiClient.patch(`/api/admin/badges/${id}/status`, { status }),
 
-    getInventoryBalance: (productId: number): Promise<InventoryBalance> =>
-        apiClient.get(`/api/admin/inventory/${productId}/balance`),
-    getInventoryLedger: (productId: number): Promise<InventoryAdjustment[]> =>
-        apiClient.get(`/api/admin/inventory/${productId}/ledger`),
-    setOpeningStock: (productId: number, quantity: number, note?: string): Promise<InventoryAdjustment> =>
-        apiClient.post(`/api/admin/inventory/${productId}/opening`, { quantity, note }),
+    getInventoryBalance: (productId: number, signal?: AbortSignal): Promise<InventoryBalance> =>
+        apiClient.get(`/api/admin/inventory/${productId}/balance`, { signal }),
+    getInventoryLedger: (productId: number, signal?: AbortSignal): Promise<InventoryAdjustment[]> =>
+        apiClient.get(`/api/admin/inventory/${productId}/ledger`, { signal }),
+    setOpeningStock: (
+        productId: number,
+        quantity: number,
+        note?: string,
+        signal?: AbortSignal
+    ): Promise<InventoryAdjustment> =>
+        apiClient.post(`/api/admin/inventory/${productId}/opening`, { quantity, note }, { signal }),
     adjustInventory: (
         productId: number,
         type: Exclude<InventoryAdjustmentType, 'OPENING_STOCK' | 'ORDER_RESERVATION' | 'ORDER_RELEASE'>,
         quantity: number,
-        note?: string
+        note?: string,
+        signal?: AbortSignal
     ): Promise<InventoryAdjustment> =>
-        apiClient.post(`/api/admin/inventory/${productId}/adjustments`, { type, quantity, note }),
+        apiClient.post(`/api/admin/inventory/${productId}/adjustments`, { type, quantity, note }, { signal }),
 };
 
 export const AdminVoucherService = {

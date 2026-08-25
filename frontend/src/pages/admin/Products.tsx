@@ -12,6 +12,8 @@ import {AdminCatalogService} from '../../service/admin-catalog.service';
 import {ToastService} from '../../service/toast.service';
 import {formatCurrency} from '../../utils/format';
 import {getPublicImageUrl} from '../../utils/file-url';
+import {InventoryDashboardService, inventoryQuantity} from '../../service/inventory-dashboard.service';
+import {StockIndicator} from '../../components/admin/StockIndicator';
 import {
     AdminButton,
     AdminCard,
@@ -60,6 +62,17 @@ export default function AdminProducts() {
     const [form, setForm] = useState<ProductWriteRequest>(emptyForm);
     const [detail, setDetail] = useState<AdminProductDetail | null>(null);
     const [saving, setSaving] = useState(false);
+    const [lowStockThreshold, setLowStockThreshold] = useState(5);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        InventoryDashboardService.getLowStockThreshold(controller.signal)
+            .then(value => {
+                if (!controller.signal.aborted) setLowStockThreshold(value);
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, []);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -204,7 +217,7 @@ export default function AdminProducts() {
                 <AdminError message={error} onRetry={() => void load()}/> : !items.length ?
                     <AdminEmpty title="Chưa có sản phẩm phù hợp"
                                 description="Thử từ khóa khác hoặc thêm sản phẩm mới."/> :
-                    <div className="overflow-x-auto">
+                    <><div className="hidden overflow-x-auto md:block">
                         <table className="w-full min-w-[920px] text-left text-sm">
                             <thead className="bg-surface-container text-xs uppercase tracking-wide text-outline">
                             <tr>
@@ -236,27 +249,48 @@ export default function AdminProducts() {
                                     <div
                                         className="text-xs text-outline"><span className="line-through">{formatCurrency(item.oldPrice)}</span><span className="ml-1 font-black text-error">SALE</span></div> : null}
                                 </td>
-                                <td className="px-4 py-3 text-right font-bold">{item.stockAvailable ?? item.stockRemain ?? '—'}</td>
+                                <td className="px-4 py-3 text-right"><StockIndicator stock={inventoryQuantity(item)} threshold={lowStockThreshold}/></td>
                                 <td className="px-4 py-3"><AdminStatus active={item.active !== false}/></td>
                                 <td className="px-4 py-3">
                                     <div className="flex justify-end gap-1">
                                         <button onClick={() => void openDetail(item.id)}
-                                                className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-primary"
-                                                title="Xem chi tiết"><Eye className="h-4 w-4"/></button>
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                aria-label={`Xem chi tiết ${item.name}`} title="Xem chi tiết"><Eye className="h-4 w-4"/></button>
                                         <button onClick={() => void openEdit(item.id)}
-                                                className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-primary"
-                                                title="Chỉnh sửa"><Edit3 className="h-4 w-4"/></button>
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                aria-label={`Chỉnh sửa ${item.name}`} title="Chỉnh sửa"><Edit3 className="h-4 w-4"/></button>
                                         <button onClick={() => void toggle(item)}
-                                                className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-primary"
-                                                title="Đổi trạng thái"><Power className="h-4 w-4"/></button>
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`} title="Đổi trạng thái"><Power className="h-4 w-4"/></button>
                                         <button onClick={() => void archive(item)}
-                                                className="rounded-lg p-2 text-outline hover:bg-error/10 hover:text-error"
-                                                title="Lưu trữ"><Archive className="h-4 w-4"/></button>
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30"
+                                                aria-label={`Lưu trữ ${item.name}`} title="Lưu trữ"><Archive className="h-4 w-4"/></button>
                                     </div>
                                 </td>
                             </tr>)}</tbody>
                         </table>
-                    </div>}
+                    </div>
+                    <div className="space-y-3 p-4 md:hidden">
+                        {items.map(item => <article key={item.id} className="rounded-xl border border-outline-variant/35 bg-surface p-4 shadow-sm">
+                            <div className="flex items-start gap-3">
+                                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-surface-container p-1">
+                                    {item.avatarImage ? <img src={getPublicImageUrl(item.avatarImage)} alt="" className="h-full w-full object-contain"/> : null}
+                                </div>
+                                <div className="min-w-0 flex-1"><h2 className="font-black text-on-surface">{item.name}</h2><p className="mt-1 text-xs text-outline">{item.code || `#${item.id}`} · {item.categoryName || 'Chưa phân loại'}</p></div>
+                                <AdminStatus active={item.active !== false}/>
+                            </div>
+                            <dl className="mt-4 grid grid-cols-2 gap-3 border-y border-outline-variant/25 py-3 text-xs">
+                                <div><dt className="font-bold uppercase text-outline">Giá bán</dt><dd className="mt-1 font-black text-primary">{formatCurrency(item.retailPrice ?? item.price ?? 0)}</dd></div>
+                                <div className="text-right"><dt className="font-bold uppercase text-outline">Tồn khả dụng</dt><dd className="mt-1"><StockIndicator stock={inventoryQuantity(item)} threshold={lowStockThreshold}/></dd></div>
+                            </dl>
+                            <div className="mt-3 flex justify-end gap-1">
+                                <button onClick={() => void openDetail(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`Xem chi tiết ${item.name}`}><Eye className="h-4 w-4"/></button>
+                                <button onClick={() => void openEdit(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`Chỉnh sửa ${item.name}`}><Edit3 className="h-4 w-4"/></button>
+                                <button onClick={() => void toggle(item)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`}><Power className="h-4 w-4"/></button>
+                                <button onClick={() => void archive(item)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30" aria-label={`Lưu trữ ${item.name}`}><Archive className="h-4 w-4"/></button>
+                            </div>
+                        </article>)}
+                    </div></>}
             <AdminPagination page={page} totalPages={totalPages} onChange={setPage}/></AdminCard>
 
         <AdminModal open={modal === 'form'} onClose={() => setModal(null)}

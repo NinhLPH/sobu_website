@@ -12,7 +12,7 @@ export const PublicUiService = {
         return apiClient.get('/api/public/ui/configs');
     },
 
-    getConfigByKey: (key: string): Promise<WebsiteConfigurationDTO> => {
-        return apiClient.get(`/api/public/ui/configs/${key}`);
+    getConfigByKey: (key: string, signal?: AbortSignal): Promise<WebsiteConfigurationDTO> => {
+        return apiClient.get(`/api/public/ui/configs/${key}`, {signal});
     },
 };

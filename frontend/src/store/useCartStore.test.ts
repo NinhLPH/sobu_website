@@ -458,6 +458,32 @@ describe('useCartStore order submission', () => {
         expect(useCartStore.getState().isSubmitting).toBe(false);
     });
 
+    it('keeps the cart authoritative when backend rejects checkout for insufficient stock', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
+        mockedCustomerService.createOrder.mockRejectedValue({
+            response: {
+                status: 409,
+                data: {
+                    code: 'INSUFFICIENT_STOCK',
+                    message: 'Sản phẩm Ao hoodie không đủ tồn kho khả dụng'
+                }
+            }
+        });
+        await useCartStore.getState().addToCart(product);
+
+        await expect(useCartStore.getState().submitOrder({
+            customerName: 'Nguyen Van A',
+            customerMobile: '0901234567',
+            ...shippingLocation,
+            ...shippingQuote
+        })).rejects.toBeDefined();
+
+        expect(useCartStore.getState().checkoutError).toBe('Sản phẩm Ao hoodie không đủ tồn kho khả dụng');
+        expect(useCartStore.getState().items).toHaveLength(1);
+        expect(mockedCustomerService.clearCart).not.toHaveBeenCalled();
+        expect(useCartStore.getState().isSubmitting).toBe(false);
+    });
+
     it('allows order submission when only shipping fee is present', async () => {
         mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
         mockedCustomerService.createOrder.mockResolvedValue({
