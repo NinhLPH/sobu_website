@@ -317,6 +317,9 @@ export default function OrderTracking() {
     const currentStep = getStatusStep(orderDetail?.status);
     const totalAmount = orderDetail?.totalAmount ?? 0;
     const shippingFee = orderDetail?.shippingFee ?? 0;
+    const discountAmount = orderDetail?.discountAmount ?? 0;
+    const shippingDiscountAmount = orderDetail?.shippingDiscountAmount ?? 0;
+    const originalSubtotal = Math.max(0, totalAmount + discountAmount + shippingDiscountAmount - shippingFee);
     const paidAmount = orderDetail?.paidAmount ?? orderDetail?.depositAmount ?? 0;
     const remainingAmount = orderDetail?.remainingAmount ?? Math.max(0, totalAmount - paidAmount);
     const availablePaymentTypes = orderDetail
@@ -560,12 +563,22 @@ export default function OrderTracking() {
                                 </div>
                                 <div className="space-y-2 border-t border-outline-variant/20 pt-3.5">
                                     <div className="flex justify-between">
-                                        <span>Tổng đơn:</span>
-                                        <span className="text-on-surface">{formatCurrency(totalAmount)}</span>
+                                        <span>Tạm tính:</span>
+                                        <span className="text-on-surface">{formatCurrency(originalSubtotal)}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Phí vận chuyển:</span>
+                                        <span>Phí vận chuyển gốc:</span>
                                         <span className="text-on-surface">{formatCurrency(shippingFee)}</span>
+                                    </div>
+                                    {discountAmount > 0 && <div className="flex justify-between text-emerald-700"><span>Giảm sản phẩm/toàn đơn:</span><span>-{formatCurrency(discountAmount)}</span></div>}
+                                    {shippingDiscountAmount > 0 && <div className="flex justify-between text-emerald-700"><span>Giảm phí vận chuyển:</span><span>-{formatCurrency(shippingDiscountAmount)}</span></div>}
+                                    {(orderDetail.discountVoucherCode || orderDetail.shippingVoucherCode) && <div className="flex flex-wrap gap-2 py-1" aria-label="Voucher đã áp dụng">
+                                        {orderDetail.discountVoucherCode && <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] font-black text-primary">{orderDetail.discountVoucherCode}</span>}
+                                        {orderDetail.shippingVoucherCode && <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] font-black text-primary">{orderDetail.shippingVoucherCode}</span>}
+                                    </div>}
+                                    <div className="flex justify-between border-t border-outline-variant/20 pt-2 font-black text-on-surface">
+                                        <span>Tổng thanh toán:</span>
+                                        <span>{formatCurrency(totalAmount)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Đã thanh toán:</span>

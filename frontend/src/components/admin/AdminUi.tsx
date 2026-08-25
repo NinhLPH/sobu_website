@@ -1,4 +1,4 @@
-import {ReactNode, useEffect} from 'react';
+import {ReactNode, useEffect, useId, useRef} from 'react';
 import {AlertCircle, ChevronLeft, ChevronRight, Loader2, Search, X} from 'lucide-react';
 
 export const inputClass = 'min-h-10 w-full rounded-lg border border-outline-variant/60 bg-surface px-3 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-surface-container';
@@ -92,21 +92,57 @@ export function AdminModal({open, title, description, children, onClose, size = 
     onClose: () => void;
     size?: 'md' | 'lg' | 'xl'
 }) {
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const onCloseRef = useRef(onClose);
+    const titleId = useId();
+    onCloseRef.current = onClose;
+
     useEffect(() => {
         if (!open) return;
-        const handler = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const dialog = dialogRef.current;
+        const focusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+        const initialFocus = dialog?.querySelector<HTMLElement>('[data-autofocus], input:not([disabled]), select:not([disabled]), textarea:not([disabled])') ?? dialog;
+        window.setTimeout(() => initialFocus?.focus(), 0);
+
+        const handler = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onCloseRef.current();
+                return;
+            }
+            if (event.key !== 'Tab' || !dialog) return;
+            const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
+            if (!focusable.length) {
+                event.preventDefault();
+                dialog.focus();
+                return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
         document.addEventListener('keydown', handler);
-        return () => document.removeEventListener('keydown', handler);
-    }, [open, onClose]);
+        return () => {
+            document.removeEventListener('keydown', handler);
+            previousFocus?.focus();
+        };
+    }, [open]);
     if (!open) return null;
     const width = {md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl'}[size];
     return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-3 sm:p-6" role="dialog"
-                aria-modal="true" aria-label={title}
+                aria-modal="true" aria-labelledby={titleId}
                 onMouseDown={event => event.target === event.currentTarget && onClose()}>
-        <div className={`max-h-[92vh] w-full ${width} overflow-y-auto rounded-2xl bg-surface shadow-2xl`}>
+        <div ref={dialogRef} tabIndex={-1} className={`max-h-[92vh] w-full ${width} overflow-y-auto rounded-2xl bg-surface shadow-2xl outline-none`}>
             <header
                 className="sticky top-0 z-10 flex items-start justify-between border-b border-outline-variant/35 bg-surface px-5 py-4">
-                <div><h2 className="text-lg font-black text-on-surface">{title}</h2>{description &&
+                <div><h2 id={titleId} className="text-lg font-black text-on-surface">{title}</h2>{description &&
                     <p className="mt-1 text-sm text-outline">{description}</p>}</div>
                 <button type="button"
                         className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-on-surface"

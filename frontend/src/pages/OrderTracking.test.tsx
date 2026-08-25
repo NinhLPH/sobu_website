@@ -160,6 +160,34 @@ describe('OrderTracking workflow', () => {
         expect(mockedRedirectToPaymentCheckout).toHaveBeenCalledWith(retryPayment);
     });
 
+    it('renders the voucher breakdown saved on a newly created order', async () => {
+        mockSearchQuery = 'orderId=42';
+        mockedCustomerService.getMyOrder.mockResolvedValue({
+            success: true,
+            message: 'OK',
+            data: {
+                id: 42,
+                orderCode: 'SO-42',
+                type: 'NORMAL',
+                status: 'PENDING',
+                paymentStatus: 'PENDING',
+                totalAmount: 353190,
+                shippingFee: 30000,
+                discountVoucherCode: 'SOBUAUTO5',
+                discountAmount: 54810,
+                shippingDiscountAmount: 0,
+                items: []
+            }
+        });
+
+        render(<OrderTracking/>);
+
+        expect(await screen.findByText('SOBUAUTO5')).toBeTruthy();
+        expect(screen.getByText('Giảm sản phẩm/toàn đơn:')).toBeTruthy();
+        expect(screen.getByText('Tổng thanh toán:')).toBeTruthy();
+        expect(screen.getAllByText(/353\.190/).length).toBeGreaterThan(0);
+    });
+
     it('reconciles a cancelled order when the cancel response fails after commit', async () => {
         mockSearchQuery = 'orderId=42';
         mockedCustomerService.getMyOrder

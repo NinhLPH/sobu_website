@@ -923,8 +923,10 @@ export default function Cart() {
                 customerStreet: street || undefined,
                 customerHamlet: hamlet || undefined,
                 shippingFee,
-                discountVoucherCode: voucherPreview.discountVoucherCode || undefined,
-                shippingVoucherCode: voucherPreview.shippingVoucherCode || undefined,
+                // Preserve explicit customer choices. The preview's generic discount code
+                // prefers ORDER over ITEM and can otherwise replace a manual ITEM voucher.
+                discountVoucherCode: discountVoucherCode || voucherPreview.discountVoucherCode || undefined,
+                shippingVoucherCode: shippingVoucherCode || voucherPreview.shippingVoucherCode || undefined,
                 ...(carrierId !== null && carrierServiceId !== null
                     ? {
                         carrierId,
@@ -1416,7 +1418,7 @@ export default function Cart() {
                             </div>
 
                             {(discountVoucherCode || shippingVoucherCode) && (
-                                <div className="mt-3 flex flex-wrap gap-2" aria-label="Voucher đã chọn">
+                                <div className="mt-3 flex flex-wrap gap-2" aria-label="Mã voucher đã nhập">
                                     {discountVoucherCode && (
                                         <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-black text-primary">
                                             <Check className="h-3.5 w-3.5" /> {discountVoucherCode}
@@ -1433,6 +1435,23 @@ export default function Cart() {
                                             </button>
                                         </span>
                                     )}
+                                </div>
+                            )}
+
+                            {(voucherPreview?.appliedVouchers?.length ?? 0) > 0 && (
+                                <div className="mt-3" aria-live="polite">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-outline">Ưu đãi đang áp dụng</p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {voucherPreview?.appliedVouchers.map(voucher => (
+                                            <span key={`${voucher.slot}-${voucher.code}`} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-black text-emerald-800">
+                                                <Check className="h-3.5 w-3.5"/>
+                                                {voucher.code} · -{formatCurrency(voucher.discountAmount)}
+                                                <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-emerald-700">
+                                                    {voucher.autoApplied ? 'Tự động' : 'Đã nhập'}
+                                                </span>
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
 

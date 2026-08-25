@@ -132,12 +132,13 @@ public class VoucherDiscountCalculator {
     }
 
     /**
-     * Calculate display promo price for a product using oldPrice * voucher% formula.
-     * newPrice = oldPrice - (oldPrice * voucher%)
+     * Calculate the conditional display price from the current retail price. The old
+     * price is only a compatibility fallback for callers that do not have a retail
+     * price; a legitimate zero retail price must remain zero.
      */
     public ProductDisplayPriceResult calculateProductDisplayPrice(Voucher voucher, BigDecimal oldPrice, BigDecimal retailPrice) {
-        BigDecimal basePrice = (oldPrice != null && oldPrice.compareTo(BigDecimal.ZERO) > 0) ? oldPrice : retailPrice;
-        if (basePrice == null || basePrice.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal basePrice = retailPrice != null ? retailPrice : oldPrice;
+        if (basePrice == null || basePrice.compareTo(BigDecimal.ZERO) < 0) {
             return new ProductDisplayPriceResult(BigDecimal.ZERO, BigDecimal.ZERO);
         }
 

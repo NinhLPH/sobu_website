@@ -1,6 +1,7 @@
 export type VoucherSlot = 'ITEM' | 'ORDER' | 'SHIPPING';
 export type VoucherType = 'DISCOUNT_PERCENT' | 'DISCOUNT_AMOUNT' | 'FREE_SHIP';
 export type VoucherScope = 'ALL' | 'PRODUCT' | 'CATEGORY';
+export type VoucherGeoScope = 'ALL' | 'HANOI_CENTER';
 
 export interface ActiveVoucher {
     id: number;
@@ -44,6 +45,32 @@ export interface AppliedVoucher {
     slot: VoucherSlot;
     type: VoucherType;
     discountAmount: number;
+    autoApplied?: boolean;
+}
+
+export interface ProductVoucherSummary {
+    id: number;
+    code: string;
+    name: string;
+    type: VoucherType;
+    slot: VoucherSlot;
+    scope: VoucherScope;
+    geoScope?: VoucherGeoScope | null;
+    value?: number | null;
+    maxDiscountAmount?: number | null;
+    minOrderValue?: number | null;
+    autoApply?: boolean | null;
+    estimatedDiscount?: number | null;
+    effectivePrice?: number | null;
+    badgeText?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+}
+
+export interface ProductVoucherQuery {
+    categoryId?: number;
+    oldPrice?: number;
+    price?: number;
 }
 
 export interface VoucherApplyResponse {

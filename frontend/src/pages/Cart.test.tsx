@@ -583,6 +583,75 @@ describe('Cart payment selection', () => {
         }));
     });
 
+    it('preserves a manual ITEM code when preview also selects an automatic ORDER voucher', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [{
+                id: 8,
+                code: 'SAVEITEM',
+                name: 'Giảm sản phẩm thủ công',
+                type: 'DISCOUNT_AMOUNT',
+                slot: 'ITEM',
+                scope: 'ALL',
+                value: 20000
+            }]
+        });
+        mockedVoucherService.apply.mockImplementation(async payload => ({
+            success: true,
+            message: 'Voucher preview ready',
+            data: {
+                valid: true,
+                // The backend compatibility field prefers ORDER over ITEM.
+                discountVoucherCode: payload.discountVoucherCode ? 'AUTOORDER' : null,
+                itemVoucherCode: payload.discountVoucherCode ?? null,
+                orderVoucherCode: 'AUTOORDER',
+                shippingVoucherCode: null,
+                itemDiscount: payload.discountVoucherCode ? 20000 : 0,
+                orderDiscount: 10000,
+                subtotalDiscount: payload.discountVoucherCode ? 30000 : 10000,
+                shippingDiscount: 0,
+                totalDiscount: payload.discountVoucherCode ? 30000 : 10000,
+                originalSubtotal: payload.subtotal,
+                originalShippingFee: payload.shippingFee,
+                finalSubtotal: payload.subtotal - (payload.discountVoucherCode ? 30000 : 10000),
+                finalShippingFee: payload.shippingFee,
+                finalTotal: payload.subtotal + payload.shippingFee - (payload.discountVoucherCode ? 30000 : 10000),
+                appliedVouchers: payload.discountVoucherCode ? [{
+                    voucherId: 8,
+                    code: 'SAVEITEM',
+                    name: 'Giảm sản phẩm thủ công',
+                    slot: 'ITEM',
+                    type: 'DISCOUNT_AMOUNT',
+                    discountAmount: 20000,
+                    autoApplied: false
+                }, {
+                    voucherId: 9,
+                    code: 'AUTOORDER',
+                    name: 'Tự động giảm toàn đơn',
+                    slot: 'ORDER',
+                    type: 'DISCOUNT_AMOUNT',
+                    discountAmount: 10000,
+                    autoApplied: true
+                }] : []
+            }
+        }));
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+        fireEvent.click(await screen.findByRole('button', { name: /SAVEITEM/i }));
+
+        expect(await screen.findByText(/AUTOORDER ·/i)).toBeTruthy();
+        expect(screen.getByText('Tự động')).toBeTruthy();
+        fireEvent.click(getCheckoutButton());
+
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(
+            expect.objectContaining({ discountVoucherCode: 'SAVEITEM' }),
+            { clearCartOnSuccess: false }
+        ));
+    });
+
     it('creates COD payment immediately and navigates to tracking', async () => {
         mockCreatePayment.mockResolvedValue({
             id: 21,

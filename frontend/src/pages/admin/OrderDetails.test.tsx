@@ -77,4 +77,28 @@ describe('AdminOrderDetail payment history', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
         expect(fetchOrderPayments).toHaveBeenCalledWith('12');
     });
+
+    it('shows persisted voucher codes and discount amounts from the order response', () => {
+        renderDetail({
+            currentOrderDetail: {
+                id: 12,
+                orderCode: 'SO-12',
+                type: 'NORMAL',
+                status: 'PENDING',
+                totalAmount: 450000,
+                shippingFee: 30000,
+                discountVoucherCode: 'SAVE20',
+                shippingVoucherCode: 'FREESHIP',
+                discountAmount: 50000,
+                shippingDiscountAmount: 30000,
+                items: []
+            }
+        });
+
+        expect(screen.getByText('SAVE20')).toBeTruthy();
+        expect(screen.getByText('FREESHIP')).toBeTruthy();
+        expect(screen.getByText('Giảm sản phẩm/toàn đơn:')).toBeTruthy();
+        expect(screen.getByText('Giảm phí vận chuyển:')).toBeTruthy();
+        expect(screen.getByText('Tổng thanh toán:')).toBeTruthy();
+    });
 });

@@ -33,4 +33,22 @@ describe('VoucherService', () => {
             { signal: controller.signal }
         );
     });
+
+    it('loads product vouchers with catalog pricing and cancellation support', () => {
+        const controller = new AbortController();
+        VoucherService.getForProduct(1001, {
+            categoryId: 101,
+            oldPrice: 229000,
+            price: 189000
+        }, controller.signal);
+
+        expect(mockApiGet).toHaveBeenCalledWith('/api/public/vouchers/product/1001', {
+            params: {
+                categoryId: 101,
+                oldPrice: 229000,
+                price: 189000
+            },
+            signal: controller.signal
+        });
+    });
 });

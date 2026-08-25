@@ -135,8 +135,8 @@ class VoucherServiceTest {
     }
 
     @Test
-    @DisplayName("Product Voucher Display Calculation uses oldPrice as base for discount formula: newPrice = oldPrice - (oldPrice * voucher%)")
-    void testProductVoucherDisplayCalculation_UsesOldPrice() {
+    @DisplayName("Product voucher display uses the current retail price before old price")
+    void testProductVoucherDisplayCalculation_UsesRetailPrice() {
         when(voucherRepository.findByActiveTrue()).thenReturn(List.of(productSpecificVoucher));
 
         BigDecimal oldPrice = new BigDecimal("400000.00");
@@ -146,10 +146,59 @@ class VoucherServiceTest {
 
         assertThat(list).hasSize(1);
         VoucherSummaryDTO summary = list.get(0);
-        // 15% of 400,000 = 60,000
-        assertThat(summary.getEstimatedDiscount()).isEqualByComparingTo("60000.00");
-        // Effective price = 400,000 - 60,000 = 340,000
-        assertThat(summary.getEffectivePrice()).isEqualByComparingTo("340000.00");
+        // 15% of the current 350,000 retail price = 52,500.
+        assertThat(summary.getEstimatedDiscount()).isEqualByComparingTo("52500.00");
+        assertThat(summary.getEffectivePrice()).isEqualByComparingTo("297500.00");
+    }
+
+    @Test
+    @DisplayName("Product voucher display falls back to old price only when retail price is absent")
+    void testProductVoucherDisplayCalculation_FallsBackToOldPrice() {
+        when(voucherRepository.findByActiveTrue()).thenReturn(List.of(productSpecificVoucher));
+
+        List<VoucherSummaryDTO> list = voucherService.getApplicableVouchersForProduct(
+                101L, 2L, new BigDecimal("400000.00"), null
+        );
+
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).getEstimatedDiscount()).isEqualByComparingTo("60000.00");
+        assertThat(list.get(0).getEffectivePrice()).isEqualByComparingTo("340000.00");
+    }
+
+    @Test
+    @DisplayName("A zero retail price remains zero instead of falling back to old price")
+    void testProductVoucherDisplayCalculation_PreservesZeroRetailPrice() {
+        when(voucherRepository.findByActiveTrue()).thenReturn(List.of(productSpecificVoucher));
+
+        List<VoucherSummaryDTO> list = voucherService.getApplicableVouchersForProduct(
+                101L, 2L, new BigDecimal("400000.00"), BigDecimal.ZERO
+        );
+
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).getEstimatedDiscount()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(list.get(0).getEffectivePrice()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("Expired and exhausted free shipping vouchers are hidden from product display")
+    void testProductVoucherDisplay_FiltersIneligibleFreeShipping() {
+        Voucher expired = Voucher.builder()
+                .id(20L).code("EXPIRED").name("Expired freeship")
+                .type(VoucherType.FREE_SHIP).slot(VoucherSlot.SHIPPING)
+                .scope(VoucherScope.ALL).active(true).usedCount(0)
+                .endDate(LocalDateTime.now().minusMinutes(1)).build();
+        Voucher exhausted = Voucher.builder()
+                .id(21L).code("USEDUP").name("Used-up freeship")
+                .type(VoucherType.FREE_SHIP).slot(VoucherSlot.SHIPPING)
+                .scope(VoucherScope.ALL).active(true).usedCount(1).usageLimit(1)
+                .build();
+        when(voucherRepository.findByActiveTrue()).thenReturn(List.of(expired, exhausted, freeShipHanoiVoucher));
+
+        List<VoucherSummaryDTO> list = voucherService.getApplicableVouchersForProduct(
+                101L, 2L, null, new BigDecimal("350000.00")
+        );
+
+        assertThat(list).extracting(VoucherSummaryDTO::getCode).containsExactly("HANOIFREE");
     }
 
     @Test
