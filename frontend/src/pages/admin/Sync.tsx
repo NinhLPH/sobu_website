@@ -17,6 +17,7 @@ import {ToastService} from '../../service/toast.service';
 import {useProductStore} from '../../store/useProductStore';
 import {useAdminStore} from '../../store/useAdminStore';
 import {useIntegrationStore} from '../../store/useIntegrationStore';
+import NhanhHistoryPanel from '../../components/admin/NhanhHistoryPanel';
 
 const getOrderSyncStatusStyle = (status?: string) => {
     switch (status) {
@@ -73,6 +74,11 @@ export default function AdminSync() {
         orderSyncBatchProgress,
         orderSyncBatchResult,
         fetchOrderSyncQueue,
+        nhanhHistoryOrders,
+        isNhanhHistoryLoading,
+        nhanhHistoryError,
+        fetchNhanhHistory,
+        clearNhanhHistory,
         retryOrderSync,
         retryOrderSyncBatch
     } = useAdminStore();
@@ -98,10 +104,19 @@ export default function AdminSync() {
     }, [ensureIntegrationLoaded]);
 
     useEffect(() => {
-        if (integrationLoaded && nhanhEnabled) {
-            void fetchOrderSyncQueue();
+        if (!integrationLoaded) {
+            return;
         }
-    }, [fetchOrderSyncQueue, integrationLoaded, nhanhEnabled]);
+        if (nhanhEnabled) {
+            void fetchOrderSyncQueue();
+        } else {
+            void fetchNhanhHistory();
+        }
+    }, [fetchNhanhHistory, fetchOrderSyncQueue, integrationLoaded, nhanhEnabled]);
+
+    useEffect(() => () => {
+        clearNhanhHistory();
+    }, [clearNhanhHistory]);
 
     useEffect(() => {
         const oauth = searchParams.get('oauth');
@@ -224,9 +239,9 @@ export default function AdminSync() {
         return (
             <div className="pt-6 space-y-6">
                 <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">Trung tâm đồng bộ ERP Nhanh.vn</h1>
-                <div className="flex flex-col items-center justify-center gap-4 rounded-3xl bg-white py-20 border border-outline-variant/30 shadow-sm text-center">
+                <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-outline-variant/30 bg-white px-5 py-12 text-center shadow-sm sm:py-16">
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-outline">
-                        <PlugZap className="h-8 w-8"/>
+                        <PlugZap className="h-8 w-8" aria-hidden="true"/>
                     </div>
                     <h2 className="text-sm font-black text-on-surface uppercase tracking-wide">Tích hợp Nhanh.vn đang tắt</h2>
                     <p className="max-w-xl text-xs leading-relaxed font-semibold text-outline">
@@ -235,6 +250,12 @@ export default function AdminSync() {
                         và hiển thị ở chế độ chỉ đọc.
                     </p>
                 </div>
+                <NhanhHistoryPanel
+                    orders={nhanhHistoryOrders}
+                    loading={isNhanhHistoryLoading}
+                    error={nhanhHistoryError}
+                    onRetry={() => void fetchNhanhHistory(true)}
+                />
             </div>
         );
     }

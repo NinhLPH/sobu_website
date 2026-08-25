@@ -13,6 +13,8 @@ import {
 import { useAdminStore } from '../../store/useAdminStore';
 import { formatCurrency } from '../../utils/format';
 import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+import {useIntegrationStore} from '../../store/useIntegrationStore';
+import {hasNhanhHistory} from '../../utils/order-sync';
 
 const getStatusColor = (status?: string) => {
     switch (status) {
@@ -115,6 +117,20 @@ export default function AdminOrders() {
     const [syncFilter, setSyncFilter] = useState('ALL');
     const [sortBy, setSortBy] = useState('createdAt');
     const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('DESC');
+    const nhanhEnabled = useIntegrationStore(state => state.nhanhEnabled);
+    const integrationLoaded = useIntegrationStore(state => state.loaded);
+    const ensureIntegrationLoaded = useIntegrationStore(state => state.ensureLoaded);
+    const showNhanhControls = integrationLoaded && nhanhEnabled;
+
+    useEffect(() => {
+        void ensureIntegrationLoaded();
+    }, [ensureIntegrationLoaded]);
+
+    useEffect(() => {
+        if (!showNhanhControls) {
+            setSyncFilter('ALL');
+        }
+    }, [showNhanhControls]);
 
     useEffect(() => {
         fetchOrders({ page, size: 10, sortBy, sortDirection });
@@ -132,10 +148,10 @@ export default function AdminOrders() {
                 order.nhanhOrderCode
             ].some(value => String(value || '').toLowerCase().includes(search));
             const matchesStatus = statusFilter === 'ALL' || order.status === statusFilter;
-            const matchesSync = syncFilter === 'ALL' || order.syncStatus === syncFilter;
+            const matchesSync = !showNhanhControls || syncFilter === 'ALL' || order.syncStatus === syncFilter;
             return matchesSearch && matchesStatus && matchesSync;
         });
-    }, [workflowOrders, searchTerm, statusFilter, syncFilter]);
+    }, [workflowOrders, searchTerm, statusFilter, syncFilter, showNhanhControls]);
 
     const searchSuggestions = useMemo<SearchSuggestion[]>(() => workflowOrders.map((order) => {
         const primaryCode = order.orderCode || String(order.id);
@@ -167,7 +183,7 @@ export default function AdminOrders() {
         <div className="space-y-6 pt-6">
             <div className="flex items-center justify-between gap-4">
                 <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface">
-                    Quản lý đơn hàng ERP
+                    {showNhanhControls ? 'Quản lý đơn hàng ERP' : 'Quản lý đơn hàng'}
                 </h1>
                 <button
                     type="button"
@@ -194,7 +210,9 @@ export default function AdminOrders() {
                         onChange={setSearchTerm}
                         onSubmit={setSearchTerm}
                         suggestions={searchSuggestions}
-                        placeholder="Tìm mã đơn, khách hàng, điện thoại hoặc mã Nhanh.vn..."
+                        placeholder={showNhanhControls
+                            ? 'Tìm mã đơn, khách hàng, điện thoại hoặc mã Nhanh.vn...'
+                            : 'Tìm mã đơn, khách hàng hoặc điện thoại...'}
                         ariaLabel="Tìm kiếm đơn hàng quản trị"
                         className="w-full border-none bg-transparent text-xs font-semibold outline-none"
                     />
@@ -208,6 +226,7 @@ export default function AdminOrders() {
                     <select
                         value={statusFilter}
                         onChange={(event) => setStatusFilter(event.target.value)}
+                        aria-label="Lọc theo trạng thái đơn hàng"
                         className="rounded-lg border-none bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface outline-none"
                     >
                         <option value="ALL">Tất cả trạng thái</option>
@@ -220,24 +239,28 @@ export default function AdminOrders() {
                         <option value="DELIVERED">Đã giao</option>
                         <option value="CANCELLED">Đã hủy</option>
                     </select>
-                    <select
-                        value={syncFilter}
-                        onChange={(event) => setSyncFilter(event.target.value)}
-                        className="rounded-lg border-none bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface outline-none"
-                    >
-                        <option value="ALL">Tất cả đồng bộ</option>
-                        <option value="SYNCED">Đã đồng bộ</option>
-                        <option value="PENDING">Đang chờ</option>
-                        <option value="FAILED">Thất bại</option>
-                        <option value="NEED_RECONCILE">Cần đối soát</option>
-                        <option value="DEAD">Đã dừng retry</option>
-                    </select>
+                    {showNhanhControls && (
+                        <select
+                            value={syncFilter}
+                            onChange={(event) => setSyncFilter(event.target.value)}
+                            aria-label="Lọc theo trạng thái đồng bộ Nhanh.vn"
+                            className="rounded-lg border-none bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface outline-none"
+                        >
+                            <option value="ALL">Tất cả đồng bộ</option>
+                            <option value="SYNCED">Đã đồng bộ</option>
+                            <option value="PENDING">Đang chờ</option>
+                            <option value="FAILED">Thất bại</option>
+                            <option value="NEED_RECONCILE">Cần đối soát</option>
+                            <option value="DEAD">Đã dừng retry</option>
+                        </select>
+                    )}
                     <select
                         value={sortBy}
                         onChange={(event) => {
                             setSortBy(event.target.value);
                             setPage(0);
                         }}
+                        aria-label="Sắp xếp danh sách đơn hàng"
                         className="rounded-lg border-none bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface outline-none"
                     >
                         <option value="createdAt">Sắp xếp: Ngày tạo</option>
@@ -250,6 +273,7 @@ export default function AdminOrders() {
                             setSortDirection(event.target.value as 'ASC' | 'DESC');
                             setPage(0);
                         }}
+                        aria-label="Chiều sắp xếp danh sách đơn hàng"
                         className="rounded-lg border-none bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface outline-none"
                     >
                         <option value="DESC">Giảm dần</option>
@@ -267,7 +291,7 @@ export default function AdminOrders() {
                                 <th className="px-6 py-4">Khách hàng</th>
                                 <th className="px-6 py-4">Ngày tạo</th>
                                 <th className="px-6 py-4 text-right">Tổng tiền</th>
-                                <th className="px-6 py-4 text-center">Đồng bộ</th>
+                                {showNhanhControls && <th className="px-6 py-4 text-center">Đồng bộ</th>}
                                 <th className="px-6 py-4 text-center">Trạng thái</th>
                                 <th className="px-6 py-4 text-center">Thao tác</th>
                             </tr>
@@ -275,7 +299,7 @@ export default function AdminOrders() {
                         <tbody>
                             {isOrdersLoading ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-16 text-center">
+                                    <td colSpan={showNhanhControls ? 7 : 6} className="px-6 py-16 text-center">
                                         <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-primary" />
                                         <p className="text-[10px] font-bold text-outline">
                                             Đang tải danh sách đơn hàng...
@@ -291,9 +315,9 @@ export default function AdminOrders() {
                                         <p className="font-black text-primary">
                                             #{order.orderCode || order.id}
                                         </p>
-                                        {(order.nhanhOrderCode || order.nhanhOrderId) && (
+                                        {hasNhanhHistory(order) && (order.nhanhOrderCode || order.nhanhOrderId) && (
                                             <span className="mt-0.5 block text-[10px] font-semibold text-outline">
-                                                Nhanh: {order.nhanhOrderCode || order.nhanhOrderId}
+                                                Nhanh{showNhanhControls ? '' : ' (lịch sử)'}: {order.nhanhOrderCode || order.nhanhOrderId}
                                             </span>
                                         )}
                                     </td>
@@ -318,14 +342,16 @@ export default function AdminOrders() {
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <span className={`inline-block rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
-                                            {getSyncStatusText(order.syncStatus)}
-                                        </span>
-                                        <span className="mt-1 block text-[10px] font-semibold text-outline">
-                                            {order.nhanhSyncStage || 'NONE'}
-                                        </span>
-                                    </td>
+                                    {showNhanhControls && (
+                                        <td className="px-6 py-4 text-center">
+                                            <span className={`inline-block rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
+                                                {getSyncStatusText(order.syncStatus)}
+                                            </span>
+                                            <span className="mt-1 block text-[10px] font-semibold text-outline">
+                                                {order.nhanhSyncStage || 'NONE'}
+                                            </span>
+                                        </td>
+                                    )}
                                     <td className="px-6 py-4 text-center">
                                         <span className={`inline-block rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${getStatusColor(order.status)}`}>
                                             {getStatusText(order.status)}
@@ -333,7 +359,7 @@ export default function AdminOrders() {
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex items-center justify-center gap-2">
-                                            {canRetrySync(order.syncStatus) && (
+                                            {showNhanhControls && canRetrySync(order.syncStatus) && (
                                                 <button
                                                     type="button"
                                                     onClick={() => void handleRetrySync(order.id)}
@@ -357,7 +383,7 @@ export default function AdminOrders() {
                             ))}
                             {!isOrdersLoading && filteredOrders.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-16 text-center font-bold text-outline">
+                                    <td colSpan={showNhanhControls ? 7 : 6} className="px-6 py-16 text-center font-bold text-outline">
                                         <FileText className="mx-auto mb-2 h-8 w-8 text-outline/30" />
                                         Không tìm thấy đơn hàng nào.
                                     </td>

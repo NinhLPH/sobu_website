@@ -95,9 +95,20 @@ public class CategorySyncService {
             category.setId(existing.get().getId());
         }
 
-        // The FK is persisted from parentId, not from the read-only parent relation.
-        Long parentId = dto.getParentId();
-        category.setParentId(parentId != null && parentId > 0 ? parentId : null);
+        // Nhanh parentId is an external id. Always resolve it to the local PK
+        // before persisting the read-only parent relation.
+        Long parentExternalId = dto.getParentId();
+        if (parentExternalId != null && parentExternalId > 0) {
+            java.util.Optional<Category> parent = categoryRepo.findByExternalId(parentExternalId);
+            if (parent.isEmpty()) {
+                log.warn("Skipping category externalId={} because parent externalId={} is missing",
+                        dto.getId(), parentExternalId);
+                return false;
+            }
+            category.setParentId(parent.get().getId());
+        } else {
+            category.setParentId(null);
+        }
         category.setParent(null);
 
         try {

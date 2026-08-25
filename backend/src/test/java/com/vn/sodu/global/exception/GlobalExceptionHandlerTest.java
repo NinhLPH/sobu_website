@@ -24,4 +24,18 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().getError()).isEqualTo("CART_STORAGE_UNAVAILABLE");
         assertThat(response.getBody().getMessage()).isEqualTo("Cart storage is unavailable");
     }
+
+    @Test
+    void nhanhDisabledUsesConflictErrorContract() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+        ResponseEntity<ApiResponseDTO<Void>> response = handler.handleNhanhIntegrationDisabledException(
+                new com.vn.sodu.integration.NhanhIntegrationDisabledException()
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isFalse();
+        assertThat(response.getBody().getError()).isEqualTo("NHANH_INTEGRATION_DISABLED");
+    }
 }

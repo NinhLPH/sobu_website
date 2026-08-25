@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import AdminOrderDetail from './OrderDetails';
 import { useAdminStore } from '../../store/useAdminStore';
+import {useIntegrationStore} from '../../store/useIntegrationStore';
 
 jest.mock('react-router-dom', () => ({
     Link: ({ children, to }: any) => <a href={to}>{children}</a>,
@@ -49,6 +50,7 @@ const renderDetail = (overrides: Record<string, unknown> = {}) => {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    useIntegrationStore.setState({nhanhEnabled: false, loaded: true, loading: false});
 });
 
 describe('AdminOrderDetail payment history', () => {
@@ -100,5 +102,27 @@ describe('AdminOrderDetail payment history', () => {
         expect(screen.getByText('Giảm sản phẩm/toàn đơn:')).toBeTruthy();
         expect(screen.getByText('Giảm phí vận chuyển:')).toBeTruthy();
         expect(screen.getByText('Tổng thanh toán:')).toBeTruthy();
+    });
+
+    it('shows historical Nhanh data read-only without retry in local mode', () => {
+        renderDetail({
+            currentOrderDetail: {
+                id: 12,
+                orderCode: 'SO-12',
+                type: 'NORMAL',
+                status: 'PENDING',
+                totalAmount: 500000,
+                syncStatus: 'FAILED',
+                nhanhSyncStage: 'NORMAL_ORDER_CREATED',
+                nhanhOrderId: '9001',
+                syncError: 'Old sync error',
+                items: []
+            }
+        });
+
+        expect(screen.getByText('Đồng bộ Nhanh.vn')).toBeTruthy();
+        expect(screen.getByText('Chỉ đọc')).toBeTruthy();
+        expect(screen.getByText('Old sync error')).toBeTruthy();
+        expect(screen.queryByRole('button', {name: /Retry đồng bộ/i})).toBeNull();
     });
 });

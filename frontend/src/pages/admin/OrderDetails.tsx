@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAdminStore } from '../../store/useAdminStore';
 import { useIntegrationStore } from '../../store/useIntegrationStore';
+import {hasNhanhHistory} from '../../utils/order-sync';
 import { formatCurrency } from '../../utils/format';
 
 const getStatusColor = (status?: string) => {
@@ -126,7 +127,13 @@ export default function AdminOrderDetail() {
     } = useAdminStore();
     const isRetryingOrderSync = id ? retryingOrderIds.includes(Number(id)) : false;
     const nhanhEnabled = useIntegrationStore((state) => state.nhanhEnabled);
+    const integrationLoaded = useIntegrationStore((state) => state.loaded);
     const ensureIntegrationLoaded = useIntegrationStore((state) => state.ensureLoaded);
+    const canUseNhanh = integrationLoaded && nhanhEnabled;
+    const showNhanhHistory = hasNhanhHistory(order);
+    const showNhanhProductIds = canUseNhanh || Boolean(
+        showNhanhHistory && order?.items?.some(item => item.nhanhProductId)
+    );
 
     useEffect(() => {
         void ensureIntegrationLoaded();
@@ -278,10 +285,10 @@ export default function AdminOrderDetail() {
                 </div>
             )}
 
-            {nhanhEnabled && canRetrySync(order.syncStatus) && (order.lastSyncMessage || order.syncError) && (
+            {showNhanhHistory && (order.lastSyncMessage || order.syncError) && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium leading-relaxed text-red-800">
                     <span className="mb-1 block font-black uppercase tracking-wide text-red-600">
-                        Chi tiết lỗi đồng bộ
+                        Chi tiết đồng bộ{canUseNhanh ? '' : ' đã lưu'}
                     </span>
                     {order.lastSyncMessage || order.syncError}
                 </div>
@@ -302,7 +309,7 @@ export default function AdminOrderDetail() {
                                     <thead className="text-[10px] font-bold uppercase tracking-wider text-outline">
                                         <tr>
                                             <th className="pb-3">Sản phẩm</th>
-                                            {nhanhEnabled && (
+                                            {showNhanhProductIds && (
                                                 <th className="pb-3 text-center">Nhanh ID</th>
                                             )}
                                             <th className="pb-3 text-center">SL</th>
@@ -314,7 +321,7 @@ export default function AdminOrderDetail() {
                                         {order.items.map((item) => (
                                             <tr key={item.id}>
                                                 <td className="py-3 text-on-surface">{item.name}</td>
-                                                {nhanhEnabled && (
+                                                {showNhanhProductIds && (
                                                     <td className="py-3 text-center text-outline">
                                                         {item.nhanhProductId || 'N/A'}
                                                     </td>
@@ -500,7 +507,7 @@ export default function AdminOrderDetail() {
                         )}
                     </section>
 
-                    {nhanhEnabled && (
+                    {(canUseNhanh || showNhanhHistory) && (
                         <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
                             <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
                                 <div className="flex items-center gap-2">
@@ -510,7 +517,7 @@ export default function AdminOrderDetail() {
                                     </h2>
                                 </div>
                                 <span className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
-                                    {getSyncStatusText(order.syncStatus)}
+                                    {canUseNhanh ? getSyncStatusText(order.syncStatus) : 'Chỉ đọc'}
                                 </span>
                             </div>
 
@@ -543,7 +550,7 @@ export default function AdminOrderDetail() {
                                 )}
                             </div>
 
-                            {canRetrySync(order.syncStatus) && (
+                            {canUseNhanh && canRetrySync(order.syncStatus) && (
                                 <button
                                     type="button"
                                     onClick={handleRetrySync}
