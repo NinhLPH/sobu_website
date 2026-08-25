@@ -32,11 +32,11 @@ export const getNhanhSyncStatusStyle = (status?: string): string => {
         case 'NEED_RECONCILE':
             return 'border-orange-200 bg-orange-50 text-orange-700';
         case 'DEAD':
-            return 'border-slate-300 bg-slate-100 text-slate-700';
+            return 'border-outline-variant/40 bg-surface-container text-on-surface-variant';
         case 'PENDING':
             return 'border-amber-200 bg-amber-50 text-amber-700';
         default:
-            return 'border-gray-200 bg-gray-50 text-gray-700';
+            return 'border-outline-variant/40 bg-surface-container-low text-on-surface-variant';
     }
 };
 

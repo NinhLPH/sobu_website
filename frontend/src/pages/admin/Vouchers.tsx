@@ -9,16 +9,21 @@ import {
     AdminCard,
     AdminEmpty,
     AdminError,
+    AdminFilterGroup,
+    AdminFilterReset,
+    AdminFilterSelect,
     AdminLoading,
     AdminModal,
     AdminPage,
     AdminPagination,
     AdminSearch,
     AdminStatus,
+    AdminToolbar,
     Field,
     getApiError,
     inputClass
 } from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
 const initial: VoucherWriteRequest = {
     code: '',
@@ -60,6 +65,7 @@ function UsageIndicator({voucher}: { voucher: Voucher }) {
 }
 
 export default function AdminVouchers() {
+    const confirm = useConfirmDialog();
     const [items, setItems] = useState<Voucher[]>([]);
     const [products, setProducts] = useState<AdminProductListItem[]>([]);
     const [productQuery, setProductQuery] = useState('');
@@ -198,7 +204,7 @@ export default function AdminVouchers() {
         }
     };
     const remove = async (x: Voucher) => {
-        if (!window.confirm(`Xóa voucher “${x.code}”?`)) return;
+        if (!await confirm({title: 'Xóa voucher?', message: `Voucher “${x.code}” sẽ bị xóa và không thể áp dụng cho đơn mới.`, confirmLabel: 'Xóa voucher', tone: 'danger'})) return;
         setBusyVoucherId(x.id);
         try {
             await AdminVoucherService.deleteVoucher(x.id);
@@ -215,38 +221,38 @@ export default function AdminVouchers() {
                       description="Quản lý mã ưu đãi theo phạm vi sản phẩm, danh mục, đơn hàng hoặc vận chuyển."
                       actions={<AdminButton onClick={() => edit()}><Plus className="h-4 w-4"/>Tạo
                           voucher</AdminButton>}><AdminCard>
-        <div className="space-y-3 border-b border-outline-variant/30 p-4">
+        <AdminToolbar>
             <AdminSearch value={query} onChange={x => {
                 setQuery(x);
                 setPage(0);
             }} placeholder="Tìm theo mã hoặc tên voucher"/>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-                <label className="block"><span className="sr-only">Trạng thái voucher</span><select aria-label="Trạng thái voucher" className={inputClass} value={activeFilter} onChange={event => {
-                    setActiveFilter(event.target.value as typeof activeFilter);
+            <AdminFilterGroup>
+                <AdminFilterSelect label="Trạng thái voucher" value={activeFilter} onChange={value => {
+                    setActiveFilter(value as typeof activeFilter);
                     setPage(0);
-                }}><option value="">Mọi trạng thái</option><option value="true">Đang hoạt động</option><option value="false">Tạm dừng</option></select></label>
-                <label className="block"><span className="sr-only">Phạm vi voucher</span><select aria-label="Phạm vi voucher" className={inputClass} value={scopeFilter} onChange={event => {
-                    setScopeFilter(event.target.value as typeof scopeFilter);
+                }}><option value="">Mọi trạng thái</option><option value="true">Đang hoạt động</option><option value="false">Tạm dừng</option></AdminFilterSelect>
+                <AdminFilterSelect label="Phạm vi voucher" value={scopeFilter} onChange={value => {
+                    setScopeFilter(value as typeof scopeFilter);
                     setPage(0);
-                }}><option value="">Mọi phạm vi</option><option value="ALL">Tất cả</option><option value="PRODUCT">Sản phẩm</option><option value="CATEGORY">Danh mục</option></select></label>
-                <label className="block"><span className="sr-only">Slot voucher</span><select aria-label="Slot voucher" className={inputClass} value={slotFilter} onChange={event => {
-                    setSlotFilter(event.target.value as typeof slotFilter);
+                }}><option value="">Mọi phạm vi</option><option value="ALL">Tất cả</option><option value="PRODUCT">Sản phẩm</option><option value="CATEGORY">Danh mục</option></AdminFilterSelect>
+                <AdminFilterSelect label="Slot voucher" value={slotFilter} onChange={value => {
+                    setSlotFilter(value as typeof slotFilter);
                     setPage(0);
-                }}><option value="">Mọi slot</option><option value="ITEM">Sản phẩm</option><option value="ORDER">Đơn hàng</option><option value="SHIPPING">Vận chuyển</option></select></label>
-                <label className="block"><span className="sr-only">Cách áp dụng voucher</span><select aria-label="Cách áp dụng voucher" className={inputClass} value={autoApplyFilter} onChange={event => {
-                    setAutoApplyFilter(event.target.value as typeof autoApplyFilter);
+                }}><option value="">Mọi slot</option><option value="ITEM">Sản phẩm</option><option value="ORDER">Đơn hàng</option><option value="SHIPPING">Vận chuyển</option></AdminFilterSelect>
+                <AdminFilterSelect label="Cách áp dụng voucher" value={autoApplyFilter} onChange={value => {
+                    setAutoApplyFilter(value as typeof autoApplyFilter);
                     setPage(0);
-                }}><option value="">Manual và tự động</option><option value="true">Tự động áp dụng</option><option value="false">Nhập thủ công</option></select></label>
-                <AdminButton type="button" variant="secondary" onClick={() => {
+                }}><option value="">Manual và tự động</option><option value="true">Tự động áp dụng</option><option value="false">Nhập thủ công</option></AdminFilterSelect>
+                <AdminFilterReset onClick={() => {
                     setQuery('');
                     setActiveFilter('');
                     setScopeFilter('');
                     setSlotFilter('');
                     setAutoApplyFilter('');
                     setPage(0);
-                }} disabled={!query && !activeFilter && !scopeFilter && !slotFilter && !autoApplyFilter}>Xóa bộ lọc</AdminButton>
-            </div>
-        </div>
+                }} disabled={!query && !activeFilter && !scopeFilter && !slotFilter && !autoApplyFilter}/>
+            </AdminFilterGroup>
+        </AdminToolbar>
         {loading ? <AdminLoading/> : error ? <AdminError message={error} onRetry={() => void load()}/> : !items.length ?
             <AdminEmpty title="Chưa có voucher phù hợp" description="Hãy đổi bộ lọc hoặc tạo voucher mới."/> : <>
             <div className="space-y-3 p-3 md:hidden">

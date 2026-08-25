@@ -126,7 +126,7 @@ export default function PaymentResult() {
 
     return (
         <main className="mx-auto flex min-h-[70vh] w-full min-w-0 max-w-3xl items-center justify-center bg-surface px-4 py-24 sm:px-6 sm:py-28">
-            <section className="w-full rounded-[2rem] border border-surface-container bg-white p-8 text-center shadow-lg sm:p-12">
+            <section className="w-full rounded-[2rem] border border-surface-container bg-surface p-8 text-center shadow-lg sm:p-12">
                 <div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full ${
                     isSuccess
                         ? 'bg-green-100 text-green-600'

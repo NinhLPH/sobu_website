@@ -1,4 +1,4 @@
-import {BrowserRouter as Router, Routes, Route, Navigate} from 'react-router-dom';
+import {BrowserRouter as Router, Routes, Route, Navigate, useLocation} from 'react-router-dom';
 
 import LoginPage from './pages/LoginPage';
 import Cart from './pages/Cart';
@@ -45,18 +45,24 @@ import AdminStaticPages from './pages/admin/StaticPages';
 import AdminReviews from './pages/admin/Reviews';
 import AdminShipping from './pages/admin/Shipping';
 import AdminSupport from './pages/admin/Support';
+import {ConfirmDialogProvider} from './components/common/ConfirmDialog';
+import {listenToSystemTheme} from './store/useThemeStore';
 
-export default function App() {
+function AppContent() {
     const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
+    const location = useLocation();
+    const isAdminRoute = location.pathname.startsWith('/admin');
 
     useEffect(() => {
         void fetchConfigs();
     }, [fetchConfigs]);
 
+    useEffect(() => listenToSystemTheme(), []);
+
     return (
-        <Router>
+        <ConfirmDialogProvider>
             <ScrollToTop/>
-            <div className="flex flex-col min-h-screen">
+            <div className={`flex min-h-screen flex-col ${isAdminRoute ? 'admin-app-shell' : ''}`}>
                 <Header/>
                 <Routes>
                     <Route path="/login" element={<LoginPage/>}/>
@@ -122,9 +128,13 @@ export default function App() {
                         </Route>
                     </Route>
                 </Routes>
-                <Footer/>
+                {!isAdminRoute && <Footer/>}
                 <Toast/>
             </div>
-        </Router>
+        </ConfirmDialogProvider>
     );
+}
+
+export default function App() {
+    return <Router><AppContent/></Router>;
 }

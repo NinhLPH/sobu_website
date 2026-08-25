@@ -45,7 +45,7 @@ export default function NhanhHistoryPanel({
     );
 
     return (
-        <section className="overflow-hidden rounded-3xl border border-outline-variant/30 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-3xl border border-outline-variant/30 bg-surface shadow-sm">
             <div className="flex flex-col gap-4 border-b border-surface-container p-5 sm:p-6 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-start gap-3 sm:gap-4">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -142,7 +142,7 @@ export default function NhanhHistoryPanel({
                                     </div>
                                 </dl>
                                 {(order.lastSyncMessage || order.syncError) && (
-                                    <p className="mt-3 rounded-xl border border-outline-variant/20 bg-white p-3 text-[10px] font-semibold leading-relaxed text-on-surface-variant">
+                                    <p className="mt-3 rounded-xl border border-outline-variant/20 bg-surface p-3 text-[10px] font-semibold leading-relaxed text-on-surface-variant">
                                         {order.lastSyncMessage || order.syncError}
                                     </p>
                                 )}

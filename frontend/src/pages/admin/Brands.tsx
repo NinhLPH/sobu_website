@@ -13,13 +13,16 @@ import {
     AdminPage,
     AdminSearch,
     AdminStatus,
+    AdminToolbar,
     Field,
     getApiError,
     inputClass
 } from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
 const initial: BrandWriteRequest = {code: '', name: '', parentId: null, status: 1};
 export default function AdminBrands() {
+    const confirm = useConfirmDialog();
     const [items, setItems] = useState<AdminBrand[]>([]);
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(true);
@@ -63,7 +66,7 @@ export default function AdminBrands() {
         }
     };
     const remove = async (x: AdminBrand) => {
-        if (!window.confirm(`Xóa thương hiệu “${x.name}”?`)) return;
+        if (!await confirm({title: 'Xóa thương hiệu?', message: `Thương hiệu “${x.name}” sẽ bị xóa khỏi hệ thống.`, confirmLabel: 'Xóa thương hiệu', tone: 'danger'})) return;
         try {
             await AdminCatalogService.deleteBrand(x.id);
             ToastService.success('Đã xóa thương hiệu.');
@@ -83,10 +86,9 @@ export default function AdminBrands() {
     return <AdminPage title="Thương hiệu" description="Quản lý nhãn hiệu và quan hệ thương hiệu cha–con của catalog."
                       actions={<AdminButton onClick={() => edit()}><Plus className="h-4 w-4"/>Thêm thương
                           hiệu</AdminButton>}><AdminCard>
-        <div className="border-b border-outline-variant/30 p-4"><AdminSearch value={query} onChange={setQuery}
-                                                                             placeholder="Tìm thương hiệu theo tên hoặc mã"
-                                                                             ariaLabel="Tìm kiếm thương hiệu quản trị"/>
-        </div>
+        <AdminToolbar><AdminSearch value={query} onChange={setQuery}
+                                   placeholder="Tìm thương hiệu theo tên hoặc mã"
+                                   ariaLabel="Tìm kiếm thương hiệu quản trị"/></AdminToolbar>
         {loading ? <AdminLoading/> : error ?
             <AdminError message={error} onRetry={() => void load()}/> : !visible.length ?
                 <AdminEmpty title="Không có thương hiệu"/> : <div className="overflow-x-auto">

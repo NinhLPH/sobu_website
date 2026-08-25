@@ -21,6 +21,7 @@ import { PaymentMethod } from '../enum/union-types';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { formatCurrency } from '../utils/format';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import {useConfirmDialog} from '../components/common/ConfirmDialog';
 
 type TrackingType = 'internal' | 'nhanh';
 
@@ -129,6 +130,7 @@ const paymentTypeLabels: Record<OrderPaymentType, string> = {
 };
 
 export default function OrderTracking() {
+    const confirm = useConfirmDialog();
     const { orderId: routeOrderId } = useParams<{ orderId?: string }>();
     const [searchParams] = useSearchParams();
     const initialOrderId = routeOrderId || searchParams.get('orderId') || '';
@@ -263,7 +265,7 @@ export default function OrderTracking() {
     };
 
     const handleCancelOrder = async () => {
-        if (!orderDetail || !window.confirm('Bạn chắc chắn muốn hủy đơn hàng này?')) {
+        if (!orderDetail || !await confirm({title: 'Hủy đơn hàng?', message: 'Đơn hàng sẽ được hủy và tồn kho được hoàn lại theo xử lý của hệ thống.', confirmLabel: 'Hủy đơn hàng', tone: 'danger'})) {
             return;
         }
 
@@ -360,7 +362,7 @@ export default function OrderTracking() {
                         disabled={isLoading}
                         className={`rounded-lg px-3 py-2 text-xs font-black transition-colors ${
                             trackingType === 'internal'
-                                ? 'bg-white text-primary shadow-sm'
+                                ? 'bg-surface text-primary shadow-sm'
                                 : 'text-outline'
                         }`}
                     >
@@ -375,7 +377,7 @@ export default function OrderTracking() {
                         disabled={isLoading}
                         className={`rounded-lg px-3 py-2 text-xs font-black transition-colors ${
                             trackingType === 'nhanh'
-                                ? 'bg-white text-primary shadow-sm'
+                                ? 'bg-surface text-primary shadow-sm'
                                 : 'text-outline'
                         }`}
                     >
@@ -652,7 +654,7 @@ export default function OrderTracking() {
                                             clearPaymentError();
                                         }}
                                         disabled={isCreatingPayment}
-                                        className="w-full rounded-xl border border-outline-variant/20 bg-white px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none"
+                                        className="w-full rounded-xl border border-outline-variant/20 bg-surface px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none"
                                     >
                                         {availablePaymentTypes.map(type => (
                                             <option key={type} value={type}>
@@ -674,7 +676,7 @@ export default function OrderTracking() {
                                             paymentType === 'DEPOSIT' ||
                                             Boolean(selectedPendingPayment)
                                         }
-                                        className="w-full rounded-xl border border-outline-variant/20 bg-white px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none disabled:opacity-60"
+                                        className="w-full rounded-xl border border-outline-variant/20 bg-surface px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none disabled:opacity-60"
                                     >
                                         <option value="ONLINE">ONLINE - PayOS</option>
                                         {paymentType !== 'DEPOSIT' && (
@@ -714,7 +716,7 @@ export default function OrderTracking() {
                                 {payments.map((payment: OrderPaymentResponseDto) => (
                                     <div
                                         key={payment.id}
-                                        className="grid gap-3 rounded-2xl border border-surface-container bg-white p-4 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
+                                        className="grid gap-3 rounded-2xl border border-surface-container bg-surface p-4 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
                                     >
                                         <div>
                                             <div className="flex flex-wrap items-center gap-2">

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import AdminOrderDetail from './OrderDetails';
 import { useAdminStore } from '../../store/useAdminStore';
 import {useIntegrationStore} from '../../store/useIntegrationStore';
+import {ConfirmDialogProvider} from '../../components/common/ConfirmDialog';
 
 jest.mock('react-router-dom', () => ({
     Link: ({ children, to }: any) => <a href={to}>{children}</a>,
@@ -45,7 +46,7 @@ const renderDetail = (overrides: Record<string, unknown> = {}) => {
         ...overrides
     } as ReturnType<typeof useAdminStore>);
 
-    render(<AdminOrderDetail />);
+    render(<ConfirmDialogProvider><AdminOrderDetail /></ConfirmDialogProvider>);
 };
 
 beforeEach(() => {

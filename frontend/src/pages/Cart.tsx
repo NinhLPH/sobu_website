@@ -320,7 +320,7 @@ function LocationCombobox({
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder={searchPlaceholder}
-                            className="h-9 w-full rounded-lg border border-surface-container bg-white pl-9 pr-3 text-xs font-medium text-on-surface outline-none transition-colors placeholder:text-outline/60 focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
+                            className="h-9 w-full rounded-lg border border-surface-container bg-surface pl-9 pr-3 text-xs font-medium text-on-surface outline-none transition-colors placeholder:text-outline/60 focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
                         />
                     </div>
                     <div id={`${id}-listbox`} role="listbox" aria-labelledby={`${id}-label`} className="max-h-[220px] overflow-y-auto pr-1">
@@ -1365,7 +1365,7 @@ export default function Cart() {
                                                     )}
                                                     <a
                                                         href="tel:0963340529"
-                                                        className="inline-flex min-h-[34px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wider text-amber-900 transition-colors hover:border-primary/50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-amber-300/50"
+                                                        className="inline-flex min-h-[34px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-500/40 bg-surface px-3 py-2 text-[11px] font-black uppercase tracking-wider text-amber-800 transition-colors hover:border-primary/50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-amber-500/40 dark:text-amber-200"
                                                     >
                                                         <PhoneCall className="h-3.5 w-3.5" />
                                                         0963340529

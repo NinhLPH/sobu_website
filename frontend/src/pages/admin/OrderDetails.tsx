@@ -16,6 +16,7 @@ import { useAdminStore } from '../../store/useAdminStore';
 import { useIntegrationStore } from '../../store/useIntegrationStore';
 import {hasNhanhHistory} from '../../utils/order-sync';
 import { formatCurrency } from '../../utils/format';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
 const getStatusColor = (status?: string) => {
     switch (status) {
@@ -37,7 +38,7 @@ const getStatusColor = (status?: string) => {
         case 'CANCELLED':
             return 'border-red-200 bg-red-100 text-red-800';
         default:
-            return 'border-gray-200 bg-gray-100 text-gray-800';
+            return 'border-outline-variant/40 bg-surface-container text-on-surface-variant';
     }
 };
 
@@ -74,11 +75,11 @@ const getSyncStatusColor = (status?: string) => {
         case 'NEED_RECONCILE':
             return 'border-orange-200 bg-orange-50 text-orange-700';
         case 'DEAD':
-            return 'border-slate-300 bg-slate-100 text-slate-700';
+            return 'border-outline-variant/40 bg-surface-container text-on-surface-variant';
         case 'PENDING':
             return 'border-amber-200 bg-amber-50 text-amber-700';
         default:
-            return 'border-gray-200 bg-gray-50 text-gray-700';
+            return 'border-outline-variant/40 bg-surface-container-low text-on-surface-variant';
     }
 };
 
@@ -103,6 +104,7 @@ const canRetrySync = (status?: string) =>
     status === 'FAILED' || status === 'NEED_RECONCILE' || status === 'DEAD';
 
 export default function AdminOrderDetail() {
+    const confirm = useConfirmDialog();
     const { id } = useParams();
     const [manualPaymentCode, setManualPaymentCode] = useState('');
     const {
@@ -191,9 +193,12 @@ export default function AdminOrderDetail() {
         if (!normalizedCode) {
             return;
         }
-        const confirmed = window.confirm(
-            `Xác nhận payment ${normalizedCode} đã thanh toán? Thao tác này chỉ dành cho giao dịch giả lập.`
-        );
+        const confirmed = await confirm({
+            title: 'Xác nhận thanh toán giả lập?',
+            message: `Giao dịch ${normalizedCode} sẽ được đánh dấu đã thanh toán. Chỉ thực hiện với môi trường giả lập.`,
+            confirmLabel: 'Xác nhận thanh toán',
+            tone: 'warning'
+        });
         if (!confirmed) {
             return;
         }
@@ -246,7 +251,7 @@ export default function AdminOrderDetail() {
             <div className="flex items-center gap-4">
                 <Link
                     to="/admin/orders"
-                    className="rounded-full border border-outline-variant/30 bg-white p-2 transition-colors hover:bg-surface-variant"
+                    className="rounded-full border border-outline-variant/30 bg-surface p-2 transition-colors hover:bg-surface-variant"
                     aria-label="Quay lại danh sách đơn hàng"
                 >
                     <ArrowLeft className="h-5 w-5 text-on-surface" />
@@ -296,7 +301,7 @@ export default function AdminOrderDetail() {
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div className="space-y-6 lg:col-span-2">
-                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                         <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
                             <Package className="h-5 w-5 text-primary" />
                             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
@@ -371,7 +376,7 @@ export default function AdminOrderDetail() {
                         </div>
                     </section>
 
-                    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
+                    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-surface p-6 shadow-sm">
                         <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
                             <div className="flex items-center gap-2">
                                 <CreditCard className="h-5 w-5 text-primary" />
@@ -415,7 +420,7 @@ export default function AdminOrderDetail() {
                                     onChange={(event) => setManualPaymentCode(event.target.value)}
                                     disabled={Boolean(confirmingPaymentCode)}
                                     placeholder="Nhập paymentCode"
-                                    className="min-w-0 flex-1 rounded-xl border border-outline-variant/20 bg-white px-3 py-2.5 text-xs font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                    className="min-w-0 flex-1 rounded-xl border border-outline-variant/20 bg-surface px-3 py-2.5 text-xs font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                                 />
                                 <button
                                     type="button"
@@ -508,7 +513,7 @@ export default function AdminOrderDetail() {
                     </section>
 
                     {(canUseNhanh || showNhanhHistory) && (
-                        <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
+                        <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-surface p-6 shadow-sm">
                             <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
                                 <div className="flex items-center gap-2">
                                     <RefreshCw className="h-5 w-5 text-primary" />
@@ -568,7 +573,7 @@ export default function AdminOrderDetail() {
                 </div>
 
                 <aside className="space-y-6">
-                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                         <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
                             <User className="h-5 w-5 text-primary" />
                             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
@@ -605,7 +610,7 @@ export default function AdminOrderDetail() {
                         </div>
                     </section>
 
-                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                         <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
                             <MapPin className="h-5 w-5 text-primary" />
                             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">

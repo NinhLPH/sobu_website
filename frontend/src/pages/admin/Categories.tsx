@@ -13,10 +13,12 @@ import {
     AdminPage,
     AdminSearch,
     AdminStatus,
+    AdminToolbar,
     Field,
     getApiError,
     inputClass
 } from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
 const initial: CategoryWriteRequest = {code: '', name: '', parentId: null, order: 0, image: '', content: '', status: 1};
 const flattenHierarchy = (items: AdminCategory[]): Array<AdminCategory & { level: number }> => {
@@ -30,6 +32,7 @@ const flattenHierarchy = (items: AdminCategory[]): Array<AdminCategory & { level
 };
 
 export default function AdminCategories() {
+    const confirm = useConfirmDialog();
     const [items, setItems] = useState<AdminCategory[]>([]);
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(true);
@@ -82,7 +85,7 @@ export default function AdminCategories() {
         }
     };
     const remove = async (x: AdminCategory) => {
-        if (!window.confirm(`Xóa danh mục “${x.name}”?`)) return;
+        if (!await confirm({title: 'Xóa danh mục?', message: `Danh mục “${x.name}” sẽ bị xóa khỏi hệ thống.`, confirmLabel: 'Xóa danh mục', tone: 'danger'})) return;
         try {
             await AdminCatalogService.deleteCategory(x.id);
             ToastService.success('Đã xóa danh mục.');
@@ -103,9 +106,8 @@ export default function AdminCategories() {
                       description="Tổ chức cây danh mục dùng chung cho điều hướng và phân loại sản phẩm."
                       actions={<AdminButton onClick={() => edit()}><Plus className="h-4 w-4"/>Thêm danh
                           mục</AdminButton>}><AdminCard>
-        <div className="border-b border-outline-variant/30 p-4"><AdminSearch value={query} onChange={setQuery}
-                                                                             placeholder="Tìm danh mục theo tên hoặc mã"/>
-        </div>
+        <AdminToolbar><AdminSearch value={query} onChange={setQuery}
+                                   placeholder="Tìm danh mục theo tên hoặc mã"/></AdminToolbar>
         {loading ? <AdminLoading/> : error ?
             <AdminError message={error} onRetry={() => void load()}/> : !visible.length ?
                 <AdminEmpty title="Không có danh mục"/> :

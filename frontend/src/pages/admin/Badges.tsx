@@ -1,4 +1,4 @@
-import {FormEvent, useCallback, useEffect, useState} from 'react';
+import {FormEvent, useCallback, useEffect, useMemo, useState} from 'react';
 import {Edit3, Plus, Power, Trash2} from 'lucide-react';
 import {ProductBadge, ProductBadgeWriteRequest} from '../../interface/admin-catalog.model';
 import {AdminCatalogService} from '../../service/admin-catalog.service';
@@ -11,14 +11,18 @@ import {
     AdminLoading,
     AdminModal,
     AdminPage,
+    AdminSearch,
     AdminStatus,
+    AdminToolbar,
     Field,
     getApiError,
     inputClass
 } from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
 const initial: ProductBadgeWriteRequest = {name: '', color: '#00618e', textColor: '#ffffff', status: 1};
 export default function AdminBadges() {
+    const confirm = useConfirmDialog();
     const [items, setItems] = useState<ProductBadge[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -26,6 +30,7 @@ export default function AdminBadges() {
     const [id, setId] = useState<number | null>(null);
     const [form, setForm] = useState(initial);
     const [saving, setSaving] = useState(false);
+    const [query, setQuery] = useState('');
     const load = useCallback(async () => {
         setLoading(true);
         setError('');
@@ -40,6 +45,7 @@ export default function AdminBadges() {
     useEffect(() => {
         void load();
     }, [load]);
+    const visible = useMemo(() => items.filter(item => item.name.toLowerCase().includes(query.trim().toLowerCase())), [items, query]);
     const edit = (x?: ProductBadge) => {
         setId(x?.id ?? null);
         setForm(x ? {name: x.name, color: x.color, textColor: x.textColor, status: x.status} : initial);
@@ -64,7 +70,7 @@ export default function AdminBadges() {
         }
     };
     const remove = async (x: ProductBadge) => {
-        if (!window.confirm(`Xóa tag “${x.name}”?`)) return;
+        if (!await confirm({title: 'Xóa tag sản phẩm?', message: `Tag “${x.name}” sẽ bị xóa khỏi hệ thống.`, confirmLabel: 'Xóa tag', tone: 'danger'})) return;
         try {
             await AdminCatalogService.deleteBadge(x.id);
             ToastService.success('Đã xóa tag.');
@@ -84,10 +90,11 @@ export default function AdminBadges() {
     return <AdminPage title="Tag sản phẩm"
                       description="Thiết kế tag thủ công HOT, NEW hoặc tùy chỉnh. SALE là tag hệ thống, tự sinh từ giá."
                       actions={<AdminButton onClick={() => edit()}><Plus className="h-4 w-4"/>Thêm
-                          tag</AdminButton>}><AdminCard>{loading ? <AdminLoading/> : error ?
-        <AdminError message={error} onRetry={() => void load()}/> : !items.length ?
+                          tag</AdminButton>}><AdminCard><AdminToolbar><AdminSearch value={query} onChange={setQuery}
+                                                                                          placeholder="Tìm tag sản phẩm"/></AdminToolbar>{loading ? <AdminLoading/> : error ?
+        <AdminError message={error} onRetry={() => void load()}/> : !visible.length ?
             <AdminEmpty title="Chưa có tag sản phẩm"/> :
-            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">{items.map(x => <article key={x.id}
+            <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">{visible.map(x => <article key={x.id}
                                                                                                    className="rounded-xl border border-outline-variant/35 p-4">
                 <div className="flex items-start justify-between gap-3"><span
                     className="inline-flex rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-wide shadow-sm"

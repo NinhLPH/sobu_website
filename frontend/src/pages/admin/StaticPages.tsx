@@ -13,7 +13,6 @@ import {
     Loader2,
     Plus,
     Save,
-    Search,
     Trash2,
     X
 } from 'lucide-react';
@@ -21,7 +20,9 @@ import {PageResponse} from '../../interface/api-response';
 import {StaticPageDTO, StaticPageMutationPayload} from '../../interface/static-page.model';
 import {StaticPageService} from '../../service/static-page.service';
 import {ToastService} from '../../service/toast.service';
-import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+import {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
+import {AdminButton, AdminSearch, AdminToolbar} from '../../components/admin/AdminUi';
 
 const PAGE_SIZE = 10;
 
@@ -81,6 +82,7 @@ const quillFormats = [
 const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('vi-VN') : '-';
 
 export default function AdminStaticPages() {
+    const confirm = useConfirmDialog();
     const [pageData, setPageData] = useState(emptyPage);
     const [page, setPage] = useState(1);
     const [searchInput, setSearchInput] = useState('');
@@ -185,7 +187,7 @@ export default function AdminStaticPages() {
     };
 
     const remove = async (staticPage: StaticPageDTO) => {
-        if (!window.confirm(`Bạn có chắc muốn xóa trang "${staticPage.title}"?`)) return;
+        if (!await confirm({title: 'Xóa trang tĩnh?', message: `Trang “${staticPage.title}” sẽ bị xóa khỏi website.`, confirmLabel: 'Xóa trang', tone: 'danger'})) return;
         setLoading(true);
         setError(null);
         try {
@@ -223,27 +225,11 @@ export default function AdminStaticPages() {
                     event.preventDefault();
                     submitSearch(searchInput);
                 }}
-                className="flex gap-3 rounded-2xl border border-outline-variant/30 bg-white p-4"
+                className="overflow-visible rounded-2xl border border-outline-variant/30 bg-surface shadow-sm"
             >
-                <div className="relative flex-1">
-                    <label htmlFor="static-page-search" className="sr-only">Tìm trang</label>
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
-                    <SearchSuggestInput
-                        id="static-page-search"
-                        value={searchInput}
-                        onChange={setSearchInput}
-                        onSubmit={submitSearch}
-                        suggestions={searchSuggestions}
-                        placeholder="Tìm theo Slug hoặc Tiêu đề..."
-                        className="h-11 w-full rounded-xl bg-surface-container py-2.5 pl-10 pr-4 text-xs font-semibold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                </div>
-                <button
-                    type="submit"
-                    className="cursor-pointer rounded-xl bg-surface-container px-4 text-xs font-black uppercase text-on-surface transition-colors hover:bg-surface-container-high"
-                >
-                    Tìm
-                </button>
+                <AdminToolbar className="rounded-2xl border-b-0"><AdminSearch value={searchInput} onChange={setSearchInput}
+                    onSubmit={submitSearch} suggestions={searchSuggestions} placeholder="Tìm theo Slug hoặc Tiêu đề..."
+                    ariaLabel="Tìm trang"/><AdminButton type="submit" variant="secondary">Tìm</AdminButton></AdminToolbar>
             </form>
 
             {error && !modalOpen && (
@@ -253,7 +239,7 @@ export default function AdminStaticPages() {
                 </div>
             )}
 
-            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[840px] text-left text-xs">
                         <thead className="bg-surface-variant text-on-surface-variant">
@@ -283,7 +269,7 @@ export default function AdminStaticPages() {
                                 <td className="px-5 py-4 font-mono font-bold text-primary">{staticPage.slug}</td>
                                 <td className="px-5 py-4">
                                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${
-                                        staticPage.isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                                        staticPage.isPublished ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-surface-container text-outline'
                                     }`}>
                                         {staticPage.isPublished ? 'Published' : 'Draft'}
                                     </span>
@@ -352,7 +338,7 @@ export default function AdminStaticPages() {
 
             {modalOpen && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-                    <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white shadow-xl">
+                    <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-surface shadow-xl">
                         <div className="flex items-center justify-between border-b border-outline-variant/30 p-6">
                             <div>
                                 <h2 className="text-xl font-black text-on-surface">

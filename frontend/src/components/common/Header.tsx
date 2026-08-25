@@ -11,34 +11,7 @@ import {formatCurrency} from "../../utils/format";
 import {usePublicUiStore} from '../../store/usePublicUiStore';
 import {getPublicImageUrl} from '../../utils/file-url';
 import SearchSuggestInput, {SearchSuggestion} from './SearchSuggestInput';
-
-type ThemeMode = 'light' | 'dark';
-
-const THEME_STORAGE_KEY = 'sobu-theme';
-
-const getInitialTheme = (): ThemeMode => {
-    if (typeof window === 'undefined') {
-        return 'light';
-    }
-
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (storedTheme === 'light' || storedTheme === 'dark') {
-        return storedTheme;
-    }
-
-    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-};
-
-const applyTheme = (theme: ThemeMode) => {
-    if (typeof document === 'undefined') {
-        return;
-    }
-
-    const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark');
-    root.classList.toggle('light', theme === 'light');
-    root.dataset.theme = theme;
-};
+import {initializeTheme, useThemeStore} from '../../store/useThemeStore';
 
 
 const getCategoryIcon = (catCode: string) => {
@@ -90,8 +63,12 @@ export default function Header() {
     const [activeParentId, setActiveParentId] = useState<number | null>(null);
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+    const theme = useThemeStore(state => state.theme);
+    const toggleTheme = useThemeStore(state => state.toggleTheme);
+
+    useEffect(() => initializeTheme(), []);
     const cartRef = useRef<HTMLDivElement>(null);
+    const headerRef = useRef<HTMLElement>(null);
 
     // Auth States & Refs
     const {isAuthenticated, user, logoutAction} = useAuthStore();
@@ -169,9 +146,18 @@ export default function Header() {
     }, [mainCategories, activeParentId]);
 
     useEffect(() => {
-        applyTheme(theme);
-        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    }, [theme]);
+        const header = headerRef.current;
+        if (!header) return;
+        const updateHeight = () => document.documentElement.style.setProperty('--app-header-height', `${header.offsetHeight}px`);
+        updateHeight();
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updateHeight);
+            return () => window.removeEventListener('resize', updateHeight);
+        }
+        const observer = new ResizeObserver(updateHeight);
+        observer.observe(header);
+        return () => observer.disconnect();
+    }, []);
 
     const submitSearch = (query: string) => {
         if (query.trim()) {
@@ -184,10 +170,6 @@ export default function Header() {
     const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         submitSearch(searchQuery);
-    };
-
-    const toggleTheme = () => {
-        setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark');
     };
 
     const mobileNavItems = [
@@ -211,7 +193,7 @@ export default function Header() {
 
     return (
         <>
-        <header className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+        <header ref={headerRef} className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
             {/* HÀNG 1: CHUNG CHO CẢ MOBILE & DESKTOP */}
             <div className="mx-auto flex max-w-[1504px] items-center justify-between px-4 pb-3 pt-3 sm:px-6 lg:py-4">
 

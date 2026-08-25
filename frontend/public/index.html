@@ -5,6 +5,21 @@
     <link rel="icon" href="./assets/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('sobu-theme');
+          var theme = stored === 'light' || stored === 'dark'
+            ? stored
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.classList.add(theme);
+          document.documentElement.dataset.theme = theme;
+        } catch (_) {
+          document.documentElement.classList.add('light');
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
     <meta
       name="description"
       content="SOBU SHOP"

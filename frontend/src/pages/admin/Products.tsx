@@ -1,5 +1,5 @@
 import {FormEvent, useCallback, useEffect, useState} from 'react';
-import {Archive, Edit3, Eye, Plus, Power} from 'lucide-react';
+import {Archive, Edit3, Eye, ImageOff, Loader2, Plus, Power} from 'lucide-react';
 import {
     AdminBrand,
     AdminCategory,
@@ -25,10 +25,12 @@ import {
     AdminPagination,
     AdminSearch,
     AdminStatus,
+    AdminToolbar,
     Field,
     getApiError,
     inputClass
 } from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
 const emptyForm: ProductWriteRequest = {
     code: '',
@@ -47,7 +49,24 @@ const emptyForm: ProductWriteRequest = {
 };
 const numberOrNull = (value: string) => value === '' ? null : Number(value);
 
+function ProductThumbnail({path, name, className}: { path?: string | null; name: string; className: string }) {
+    const [failed, setFailed] = useState(false);
+    const source = path ? getPublicImageUrl(path) : '';
+
+    if (!source || failed) {
+        return <div className={`${className} flex items-center justify-center bg-surface-container text-outline`}
+                    role="img" aria-label={`Không có ảnh cho ${name}`}>
+            <ImageOff className="h-5 w-5" aria-hidden="true"/>
+        </div>;
+    }
+
+    return <div className={`${className} overflow-hidden bg-surface-container p-1`}>
+        <img src={source} alt="" className="h-full w-full object-contain" onError={() => setFailed(true)}/>
+    </div>;
+}
+
 export default function AdminProducts() {
+    const confirm = useConfirmDialog();
     const [items, setItems] = useState<AdminProductListItem[]>([]);
     const [categories, setCategories] = useState<AdminCategory[]>([]);
     const [brands, setBrands] = useState<AdminBrand[]>([]);
@@ -63,6 +82,7 @@ export default function AdminProducts() {
     const [detail, setDetail] = useState<AdminProductDetail | null>(null);
     const [saving, setSaving] = useState(false);
     const [lowStockThreshold, setLowStockThreshold] = useState(5);
+    const [pendingActiveIds, setPendingActiveIds] = useState<number[]>([]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -177,16 +197,22 @@ export default function AdminProducts() {
         }
     };
     const toggle = async (item: AdminProductListItem) => {
+        if (pendingActiveIds.includes(item.id)) return;
+        setPendingActiveIds(previous => [...previous, item.id]);
         try {
-            await AdminCatalogService.setProductActive(item.id, item.active === false, 'Cập nhật từ trang quản trị');
+            const updated = await AdminCatalogService.setProductActive(item.id, item.active === false, 'Cập nhật từ trang quản trị');
+            setItems(previous => previous.map(product => product.id === item.id
+                ? {...product, ...updated, active: updated.active !== false}
+                : product));
             ToastService.success('Đã cập nhật trạng thái sản phẩm.');
-            await load();
         } catch (e) {
             ToastService.error(getApiError(e));
+        } finally {
+            setPendingActiveIds(previous => previous.filter(id => id !== item.id));
         }
     };
     const archive = async (item: AdminProductListItem) => {
-        if (!window.confirm(`Lưu trữ sản phẩm “${item.name}”?`)) return;
+        if (!await confirm({title: 'Lưu trữ sản phẩm?', message: `Sản phẩm “${item.name}” sẽ ngừng hiển thị để bán.`, confirmLabel: 'Lưu trữ', tone: 'warning'})) return;
         try {
             await AdminCatalogService.archiveProduct(item.id, 'Lưu trữ từ trang quản trị');
             ToastService.success('Đã lưu trữ sản phẩm.');
@@ -205,14 +231,14 @@ export default function AdminProducts() {
                       actions={<AdminButton onClick={openCreate}><Plus className="h-4 w-4"/>Thêm sản
                           phẩm</AdminButton>}>
         <AdminCard>
-            <div className="flex flex-col gap-3 border-b border-outline-variant/30 p-4 sm:flex-row"><AdminSearch
+            <AdminToolbar><AdminSearch
                 value={query} onChange={value => {
                 setQuery(value);
                 setPage(0);
             }} placeholder="Tìm theo tên hoặc mã sản phẩm" ariaLabel="Tìm kiếm sản phẩm quản trị"/>
                 <div className="self-center whitespace-nowrap text-xs text-outline">{items.length} sản phẩm trên trang
                 </div>
-            </div>
+            </AdminToolbar>
             {loading ? <AdminLoading/> : error ?
                 <AdminError message={error} onRetry={() => void load()}/> : !items.length ?
                     <AdminEmpty title="Chưa có sản phẩm phù hợp"
@@ -233,10 +259,8 @@ export default function AdminProducts() {
                                                           className="border-t border-outline-variant/25 hover:bg-surface-container-low">
                                 <td className="px-4 py-3">
                                     <div className="flex items-center gap-3">
-                                        <div
-                                            className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-container p-1">{item.avatarImage ?
-                                            <img src={getPublicImageUrl(item.avatarImage)} alt=""
-                                                 className="h-full w-full object-contain"/> : null}</div>
+                                        <ProductThumbnail path={item.avatarImage} name={item.name}
+                                                          className="h-12 w-12 shrink-0 rounded-lg"/>
                                         <div><p className="max-w-xs font-bold text-on-surface">{item.name}</p><p
                                             className="text-xs text-outline">{item.code || `#${item.id}`}{item.badgeName && item.badgeName.toUpperCase() !== 'SALE' ? ` · ${item.badgeName}` : ''}</p>
                                         </div>
@@ -259,9 +283,11 @@ export default function AdminProducts() {
                                         <button onClick={() => void openEdit(item.id)}
                                                 className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                                                 aria-label={`Chỉnh sửa ${item.name}`} title="Chỉnh sửa"><Edit3 className="h-4 w-4"/></button>
-                                        <button onClick={() => void toggle(item)}
-                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                                                aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`} title="Đổi trạng thái"><Power className="h-4 w-4"/></button>
+                                        <button onClick={() => void toggle(item)} disabled={pendingActiveIds.includes(item.id)}
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-wait disabled:opacity-50"
+                                                aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`} title="Đổi trạng thái">
+                                            {pendingActiveIds.includes(item.id) ? <Loader2 className="h-4 w-4 animate-spin"/> : <Power className="h-4 w-4"/>}
+                                        </button>
                                         <button onClick={() => void archive(item)}
                                                 className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30"
                                                 aria-label={`Lưu trữ ${item.name}`} title="Lưu trữ"><Archive className="h-4 w-4"/></button>
@@ -273,9 +299,8 @@ export default function AdminProducts() {
                     <div className="space-y-3 p-4 md:hidden">
                         {items.map(item => <article key={item.id} className="rounded-xl border border-outline-variant/35 bg-surface p-4 shadow-sm">
                             <div className="flex items-start gap-3">
-                                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-surface-container p-1">
-                                    {item.avatarImage ? <img src={getPublicImageUrl(item.avatarImage)} alt="" className="h-full w-full object-contain"/> : null}
-                                </div>
+                                <ProductThumbnail path={item.avatarImage} name={item.name}
+                                                  className="h-14 w-14 shrink-0 rounded-lg"/>
                                 <div className="min-w-0 flex-1"><h2 className="font-black text-on-surface">{item.name}</h2><p className="mt-1 text-xs text-outline">{item.code || `#${item.id}`} · {item.categoryName || 'Chưa phân loại'}</p></div>
                                 <AdminStatus active={item.active !== false}/>
                             </div>
@@ -286,7 +311,7 @@ export default function AdminProducts() {
                             <div className="mt-3 flex justify-end gap-1">
                                 <button onClick={() => void openDetail(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`Xem chi tiết ${item.name}`}><Eye className="h-4 w-4"/></button>
                                 <button onClick={() => void openEdit(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`Chỉnh sửa ${item.name}`}><Edit3 className="h-4 w-4"/></button>
-                                <button onClick={() => void toggle(item)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`}><Power className="h-4 w-4"/></button>
+                                <button onClick={() => void toggle(item)} disabled={pendingActiveIds.includes(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-wait disabled:opacity-50" aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`}>{pendingActiveIds.includes(item.id) ? <Loader2 className="h-4 w-4 animate-spin"/> : <Power className="h-4 w-4"/>}</button>
                                 <button onClick={() => void archive(item)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30" aria-label={`Lưu trữ ${item.name}`}><Archive className="h-4 w-4"/></button>
                             </div>
                         </article>)}

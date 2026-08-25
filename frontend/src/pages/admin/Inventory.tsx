@@ -1,11 +1,36 @@
 import {FormEvent, useEffect, useMemo, useRef, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {AlertTriangle, ArrowDownToLine, PackageCheck, RefreshCw, ShoppingCart, Warehouse} from 'lucide-react';
-import {AdminProductListItem, InventoryAdjustment, InventoryAdjustmentType, InventoryBalance} from '../../interface/admin-catalog.model';
+import {
+    AdminProductListItem,
+    InventoryAdjustment,
+    InventoryAdjustmentType,
+    InventoryBalance
+} from '../../interface/admin-catalog.model';
 import {AdminCatalogService} from '../../service/admin-catalog.service';
-import {DEFAULT_LOW_STOCK_THRESHOLD, InventoryDashboardService, inventoryQuantity} from '../../service/inventory-dashboard.service';
+import {
+    DEFAULT_LOW_STOCK_THRESHOLD,
+    InventoryDashboardService,
+    inventoryQuantity
+} from '../../service/inventory-dashboard.service';
 import {ToastService} from '../../service/toast.service';
-import {AdminButton, AdminCard, AdminEmpty, AdminError, AdminLoading, AdminModal, AdminPage, AdminPagination, AdminSearch, Field, getApiError, inputClass} from '../../components/admin/AdminUi';
+import {
+    AdminButton,
+    AdminCard,
+    AdminEmpty,
+    AdminError,
+    AdminFilterGroup,
+    AdminFilterSelect,
+    AdminLoading,
+    AdminModal,
+    AdminPage,
+    AdminPagination,
+    AdminSearch,
+    AdminToolbar,
+    Field,
+    getApiError,
+    inputClass
+} from '../../components/admin/AdminUi';
 import {StockIndicator} from '../../components/admin/StockIndicator';
 
 const LOW_STOCK_PAGE_SIZE = 10;
@@ -16,7 +41,7 @@ const typeNames: Record<InventoryAdjustmentType, string> = {
 };
 type ManualType = Exclude<InventoryAdjustmentType, 'OPENING_STOCK' | 'ORDER_RESERVATION' | 'ORDER_RELEASE'>;
 const isAbortError = (error: unknown) => (error instanceof DOMException && error.name === 'AbortError')
-    || (error as {code?: string})?.code === 'ERR_CANCELED';
+    || (error as { code?: string })?.code === 'ERR_CANCELED';
 const isOrderLedger = (entry: InventoryAdjustment) => entry.type === 'ORDER_RESERVATION' || entry.type === 'ORDER_RELEASE';
 const balanceLabel = (entry: InventoryAdjustment) => isOrderLedger(entry) ? 'Khả dụng sau' : 'Thực tế sau';
 const formatDate = (value?: string) => value ? new Date(value).toLocaleString('vi-VN') : '—';
@@ -55,8 +80,10 @@ export default function AdminInventory() {
             setProductsLoading(true);
             setProductsError('');
             try {
-                const response = await AdminCatalogService.getProducts({page: 0, pageSize: 100,
-                    search: productQuery.trim() || undefined, sortBy: 'name', sortDirection: 'ASC'}, controller.signal);
+                const response = await AdminCatalogService.getProducts({
+                    page: 0, pageSize: 100,
+                    search: productQuery.trim() || undefined, sortBy: 'name', sortDirection: 'ASC'
+                }, controller.signal);
                 if (!controller.signal.aborted) setProducts(response.content ?? []);
             } catch (error) {
                 if (!controller.signal.aborted && !isAbortError(error)) setProductsError(getApiError(error, 'Không thể tải danh sách sản phẩm.'));
@@ -64,7 +91,10 @@ export default function AdminInventory() {
                 if (!controller.signal.aborted) setProductsLoading(false);
             }
         }, 250);
-        return () => { controller.abort(); window.clearTimeout(timer); };
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
     }, [productQuery, productSearchRetry]);
 
     useEffect(() => {
@@ -78,12 +108,19 @@ export default function AdminInventory() {
             setLowStockPage(0);
         }).catch(error => {
             if (!controller.signal.aborted && !isAbortError(error)) setOverviewError(getApiError(error, 'Không thể tải cảnh báo tồn thấp.'));
-        }).finally(() => { if (!controller.signal.aborted) setOverviewLoading(false); });
+        }).finally(() => {
+            if (!controller.signal.aborted) setOverviewLoading(false);
+        });
         return () => controller.abort();
     }, [overviewRetry]);
 
     useEffect(() => {
-        if (!productId) { setBalance(null); setLedger([]); setDetailError(''); return; }
+        if (!productId) {
+            setBalance(null);
+            setLedger([]);
+            setDetailError('');
+            return;
+        }
         const controller = new AbortController();
         setDetailLoading(true);
         setDetailError('');
@@ -97,7 +134,9 @@ export default function AdminInventory() {
             setAnnouncement(`Đã tải tồn kho của ${selectedProduct?.name ?? `sản phẩm ${productId}`}.`);
         }).catch(error => {
             if (!controller.signal.aborted && !isAbortError(error)) setDetailError(getApiError(error, 'Không thể tải dữ liệu tồn kho.'));
-        }).finally(() => { if (!controller.signal.aborted) setDetailLoading(false); });
+        }).finally(() => {
+            if (!controller.signal.aborted) setDetailLoading(false);
+        });
         return () => controller.abort();
     }, [productId, detailRetry, selectedProduct?.name]);
 
@@ -116,8 +155,11 @@ export default function AdminInventory() {
         }, 0);
     };
     const openModal = (nextMode: 'opening' | 'adjust') => {
-        setMode(nextMode); setQuantity(''); setType(nextMode === 'adjust' && ledger.length > 0 ? 'CORRECTION' : 'STOCK_IN');
-        setNote(''); setFormError('');
+        setMode(nextMode);
+        setQuantity('');
+        setType(nextMode === 'adjust' && ledger.length > 0 ? 'CORRECTION' : 'STOCK_IN');
+        setNote('');
+        setFormError('');
     };
     const validateAdjustment = (numericQuantity: number): string => {
         if (!Number.isFinite(numericQuantity)) return 'Vui lòng nhập số lượng hợp lệ.';
@@ -136,21 +178,34 @@ export default function AdminInventory() {
         event.preventDefault();
         if (!productId || saving) return;
         const normalizedNote = note.trim();
-        if (!normalizedNote) { setFormError('Vui lòng nhập ghi chú đối soát.'); return; }
+        if (!normalizedNote) {
+            setFormError('Vui lòng nhập ghi chú đối soát.');
+            return;
+        }
         const numericQuantity = Number(quantity);
         const validationMessage = validateAdjustment(numericQuantity);
-        if (validationMessage) { setFormError(validationMessage); return; }
-        setSaving(true); setFormError('');
+        if (validationMessage) {
+            setFormError(validationMessage);
+            return;
+        }
+        setSaving(true);
+        setFormError('');
         try {
             if (mode === 'opening') await AdminCatalogService.setOpeningStock(productId, numericQuantity, normalizedNote);
             else await AdminCatalogService.adjustInventory(productId, type, numericQuantity, normalizedNote);
             const message = mode === 'opening' ? 'Đã thiết lập tồn đầu kỳ.' : 'Đã ghi nhận điều chỉnh kho.';
-            ToastService.success(message); setAnnouncement(message); setMode(null);
-            setDetailRetry(value => value + 1); setOverviewRetry(value => value + 1);
+            ToastService.success(message);
+            setAnnouncement(message);
+            setMode(null);
+            setDetailRetry(value => value + 1);
+            setOverviewRetry(value => value + 1);
         } catch (error) {
             const message = getApiError(error, 'Không thể ghi nhận điều chỉnh kho.');
-            setFormError(message); ToastService.error(message);
-        } finally { setSaving(false); }
+            setFormError(message);
+            ToastService.error(message);
+        } finally {
+            setSaving(false);
+        }
     };
     const renderStockState = (product: AdminProductListItem) =>
         <StockIndicator stock={inventoryQuantity(product)} threshold={threshold}/>;
@@ -158,63 +213,240 @@ export default function AdminInventory() {
         ? 'Số lượng tồn đầu kỳ'
         : type === 'CORRECTION' ? 'Tồn thực tế sau kiểm kê' : 'Số lượng';
 
-    return <AdminPage title="Tồn kho" description="Theo dõi tồn thực tế, tồn khả dụng, lượng đang giữ và lịch sử điều chỉnh.">
+    return <AdminPage title="Tồn kho"
+                      description="Theo dõi tồn thực tế, tồn khả dụng, lượng đang giữ và lịch sử điều chỉnh.">
         <div className="sr-only" aria-live="polite">{announcement}</div>
         <section aria-labelledby="low-stock-title"><AdminCard>
-            <header className="flex flex-col justify-between gap-3 border-b border-outline-variant/30 p-4 sm:flex-row sm:items-center">
-                <div><h2 id="low-stock-title" className="flex items-center gap-2 font-black text-on-surface"><AlertTriangle className="h-5 w-5 text-amber-600"/>Cảnh báo tồn thấp</h2>
+            <header
+                className="flex flex-col justify-between gap-3 border-b border-outline-variant/30 p-4 sm:flex-row sm:items-center">
+                <div><h2 id="low-stock-title" className="flex items-center gap-2 font-black text-on-surface">
+                    <AlertTriangle className="h-5 w-5 text-amber-600"/>Cảnh báo tồn thấp</h2>
                     <p className="mt-1 text-xs text-outline">Ngưỡng hiện hành: tồn khả dụng ≤ {threshold}</p></div>
-                <AdminButton variant="secondary" disabled={overviewLoading} onClick={() => setOverviewRetry(value => value + 1)}>
-                    <RefreshCw className={`h-4 w-4 ${overviewLoading ? 'animate-spin motion-reduce:animate-none' : ''}`}/>Làm mới
+                <AdminButton variant="secondary" disabled={overviewLoading}
+                             onClick={() => setOverviewRetry(value => value + 1)}>
+                    <RefreshCw
+                        className={`h-4 w-4 ${overviewLoading ? 'animate-spin motion-reduce:animate-none' : ''}`}/>Làm
+                    mới
                 </AdminButton>
             </header>
             <div className="grid gap-3 p-4 sm:grid-cols-3">
-                <div className="rounded-xl bg-error/10 p-4"><p className="text-xs font-bold uppercase text-error">Hết hàng</p><p className="mt-1 text-2xl font-black text-error">{outOfStockCount}</p></div>
-                <div className="rounded-xl bg-amber-100 p-4"><p className="text-xs font-bold uppercase text-amber-800">Sắp hết</p><p className="mt-1 text-2xl font-black text-amber-900">{lowCount}</p></div>
-                <div className="rounded-xl bg-primary/10 p-4"><p className="text-xs font-bold uppercase text-primary">Ngưỡng cảnh báo</p><p className="mt-1 text-2xl font-black text-primary">{threshold}</p></div>
+                <div className="rounded-xl bg-error/10 p-4"><p className="text-xs font-bold uppercase text-error">Hết
+                    hàng</p><p className="mt-1 text-2xl font-black text-error">{outOfStockCount}</p></div>
+                <div className="rounded-xl bg-amber-500/15 p-4"><p
+                    className="text-xs font-bold uppercase text-amber-700 dark:text-amber-300">Sắp hết</p><p
+                    className="mt-1 text-2xl font-black text-amber-800 dark:text-amber-200">{lowCount}</p></div>
+                <div className="rounded-xl bg-primary/10 p-4"><p
+                    className="text-xs font-bold uppercase text-primary">Ngưỡng cảnh báo</p><p
+                    className="mt-1 text-2xl font-black text-primary">{threshold}</p></div>
             </div>
             {overviewLoading ? <AdminLoading label="Đang tải cảnh báo tồn thấp..."/> : overviewError
                 ? <AdminError message={overviewError} onRetry={() => setOverviewRetry(value => value + 1)}/>
-                : !visibleLowStockProducts.length ? <AdminEmpty title="Không có sản phẩm tồn thấp" description="Tất cả sản phẩm active đang cao hơn ngưỡng cảnh báo."/>
-                    : <><div className="hidden overflow-x-auto md:block"><table className="w-full text-left text-sm">
-                        <thead className="bg-surface-container text-xs uppercase text-outline"><tr><th className="px-4 py-3">Sản phẩm</th><th className="px-4 py-3 text-right">Tồn khả dụng</th><th className="px-4 py-3 text-right">Thao tác</th></tr></thead>
-                        <tbody>{visibleLowStockProducts.map(product => <tr key={product.id} className="border-t border-outline-variant/25"><td className="px-4 py-3"><p className="font-bold text-on-surface">{product.name}</p><p className="text-xs text-outline">{product.code || `#${product.id}`}</p></td><td className="px-4 py-3 text-right">{renderStockState(product)}</td><td className="px-4 py-3 text-right"><AdminButton variant="ghost" className="!min-h-10 !px-3" onClick={() => selectProduct(product, true)}>Xem sổ kho</AdminButton></td></tr>)}</tbody>
-                    </table></div>
-                    <div className="space-y-3 p-4 md:hidden">{visibleLowStockProducts.map(product => <button key={product.id} type="button" onClick={() => selectProduct(product, true)} className="flex min-h-16 w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-outline-variant/35 bg-surface p-4 text-left transition-colors hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"><span className="min-w-0"><span className="block truncate font-bold text-on-surface">{product.name}</span><span className="text-xs text-outline">{product.code || `#${product.id}`}</span></span>{renderStockState(product)}</button>)}</div>
-                    <AdminPagination page={lowStockPage} totalPages={lowStockTotalPages} onChange={setLowStockPage}/></>}
+                : !visibleLowStockProducts.length ? <AdminEmpty title="Không có sản phẩm tồn thấp"
+                                                                description="Tất cả sản phẩm active đang cao hơn ngưỡng cảnh báo."/>
+                    : <>
+                        <div className="hidden overflow-x-auto md:block">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-surface-container text-xs uppercase text-outline">
+                                <tr>
+                                    <th className="px-4 py-3">Sản phẩm</th>
+                                    <th className="px-4 py-3 text-right">Tồn khả dụng</th>
+                                    <th className="px-4 py-3 text-right">Thao tác</th>
+                                </tr>
+                                </thead>
+                                <tbody>{visibleLowStockProducts.map(product => <tr key={product.id}
+                                                                                   className="border-t border-outline-variant/25">
+                                    <td className="px-4 py-3"><p
+                                        className="font-bold text-on-surface">{product.name}</p><p
+                                        className="text-xs text-outline">{product.code || `#${product.id}`}</p></td>
+                                    <td className="px-4 py-3 text-right">{renderStockState(product)}</td>
+                                    <td className="px-4 py-3 text-right"><AdminButton variant="ghost"
+                                                                                      className="!min-h-10 !px-3"
+                                                                                      onClick={() => selectProduct(product, true)}>Xem
+                                        sổ kho</AdminButton></td>
+                                </tr>)}</tbody>
+                            </table>
+                        </div>
+                        <div className="space-y-3 p-4 md:hidden">{visibleLowStockProducts.map(product => <button
+                            key={product.id} type="button" onClick={() => selectProduct(product, true)}
+                            className="flex min-h-16 w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-outline-variant/35 bg-surface p-4 text-left transition-colors hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                            <span className="min-w-0"><span
+                                className="block truncate font-bold text-on-surface">{product.name}</span><span
+                                className="text-xs text-outline">{product.code || `#${product.id}`}</span></span>{renderStockState(product)}
+                        </button>)}</div>
+                        <AdminPagination page={lowStockPage} totalPages={lowStockTotalPages}
+                                         onChange={setLowStockPage}/></>}
         </AdminCard></section>
 
-        <AdminCard className="space-y-3 p-4">
-            <AdminSearch value={productQuery} onChange={setProductQuery} placeholder="Tìm sản phẩm theo tên hoặc mã" ariaLabel="Tìm sản phẩm để xem tồn kho"/>
-            <Field label="Chọn sản phẩm"><select aria-label="Chọn sản phẩm" className={inputClass} value={productId ?? ''} disabled={productsLoading || Boolean(productsError)} onChange={event => {
-                const id = event.target.value ? Number(event.target.value) : null; setProductId(id);
-                setSelectedProduct(products.find(product => product.id === id) ?? null);
-            }}><option value="">{productsLoading ? 'Đang tải sản phẩm...' : 'Chọn sản phẩm'}</option>
-                {selectedProduct && !products.some(product => product.id === selectedProduct.id) ? <option value={selectedProduct.id}>{selectedProduct.code || `#${selectedProduct.id}`} — {selectedProduct.name}</option> : null}
-                {products.map(product => <option key={product.id} value={product.id}>{product.code || `#${product.id}`} — {product.name}</option>)}</select></Field>
-            {productsError && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-error/10 px-3 py-2 text-xs font-bold text-error"><span>{productsError}</span><AdminButton variant="secondary" className="!min-h-9 !px-3" onClick={() => setProductSearchRetry(value => value + 1)}>Thử lại</AdminButton></div>}
+        <AdminCard>
+            <AdminToolbar>
+                <AdminSearch value={productQuery} onChange={setProductQuery} placeholder="Tìm sản phẩm theo tên hoặc mã"
+                             ariaLabel="Tìm sản phẩm để xem tồn kho"/>
+                <AdminFilterGroup label="Sản phẩm"><AdminFilterSelect label="Chọn sản phẩm" value={productId ?? ''}
+                                                                      className="sm:min-w-72" onChange={value => {
+                    const id = value ? Number(value) : null;
+                    setProductId(id);
+                    setSelectedProduct(products.find(product => product.id === id) ?? null);
+                }}>
+                    <option value="">{productsLoading ? 'Đang tải sản phẩm...' : 'Chọn sản phẩm'}</option>
+                    {selectedProduct && !products.some(product => product.id === selectedProduct.id) ? <option
+                        value={selectedProduct.id}>{selectedProduct.code || `#${selectedProduct.id}`} — {selectedProduct.name}</option> : null}
+                    {products.map(product => <option key={product.id}
+                                                     value={product.id}>{product.code || `#${product.id}`} — {product.name}</option>)}
+                </AdminFilterSelect></AdminFilterGroup>
+            </AdminToolbar>
+            {productsError && <div
+                className="m-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-error/10 px-3 py-2 text-xs font-bold text-error">
+                <span>{productsError}</span><AdminButton variant="secondary" className="!min-h-9 !px-3"
+                                                         onClick={() => setProductSearchRetry(value => value + 1)}>Thử
+                lại</AdminButton></div>}
         </AdminCard>
 
         <div ref={detailRef} tabIndex={-1} className="scroll-mt-32 outline-none">
             {!productId ? <AdminCard><AdminEmpty title="Chọn sản phẩm để xem tồn kho"/></AdminCard>
                 : detailLoading ? <AdminCard><AdminLoading label="Đang tải số dư và sổ kho..."/></AdminCard>
-                    : detailError ? <AdminCard><AdminError message={detailError} onRetry={() => setDetailRetry(value => value + 1)}/></AdminCard>
-                        : <><div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h2 className="text-lg font-black text-on-surface">{selectedProduct?.name || `Sản phẩm #${productId}`}</h2><p className="mt-1 text-xs text-outline">{selectedProduct?.code || `#${productId}`} · Dữ liệu số dư do backend xác nhận</p>
-                            {!canSetOpeningStock && ledger.length > 0 && <p className="mt-2 text-xs font-semibold text-amber-800">Sản phẩm đã có lịch sử kho. Dùng “Điều chỉnh kho” thay cho tồn đầu kỳ.</p>}</div>
-                            <div className="flex flex-wrap gap-2"><AdminButton variant="secondary" disabled={!canSetOpeningStock} title={!canSetOpeningStock && ledger.length > 0 ? 'Chỉ dùng cho sản phẩm chưa có lịch sử kho' : undefined} onClick={() => openModal('opening')}><PackageCheck className="h-4 w-4"/>Tồn đầu kỳ</AdminButton><AdminButton disabled={!balance} onClick={() => openModal('adjust')}><ArrowDownToLine className="h-4 w-4"/>Điều chỉnh kho</AdminButton></div></div>
-                            <div className="grid gap-4 sm:grid-cols-3"><AdminCard className="p-5"><p className="text-xs font-bold uppercase text-outline">Tồn thực tế</p><p className="mt-2 text-3xl font-black">{balance?.stockRemain ?? 0}</p></AdminCard><AdminCard className="p-5"><p className="text-xs font-bold uppercase text-outline">Tồn khả dụng</p><p className="mt-2 text-3xl font-black text-primary">{balance?.stockAvailable ?? 0}</p></AdminCard><AdminCard className="p-5"><p className="text-xs font-bold uppercase text-outline">Đang giữ cho đơn</p><p className="mt-2 text-3xl font-black text-amber-700">{balance?.reserved ?? 0}</p></AdminCard></div>
-                            <AdminCard className="mt-4"><div className="flex items-center justify-between border-b border-outline-variant/30 px-4 py-3"><div><h2 className="flex items-center gap-2 font-black"><Warehouse className="h-4 w-4 text-primary"/>Sổ kho</h2><p className="text-xs text-outline">{selectedProduct?.name}</p></div><button type="button" onClick={() => setDetailRetry(value => value + 1)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label="Làm mới sổ kho"><RefreshCw className="h-4 w-4"/></button></div>
-                                {!ledger.length ? <AdminEmpty title="Chưa có biến động kho"/> : <><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[860px] text-sm"><thead className="bg-surface-container text-left text-xs uppercase text-outline"><tr><th className="px-4 py-3">Thời gian</th><th className="px-4 py-3">Loại</th><th className="px-4 py-3 text-right">Thay đổi</th><th className="px-4 py-3 text-right">Số dư sau</th><th className="px-4 py-3">Đối soát</th><th className="px-4 py-3">Người thực hiện</th></tr></thead><tbody>{ledger.map(entry => <tr key={entry.id} className="border-t border-outline-variant/25"><td className="px-4 py-3 text-outline">{formatDate(entry.createdAt)}</td><td className="px-4 py-3 font-bold">{typeNames[entry.type] || entry.type}</td><td className={`px-4 py-3 text-right font-black ${entry.quantityDelta >= 0 ? 'text-emerald-700' : 'text-error'}`}>{entry.quantityDelta > 0 ? '+' : ''}{entry.quantityDelta}</td><td className="px-4 py-3 text-right"><span className="block font-bold">{entry.balanceAfter}</span><span className="text-[10px] text-outline">{balanceLabel(entry)}</span></td><td className="px-4 py-3 text-outline">{entry.orderId ? <Link className="inline-flex items-center gap-1 font-bold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" to={`/admin/orders/${entry.orderId}`}><ShoppingCart className="h-3.5 w-3.5"/>#{entry.orderCode || entry.orderId}</Link> : entry.note || '—'}</td><td className="px-4 py-3 text-outline">{entry.actor || 'system'}</td></tr>)}</tbody></table></div>
-                                    <div className="space-y-3 p-4 md:hidden">{ledger.map(entry => <article key={entry.id} className="rounded-xl border border-outline-variant/35 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-on-surface">{typeNames[entry.type] || entry.type}</p><p className="mt-1 text-xs text-outline">{formatDate(entry.createdAt)}</p></div><span className={`text-lg font-black ${entry.quantityDelta >= 0 ? 'text-emerald-700' : 'text-error'}`}>{entry.quantityDelta > 0 ? '+' : ''}{entry.quantityDelta}</span></div><dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><dt className="font-bold uppercase text-outline">{balanceLabel(entry)}</dt><dd className="mt-1 font-black text-on-surface">{entry.balanceAfter}</dd></div><div><dt className="font-bold uppercase text-outline">Người thực hiện</dt><dd className="mt-1 break-all font-bold text-on-surface">{entry.actor || 'system'}</dd></div></dl><div className="mt-3 border-t border-outline-variant/25 pt-3 text-xs text-outline">{entry.orderId ? <Link className="inline-flex min-h-10 items-center gap-1 font-bold text-primary hover:underline" to={`/admin/orders/${entry.orderId}`}><ShoppingCart className="h-3.5 w-3.5"/>Đơn #{entry.orderCode || entry.orderId}</Link> : entry.note || 'Không có ghi chú'}</div></article>)}</div></>}
+                    : detailError ? <AdminCard><AdminError message={detailError}
+                                                           onRetry={() => setDetailRetry(value => value + 1)}/></AdminCard>
+                        : <>
+                            <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                                <div><h2
+                                    className="text-lg font-black text-on-surface">{selectedProduct?.name || `Sản phẩm #${productId}`}</h2>
+                                    <p className="mt-1 text-xs text-outline">{selectedProduct?.code || `#${productId}`} ·
+                                        Dữ liệu số dư do backend xác nhận</p>
+                                    {!canSetOpeningStock && ledger.length > 0 &&
+                                        <p className="mt-2 text-xs font-semibold text-amber-800">Sản phẩm đã có lịch sử
+                                            kho. Dùng “Điều chỉnh kho” thay cho tồn đầu kỳ.</p>}</div>
+                                <div className="flex flex-wrap gap-2"><AdminButton variant="secondary"
+                                                                                   disabled={!canSetOpeningStock}
+                                                                                   title={!canSetOpeningStock && ledger.length > 0 ? 'Chỉ dùng cho sản phẩm chưa có lịch sử kho' : undefined}
+                                                                                   onClick={() => openModal('opening')}><PackageCheck
+                                    className="h-4 w-4"/>Tồn đầu kỳ</AdminButton><AdminButton disabled={!balance}
+                                                                                              onClick={() => openModal('adjust')}><ArrowDownToLine
+                                    className="h-4 w-4"/>Điều chỉnh kho</AdminButton></div>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-3"><AdminCard className="p-5"><p
+                                className="text-xs font-bold uppercase text-outline">Tồn thực tế</p><p
+                                className="mt-2 text-3xl font-black">{balance?.stockRemain ?? 0}</p>
+                            </AdminCard><AdminCard className="p-5"><p
+                                className="text-xs font-bold uppercase text-outline">Tồn khả dụng</p><p
+                                className="mt-2 text-3xl font-black text-primary">{balance?.stockAvailable ?? 0}</p>
+                            </AdminCard><AdminCard className="p-5"><p
+                                className="text-xs font-bold uppercase text-outline">Đang giữ cho đơn</p><p
+                                className="mt-2 text-3xl font-black text-amber-700">{balance?.reserved ?? 0}</p>
+                            </AdminCard></div>
+                            <AdminCard className="mt-4">
+                                <div
+                                    className="flex items-center justify-between border-b border-outline-variant/30 px-4 py-3">
+                                    <div><h2 className="flex items-center gap-2 font-black"><Warehouse
+                                        className="h-4 w-4 text-primary"/>Sổ kho</h2><p
+                                        className="text-xs text-outline">{selectedProduct?.name}</p></div>
+                                    <button type="button" onClick={() => setDetailRetry(value => value + 1)}
+                                            className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                            aria-label="Làm mới sổ kho"><RefreshCw className="h-4 w-4"/></button>
+                                </div>
+                                {!ledger.length ? <AdminEmpty title="Chưa có biến động kho"/> : <>
+                                    <div className="hidden overflow-x-auto md:block">
+                                        <table className="w-full min-w-[860px] text-sm">
+                                            <thead
+                                                className="bg-surface-container text-left text-xs uppercase text-outline">
+                                            <tr>
+                                                <th className="px-4 py-3">Thời gian</th>
+                                                <th className="px-4 py-3">Loại</th>
+                                                <th className="px-4 py-3 text-right">Thay đổi</th>
+                                                <th className="px-4 py-3 text-right">Số dư sau</th>
+                                                <th className="px-4 py-3">Đối soát</th>
+                                                <th className="px-4 py-3">Người thực hiện</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>{ledger.map(entry => <tr key={entry.id}
+                                                                            className="border-t border-outline-variant/25">
+                                                <td className="px-4 py-3 text-outline">{formatDate(entry.createdAt)}</td>
+                                                <td className="px-4 py-3 font-bold">{typeNames[entry.type] || entry.type}</td>
+                                                <td className={`px-4 py-3 text-right font-black ${entry.quantityDelta >= 0 ? 'text-emerald-700' : 'text-error'}`}>{entry.quantityDelta > 0 ? '+' : ''}{entry.quantityDelta}</td>
+                                                <td className="px-4 py-3 text-right"><span
+                                                    className="block font-bold">{entry.balanceAfter}</span><span
+                                                    className="text-[10px] text-outline">{balanceLabel(entry)}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-outline">{entry.orderId ? <Link
+                                                    className="inline-flex items-center gap-1 font-bold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                    to={`/admin/orders/${entry.orderId}`}><ShoppingCart
+                                                    className="h-3.5 w-3.5"/>#{entry.orderCode || entry.orderId}
+                                                </Link> : entry.note || '—'}</td>
+                                                <td className="px-4 py-3 text-outline">{entry.actor || 'system'}</td>
+                                            </tr>)}</tbody>
+                                        </table>
+                                    </div>
+                                    <div className="space-y-3 p-4 md:hidden">{ledger.map(entry => <article
+                                        key={entry.id} className="rounded-xl border border-outline-variant/35 p-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div><p
+                                                className="font-black text-on-surface">{typeNames[entry.type] || entry.type}</p>
+                                                <p className="mt-1 text-xs text-outline">{formatDate(entry.createdAt)}</p>
+                                            </div>
+                                            <span
+                                                className={`text-lg font-black ${entry.quantityDelta >= 0 ? 'text-emerald-700' : 'text-error'}`}>{entry.quantityDelta > 0 ? '+' : ''}{entry.quantityDelta}</span>
+                                        </div>
+                                        <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                                            <div>
+                                                <dt className="font-bold uppercase text-outline">{balanceLabel(entry)}</dt>
+                                                <dd className="mt-1 font-black text-on-surface">{entry.balanceAfter}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="font-bold uppercase text-outline">Người thực hiện</dt>
+                                                <dd className="mt-1 break-all font-bold text-on-surface">{entry.actor || 'system'}</dd>
+                                            </div>
+                                        </dl>
+                                        <div
+                                            className="mt-3 border-t border-outline-variant/25 pt-3 text-xs text-outline">{entry.orderId ?
+                                            <Link
+                                                className="inline-flex min-h-10 items-center gap-1 font-bold text-primary hover:underline"
+                                                to={`/admin/orders/${entry.orderId}`}><ShoppingCart
+                                                className="h-3.5 w-3.5"/>Đơn #{entry.orderCode || entry.orderId}
+                                            </Link> : entry.note || 'Không có ghi chú'}</div>
+                                    </article>)}</div>
+                                </>}
                             </AdminCard></>}
         </div>
 
-        <AdminModal open={Boolean(mode)} onClose={() => !saving && setMode(null)} title={mode === 'opening' ? 'Thiết lập tồn đầu kỳ' : 'Điều chỉnh tồn kho'} description={selectedProduct?.name} size="md">
-            <form noValidate onSubmit={submit} className="space-y-4 p-5">{mode === 'adjust' && <Field label="Loại điều chỉnh"><select aria-label="Loại điều chỉnh" data-autofocus className={inputClass} value={type} onChange={event => {setType(event.target.value as ManualType); setQuantity(''); setFormError('');}}><option value="STOCK_IN">Nhập kho</option><option value="STOCK_OUT">Xuất kho</option><option value="CORRECTION">Điều chỉnh kiểm kê</option><option value="DAMAGED">Hàng hỏng</option><option value="RETURNED">Hoàn kho</option></select></Field>}
-                <Field label={quantityLabel} hint={type === 'CORRECTION' && mode === 'adjust' ? `Nhập tồn thực tế mục tiêu; không thấp hơn ${balance?.reserved ?? 0} sản phẩm đang giữ.` : 'Hệ thống backend xác định chiều tăng/giảm theo loại điều chỉnh.'}><input aria-label={quantityLabel} data-autofocus={mode === 'opening' ? true : undefined} required type="number" step="any" min={mode === 'opening' ? 0 : type === 'CORRECTION' ? balance?.reserved ?? 0 : 0.01} max={mode === 'adjust' && (type === 'STOCK_OUT' || type === 'DAMAGED') ? balance?.stockAvailable : undefined} className={inputClass} value={quantity} onChange={event => {setQuantity(event.target.value); setFormError('');}}/></Field>
-                <Field label="Ghi chú đối soát" hint="Bắt buộc nhập lý do để truy vết trong sổ kho."><textarea aria-label="Ghi chú đối soát" required className={`${inputClass} min-h-24 py-2`} value={note} onChange={event => {setNote(event.target.value); setFormError('');}} placeholder="Lý do và thông tin đối soát"/></Field>
-                {formError && <div role="alert" className="rounded-lg border border-error/20 bg-error/10 px-3 py-2 text-sm font-bold text-error">{formError}</div>}
-                <div className="flex flex-col-reverse gap-2 border-t border-outline-variant/30 pt-4 sm:flex-row sm:justify-end"><AdminButton type="button" variant="secondary" disabled={saving} onClick={() => setMode(null)}>Hủy</AdminButton><AdminButton type="submit" disabled={saving}>{saving ? 'Đang ghi nhận...' : 'Xác nhận'}</AdminButton></div>
+        <AdminModal open={Boolean(mode)} onClose={() => !saving && setMode(null)}
+                    title={mode === 'opening' ? 'Thiết lập tồn đầu kỳ' : 'Điều chỉnh tồn kho'}
+                    description={selectedProduct?.name} size="md">
+            <form noValidate onSubmit={submit} className="space-y-4 p-5">{mode === 'adjust' &&
+                <Field label="Loại điều chỉnh"><select aria-label="Loại điều chỉnh" data-autofocus
+                                                       className={inputClass} value={type} onChange={event => {
+                    setType(event.target.value as ManualType);
+                    setQuantity('');
+                    setFormError('');
+                }}>
+                    <option value="STOCK_IN">Nhập kho</option>
+                    <option value="STOCK_OUT">Xuất kho</option>
+                    <option value="CORRECTION">Điều chỉnh kiểm kê</option>
+                    <option value="DAMAGED">Hàng hỏng</option>
+                    <option value="RETURNED">Hoàn kho</option>
+                </select></Field>}
+                <Field label={quantityLabel}
+                       hint={type === 'CORRECTION' && mode === 'adjust' ? `Nhập tồn thực tế mục tiêu; không thấp hơn ${balance?.reserved ?? 0} sản phẩm đang giữ.` : 'Hệ thống backend xác định chiều tăng/giảm theo loại điều chỉnh.'}><input
+                    aria-label={quantityLabel} data-autofocus={mode === 'opening' ? true : undefined} required
+                    type="number" step="any"
+                    min={mode === 'opening' ? 0 : type === 'CORRECTION' ? balance?.reserved ?? 0 : 0.01}
+                    max={mode === 'adjust' && (type === 'STOCK_OUT' || type === 'DAMAGED') ? balance?.stockAvailable : undefined}
+                    className={inputClass} value={quantity} onChange={event => {
+                    setQuantity(event.target.value);
+                    setFormError('');
+                }}/></Field>
+                <Field label="Ghi chú đối soát" hint="Bắt buộc nhập lý do để truy vết trong sổ kho."><textarea
+                    aria-label="Ghi chú đối soát" required className={`${inputClass} min-h-24 py-2`} value={note}
+                    onChange={event => {
+                        setNote(event.target.value);
+                        setFormError('');
+                    }} placeholder="Lý do và thông tin đối soát"/></Field>
+                {formError && <div role="alert"
+                                   className="rounded-lg border border-error/20 bg-error/10 px-3 py-2 text-sm font-bold text-error">{formError}</div>}
+                <div
+                    className="flex flex-col-reverse gap-2 border-t border-outline-variant/30 pt-4 sm:flex-row sm:justify-end">
+                    <AdminButton type="button" variant="secondary" disabled={saving}
+                                 onClick={() => setMode(null)}>Hủy</AdminButton><AdminButton type="submit"
+                                                                                             disabled={saving}>{saving ? 'Đang ghi nhận...' : 'Xác nhận'}</AdminButton>
+                </div>
             </form>
         </AdminModal>
     </AdminPage>;

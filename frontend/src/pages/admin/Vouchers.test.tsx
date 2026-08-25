@@ -2,6 +2,7 @@ import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {beforeEach, describe, expect, it, jest} from '@jest/globals';
 import AdminVouchers from './Vouchers';
 import {AdminCatalogService, AdminVoucherService} from '../../service/admin-catalog.service';
+import {ConfirmDialogProvider} from '../../components/common/ConfirmDialog';
 
 jest.mock('../../service/admin-catalog.service');
 jest.mock('../../service/toast.service', () => ({
@@ -13,6 +14,7 @@ jest.mock('../../service/toast.service', () => ({
 
 const mockedCatalog = jest.mocked(AdminCatalogService);
 const mockedVouchers = jest.mocked(AdminVoucherService);
+const renderPage = () => render(<ConfirmDialogProvider><AdminVouchers/></ConfirmDialogProvider>);
 
 const voucher = {
     id: 7,
@@ -74,7 +76,7 @@ describe('AdminVouchers', () => {
     });
 
     it('filters with the server contract and shows usage progress', async () => {
-        render(<AdminVouchers/>);
+        renderPage();
 
         expect((await screen.findAllByText('SAVE20')).length).toBeGreaterThan(0);
         expect(screen.getAllByLabelText('Đã dùng 90 trên 100 lượt').length).toBeGreaterThan(0);
@@ -94,7 +96,7 @@ describe('AdminVouchers', () => {
     });
 
     it('creates a product-scoped voucher with keyboard-friendly product selection and restores focus', async () => {
-        render(<AdminVouchers/>);
+        renderPage();
         await screen.findAllByText('SAVE20');
 
         const openButton = screen.getByRole('button', {name: /Tạo voucher/i});

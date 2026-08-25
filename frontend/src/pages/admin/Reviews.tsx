@@ -13,6 +13,8 @@ import {
 import { ReviewResponseDto, ReviewStatus } from '../../interface/review.model';
 import { ToastService } from '../../service/toast.service';
 import { useAdminReviewStore } from '../../store/useAdminReviewStore';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
+import {AdminFilterGroup, AdminFilterReset, AdminFilterSelect, AdminToolbar} from '../../components/admin/AdminUi';
 
 const REVIEW_STATUS_FILTERS: Array<{ value: ReviewStatus | 'ALL'; label: string }> = [
     { value: 'ALL', label: 'Tất cả' },
@@ -34,11 +36,11 @@ const getStatusText = (status?: ReviewStatus) => {
 const getStatusClassName = (status?: ReviewStatus) => {
     switch (status) {
         case 'PUBLISHED':
-            return 'bg-green-100 text-green-800';
+            return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
         case 'HIDDEN':
-            return 'bg-slate-100 text-slate-700';
+            return 'bg-surface-container text-on-surface-variant';
         default:
-            return 'bg-gray-100 text-gray-800';
+            return 'bg-surface-container text-on-surface-variant';
     }
 };
 
@@ -63,6 +65,7 @@ const RatingStars = ({ rating }: { rating: number }) => (
 );
 
 export default function AdminReviews() {
+    const confirm = useConfirmDialog();
     const {
         reviews,
         reviewsPage,
@@ -120,7 +123,7 @@ export default function AdminReviews() {
     };
 
     const handleDelete = async (review: ReviewResponseDto) => {
-        const confirmed = window.confirm(`Xóa vĩnh viễn đánh giá #${review.id}?`);
+        const confirmed = await confirm({title: 'Xóa vĩnh viễn đánh giá?', message: `Đánh giá #${review.id} và phản hồi liên quan sẽ bị xóa.`, confirmLabel: 'Xóa đánh giá', tone: 'danger'});
         if (!confirmed) return;
 
         try {
@@ -183,21 +186,14 @@ export default function AdminReviews() {
                 </button>
             </div>
 
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-outline-variant/30 bg-white p-3 shadow-sm">
-                {REVIEW_STATUS_FILTERS.map((item) => (
-                    <button
-                        key={item.value}
-                        type="button"
-                        onClick={() => handleStatusFilterChange(item.value)}
-                        className={`rounded-xl px-4 py-2 text-xs font-black transition-colors ${
-                            activeStatus === item.value
-                                ? 'bg-primary text-on-primary'
-                                : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
-                        }`}
-                    >
-                        {item.label}
-                    </button>
-                ))}
+            <div className="overflow-visible rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
+                <AdminToolbar className="rounded-2xl border-b-0"><AdminFilterGroup>
+                    <AdminFilterSelect label="Lọc theo trạng thái đánh giá" value={activeStatus}
+                                       onChange={value => handleStatusFilterChange(value as ReviewStatus | 'ALL')}>
+                        {REVIEW_STATUS_FILTERS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </AdminFilterSelect>
+                    <AdminFilterReset disabled={activeStatus === 'ALL'} onClick={() => handleStatusFilterChange('ALL')}/>
+                </AdminFilterGroup></AdminToolbar>
             </div>
 
             {error && (
@@ -206,7 +202,7 @@ export default function AdminReviews() {
                 </div>
             )}
 
-            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                         <thead className="bg-surface-variant font-bold text-on-surface-variant">
@@ -283,7 +279,7 @@ export default function AdminReviews() {
                                                     disabled={isActionLoading}
                                                     className={`rounded-lg p-2 transition-colors disabled:opacity-40 ${
                                                         nextStatus === 'HIDDEN'
-                                                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                            ? 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
                                                             : 'bg-green-50 text-green-700 hover:bg-green-100'
                                                     }`}
                                                     aria-label={toggleLabel}
@@ -365,7 +361,7 @@ export default function AdminReviews() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
                     <form
                         onSubmit={handleReplySubmit}
-                        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl"
+                        className="w-full max-w-lg rounded-2xl bg-surface p-6 shadow-xl"
                     >
                         <h2 className="text-lg font-black text-on-surface">Phản hồi đánh giá</h2>
                         <p className="mt-1 text-xs font-semibold text-outline">

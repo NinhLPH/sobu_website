@@ -5,6 +5,7 @@ import { CustomerService } from '../service/custom.service';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
 import { CreateOrderPaymentDto, OrderPaymentResponseDto } from '../interface/order.model';
+import {ConfirmDialogProvider} from '../components/common/ConfirmDialog';
 
 let mockSearchQuery = 'nhanhOrderId=NH-42';
 
@@ -28,6 +29,7 @@ const fetchPayments = jest.fn(async () => []);
 const createPayment = jest.fn<Promise<OrderPaymentResponseDto>, [string | number, CreateOrderPaymentDto]>();
 const clearPaymentError = jest.fn();
 const clearPayments = jest.fn();
+const renderPage = () => render(<ConfirmDialogProvider><OrderTracking /></ConfirmDialogProvider>);
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -62,7 +64,7 @@ describe('OrderTracking workflow', () => {
             }
         });
 
-        render(<OrderTracking />);
+        renderPage();
 
         await waitFor(() => {
             expect(mockedCustomerService.getOrderByNhanhId).toHaveBeenCalledWith('NH-42');
@@ -148,7 +150,7 @@ describe('OrderTracking workflow', () => {
             clearPayments
         } as ReturnType<typeof usePaymentStore>);
 
-        render(<OrderTracking />);
+        renderPage();
 
         await waitFor(() => expect(screen.getByText('Phiên thanh toán chưa được tạo')).toBeTruthy());
         fireEvent.click(screen.getByRole('button', { name: 'Thử tạo lại thanh toán' }));
@@ -180,7 +182,7 @@ describe('OrderTracking workflow', () => {
             }
         });
 
-        render(<OrderTracking/>);
+        renderPage();
 
         expect(await screen.findByText('SOBUAUTO5')).toBeTruthy();
         expect(screen.getByText('Giảm sản phẩm/toàn đơn:')).toBeTruthy();
@@ -218,12 +220,11 @@ describe('OrderTracking workflow', () => {
                 }
             });
         mockedCustomerService.cancelOrder.mockRejectedValue(new Error('Server returned 500'));
-        jest.spyOn(window, 'confirm').mockReturnValue(true);
-
-        render(<OrderTracking />);
+        renderPage();
 
         await waitFor(() => expect(screen.getByRole('button', { name: 'Hủy đơn' })).toBeTruthy());
         fireEvent.click(screen.getByRole('button', { name: 'Hủy đơn' }));
+        fireEvent.click(await screen.findByRole('button', {name: 'Hủy đơn hàng'}));
 
         await waitFor(() => expect(screen.getByText('Đơn hàng đã được hủy.')).toBeTruthy());
         expect(mockedCustomerService.cancelOrder).toHaveBeenCalledTimes(1);

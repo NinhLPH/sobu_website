@@ -9,6 +9,7 @@ jest.mock('./store/usePublicUiStore', () => ({
 
 jest.mock('react-router-dom', () => ({
     BrowserRouter: ({children}: any) => <>{children}</>,
+    useLocation: () => ({pathname: '/'}),
     Routes: ({children}: any) => <>{children}</>,
     Route: ({path, element, children}: any) => (
         <div data-path={path || ''} data-element={element?.type?.name || ''}>{children}</div>

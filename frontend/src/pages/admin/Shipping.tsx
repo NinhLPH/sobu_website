@@ -262,7 +262,7 @@ export default function AdminShipping() {
                     type="button"
                     onClick={() => void load()}
                     disabled={isLoading || isSaving}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-outline-variant/40 bg-white px-4 py-2.5 text-xs font-black uppercase text-on-surface transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-outline-variant/40 bg-surface px-4 py-2.5 text-xs font-black uppercase text-on-surface transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                     Tai lai
@@ -292,7 +292,7 @@ export default function AdminShipping() {
             )}
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
-                <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                     <div className="flex items-center justify-between gap-3 border-b border-outline-variant/20 bg-surface-container-lowest px-5 py-4">
                         <div>
                             <h2 className="text-sm font-black uppercase text-on-surface">Don vi van chuyen tu Nhanh</h2>
@@ -354,7 +354,7 @@ export default function AdminShipping() {
                     )}
                 </section>
 
-                <section className="rounded-2xl border border-outline-variant/30 bg-white p-5 shadow-sm">
+                <section className="rounded-2xl border border-outline-variant/30 bg-surface p-5 shadow-sm">
                     <div className="mb-5">
                         <h2 className="text-sm font-black uppercase text-on-surface">Cau hinh carrier</h2>
                         <p className="mt-1 text-xs font-semibold text-outline">

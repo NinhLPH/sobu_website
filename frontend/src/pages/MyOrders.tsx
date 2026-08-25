@@ -139,7 +139,7 @@ export default function MyOrders() {
                 </div>
             </div>
 
-            <form onSubmit={handleLookup} className="mb-5 rounded-2xl border border-outline-variant/30 bg-white p-4 shadow-sm">
+            <form onSubmit={handleLookup} className="mb-5 rounded-2xl border border-outline-variant/30 bg-surface p-4 shadow-sm">
                 <div className="mb-3 flex gap-2 text-xs font-black">
                     <button type="button" onClick={() => setLookupType('internal')} className={`rounded-lg px-3 py-2 ${lookupType === 'internal' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'}`}>Mã đơn SOBU</button>
                     <button type="button" onClick={() => setLookupType('nhanh')} className={`rounded-lg px-3 py-2 ${lookupType === 'nhanh' ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'}`}>Nhanh ID / code</button>
@@ -151,7 +151,7 @@ export default function MyOrders() {
                 </div>
             </form>
 
-            <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                 <div className="border-b border-outline-variant/20 p-4">
                     <div className="mb-3 flex items-center gap-2 text-xs font-black text-outline"><SlidersHorizontal className="h-4 w-4" />Lọc đơn hàng</div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">

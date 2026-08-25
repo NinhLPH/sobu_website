@@ -1,5 +1,6 @@
 import {ReactNode, useEffect, useId, useRef} from 'react';
-import {AlertCircle, ChevronLeft, ChevronRight, Loader2, Search, X} from 'lucide-react';
+import {AlertCircle, ChevronLeft, ChevronRight, Loader2, Search, SlidersHorizontal, X} from 'lucide-react';
+import SearchSuggestInput, {SearchSuggestion} from '../common/SearchSuggestInput';
 
 export const inputClass = 'min-h-10 w-full rounded-lg border border-outline-variant/60 bg-surface px-3 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:cursor-not-allowed disabled:bg-surface-container';
 export const labelClass = 'mb-1.5 block text-xs font-bold uppercase tracking-wide text-outline';
@@ -43,17 +44,72 @@ export function AdminButton({
         className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]} ${className}`} {...props}>{children}</button>;
 }
 
-export function AdminSearch({value, onChange, placeholder, ariaLabel}: {
+export function AdminToolbar({children, className = ''}: { children: ReactNode; className?: string }) {
+    return <div className={`flex flex-col gap-3 border-b border-outline-variant/30 bg-surface-container-lowest p-4 lg:flex-row lg:items-center lg:has-[.admin-filter-group]:flex-col lg:has-[.admin-filter-group]:items-stretch ${className}`}>
+        {children}
+    </div>;
+}
+
+export function AdminSearch({value, onChange, placeholder, ariaLabel, onSubmit, suggestions, loading = false}: {
     value: string;
     onChange: (value: string) => void;
     placeholder: string;
-    ariaLabel?: string
+    ariaLabel?: string;
+    onSubmit?: (value: string) => void;
+    suggestions?: SearchSuggestion[];
+    loading?: boolean;
 }) {
-    return <label className="relative block min-w-0 flex-1"><span
-        className="sr-only">{ariaLabel || placeholder}</span><Search
-        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/><input
-        aria-label={ariaLabel || placeholder} value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} className={`${inputClass} pl-9`}/></label>;
+    const label = ariaLabel || placeholder;
+    const sharedClassName = `${inputClass} pl-9 ${value ? 'pr-9' : 'pr-3'}`;
+    return <div className="relative min-w-0 flex-1"><span className="sr-only">{label}</span>
+        {loading ? <Loader2 className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 animate-spin text-primary"/>
+            : <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-outline"/>}
+        {suggestions && onSubmit ? <SearchSuggestInput value={value} onChange={onChange} onSubmit={onSubmit}
+                                                           suggestions={suggestions} placeholder={placeholder}
+                                                           ariaLabel={label} className={sharedClassName}/>
+            : <input type="search" aria-label={label} value={value} onChange={e => onChange(e.target.value)}
+                     onKeyDown={event => {
+                         if (event.key === 'Enter') onSubmit?.(value.trim());
+                     }}
+                     placeholder={placeholder} className={sharedClassName}/>}
+        {value && <button type="button" onClick={() => {
+            onChange('');
+            onSubmit?.('');
+        }} aria-label={`Xóa ${label.toLowerCase()}`}
+                          className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-md p-1 text-outline hover:bg-surface-container hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/40">
+            <X className="h-4 w-4"/>
+        </button>}
+    </div>;
+}
+
+export function AdminFilterGroup({children, label = 'Bộ lọc'}: { children: ReactNode; label?: string }) {
+    return <div className="admin-filter-group flex min-w-0 flex-1 flex-wrap items-center gap-2 lg:justify-end">
+        <span className="inline-flex min-h-10 items-center gap-1.5 px-1 text-xs font-black uppercase tracking-wide text-outline">
+            <SlidersHorizontal className="h-4 w-4"/>{label}
+        </span>
+        {children}
+    </div>;
+}
+
+export function AdminFilterSelect({label, value, onChange, children, className = ''}: {
+    label: string;
+    value: string | number;
+    onChange: (value: string) => void;
+    children: ReactNode;
+    className?: string;
+}) {
+    return <label className={`min-w-0 flex-1 sm:flex-none ${className}`}><span className="sr-only">{label}</span>
+        <select aria-label={label} value={value} onChange={event => onChange(event.target.value)}
+                className={`${inputClass} min-w-[10rem] cursor-pointer bg-surface-container-lowest sm:w-auto`}>
+            {children}
+        </select>
+    </label>;
+}
+
+export function AdminFilterReset({onClick, disabled}: { onClick: () => void; disabled: boolean }) {
+    return <AdminButton type="button" variant="ghost" onClick={onClick} disabled={disabled} className="!px-3">
+        <X className="h-4 w-4"/>Xóa lọc
+    </AdminButton>;
 }
 
 export function AdminStatus({active, activeText = 'Hoạt động', inactiveText = 'Tạm dừng'}: {
@@ -62,7 +118,7 @@ export function AdminStatus({active, activeText = 'Hoạt động', inactiveText
     inactiveText?: string
 }) {
     return <span
-        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-surface-container text-outline'}`}>{active ? activeText : inactiveText}</span>;
+        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${active ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-surface-container text-outline'}`}>{active ? activeText : inactiveText}</span>;
 }
 
 export function AdminLoading({label = 'Đang tải dữ liệu...'}: { label?: string }) {
