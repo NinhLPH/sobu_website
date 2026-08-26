@@ -1,6 +1,7 @@
 import {useState, useMemo, useEffect} from 'react';
-import {Link, useSearchParams, useNavigate} from 'react-router-dom';
+import {useSearchParams, useNavigate} from 'react-router-dom';
 import {ChevronRight, ChevronDown, SlidersHorizontal, X} from 'lucide-react';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 
 import ProductCard from "../components/common/ProductCard";
 import {useProductStore} from '../store/useProductStore';
@@ -181,13 +182,11 @@ export default function ProductList() {
     };
 
     return (
-        <main className="flex min-h-screen w-full min-w-0 flex-col bg-surface px-3 pb-20 pt-24 sm:px-6 sm:pb-24 sm:pt-32">
-            {/* Header / Breadcrumb */}
-            <nav className="mb-6 flex items-center gap-2 text-xs font-bold text-on-surface-variant sm:mb-8 sm:text-sm">
-                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
-                <ChevronRight className="w-4 h-4"/>
-                <span className="text-primary">Cửa hàng</span>
-            </nav>
+        <main className="flex min-h-screen w-full min-w-0 flex-col bg-surface px-4 pb-20 pt-28 sm:px-6 sm:pb-24 sm:pt-32">
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Cửa hàng'},
+            ]}/>
             <header className="mb-7 sm:mb-12">
                 <h1 className="mb-4 text-2xl font-black uppercase tracking-tight text-on-surface sm:text-4xl lg:text-5xl">Tất cả sản phẩm</h1>
             </header>

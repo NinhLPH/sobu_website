@@ -11,6 +11,7 @@ import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 import { useIntegrationStore } from '../store/useIntegrationStore';
 import { VoucherService } from '../service/voucher.service';
+import { ToastService } from '../service/toast.service';
 
 const mockNavigate = jest.fn();
 
@@ -27,6 +28,7 @@ jest.mock('../store/usePaymentStore');
 jest.mock('../store/useIntegrationStore');
 jest.mock('../service/shipping.service');
 jest.mock('../service/voucher.service');
+jest.mock('../service/toast.service');
 jest.mock('../utils/payment-session', () => ({
     redirectToPaymentCheckout: require('@jest/globals').jest.fn()
 }));
@@ -47,6 +49,7 @@ const mockedRedirectToPaymentCheckout = jest.mocked(redirectToPaymentCheckout);
 const mockedOnlineCartRecovery = jest.mocked(onlineCartRecovery);
 const mockedShippingService = jest.mocked(ShippingService);
 const mockedVoucherService = jest.mocked(VoucherService);
+const mockedToastService = jest.mocked(ToastService);
 const mockSubmitOrder = jest.fn<Promise<any>, any[]>();
 const mockCreatePayment = jest.fn<Promise<any>, any[]>();
 
@@ -514,6 +517,58 @@ describe('Cart payment selection', () => {
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(true));
     });
 
+    it('shows voucher errors as a toast without rendering the voucher retry action', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [{
+                id: 1,
+                code: 'INVALID',
+                name: 'Mã không hợp lệ',
+                type: 'DISCOUNT_AMOUNT',
+                slot: 'ITEM',
+                scope: 'ALL',
+                value: 10000
+            }]
+        });
+        mockedVoucherService.apply.mockImplementation(async (payload) => {
+            if (payload.discountVoucherCode === 'INVALID') {
+                return {
+                    success: true,
+                    message: 'Voucher preview rejected',
+                    data: { valid: false, message: 'Mã voucher không hợp lệ.' }
+                } as any;
+            }
+            return {
+                success: true,
+                message: 'Voucher preview ready',
+                data: {
+                    valid: true,
+                    itemDiscount: 0,
+                    orderDiscount: 0,
+                    subtotalDiscount: 0,
+                    shippingDiscount: 0,
+                    totalDiscount: 0,
+                    originalSubtotal: payload.subtotal,
+                    originalShippingFee: payload.shippingFee,
+                    finalSubtotal: payload.subtotal,
+                    finalShippingFee: payload.shippingFee,
+                    finalTotal: payload.subtotal + payload.shippingFee,
+                    appliedVouchers: []
+                }
+            };
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+        fireEvent.click(await screen.findByRole('button', { name: /INVALID/i }));
+
+        await waitFor(() => expect(mockedToastService.error).toHaveBeenCalledWith('Mã voucher không hợp lệ.'));
+        expect(screen.queryByText('Mã voucher không hợp lệ.')).toBeNull();
+        expect(screen.queryByRole('button', { name: /Tính lại ưu đãi/i })).toBeNull();
+    });
+
     it('applies suggested vouchers, renders the discount breakdown, and submits their codes', async () => {
         mockedVoucherService.getActive.mockResolvedValue({
             success: true,
@@ -747,5 +802,26 @@ describe('Cart payment selection', () => {
         expect(mockCreatePayment).toHaveBeenCalledTimes(1);
         expect(mockedOnlineCartRecovery.save).not.toHaveBeenCalled();
         expect(mockedRedirectToPaymentCheckout).not.toHaveBeenCalled();
+    });
+
+    it('shows an insufficient-stock checkout failure as a Vietnamese toast', async () => {
+        mockSubmitOrder.mockRejectedValue({
+            response: {
+                status: 409,
+                data: {
+                    code: 'INSUFFICIENT_STOCK',
+                    message: 'Insufficient stock for product 24: requested 6, available 5.0'
+                }
+            }
+        });
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng và thanh toán' }));
+
+        await waitFor(() => expect(mockedToastService.error).toHaveBeenCalledWith(
+            'Sản phẩm vượt quá số lượng hiện có trong kho'
+        ));
     });
 });

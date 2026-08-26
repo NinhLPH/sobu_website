@@ -4,8 +4,6 @@ import com.vn.sodu.voucher.GeoScope;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -13,20 +11,21 @@ import java.util.regex.Pattern;
 @Service
 public class VoucherGeoService {
 
-    // 11 Central Hanoi Districts normalized (no accents, lowercase, trimmed)
-    private static final Set<String> HANOI_CENTER_DISTRICTS = new HashSet<>(Arrays.asList(
-            "hoan kiem",
-            "ba dinh",
-            "dong da",
-            "hai ba trung",
-            "cau giay",
-            "thanh xuan",
-            "tay ho",
-            "hoang mai",
-            "nam tu liem",
-            "bac tu liem",
-            "ha dong"
-    ));
+    // Canonical Hanoi-center wards supplied by the business. Store normalized
+    // values so comparison is stable across accents, casing and whitespace.
+    private static final Set<String> HANOI_CENTER_WARDS = Set.of(
+            "phuong hoan kiem", "phuong cua nam", "phuong ba dinh", "phuong ngoc ha",
+            "phuong giang vo", "phuong tay ho", "phuong phu thuong", "phuong long bien",
+            "phuong bo de", "phuong viet hung", "phuong phuc loi", "phuong dong da",
+            "phuong kim lien", "phuong van mieu qtg", "phuong o cho dua", "phuong lang",
+            "phuong cau giay", "phuong nghia do", "phuong yen hoa", "phuong thanh xuan",
+            "phuong khuong dinh", "phuong phuong liet", "phuong thuong cat", "phuong tay tuu",
+            "phuong dong ngac", "phuong xuan dinh", "phuong phu dien", "phuong tu liem",
+            "phuong xuan phuong", "phuong tay mo", "phuong dai mo", "phuong hai ba trung",
+            "phuong bach mai", "phuong vinh tuy", "phuong hoang mai", "phuong vinh hung",
+            "phuong tuong mai", "phuong dinh cong", "phuong hoang liet", "phuong yen so",
+            "phuong linh nam", "phuong hong ha"
+    );
 
     private static final Pattern DIACRITICS_PATTERN = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
 
@@ -42,49 +41,51 @@ public class VoucherGeoService {
                 .replaceAll("\\s+", " ");
     }
 
-    public boolean isAddressEligible(GeoScope geoScope, String cityName, String districtName, Long cityId, Long districtId) {
+    public boolean isAddressEligible(GeoScope geoScope, String cityName, String wardName, Long cityId) {
         if (geoScope == null || geoScope == GeoScope.ALL) {
             return true;
         }
 
         if (geoScope == GeoScope.HANOI_CENTER) {
-            return isHanoiCenter(cityName, districtName, cityId, districtId);
+            return isHanoiCenter(cityName, wardName, cityId);
         }
 
         return true;
     }
 
-    public boolean isHanoiCenter(String cityName, String districtName, Long cityId, Long districtId) {
+    public boolean isHanoiCenter(String cityName, String wardName, Long cityId) {
         if (cityName == null && cityId == null) {
             return false;
         }
 
-        // Check City
-        boolean isHanoiCity = false;
-        if (cityId != null && cityId == 1L) {
-            isHanoiCity = true;
-        } else if (cityName != null) {
-            String normCity = normalizeText(cityName);
-            if (normCity.contains("ha noi")) {
-                isHanoiCity = true;
-            }
+        // The local address dataset uses province id 1 for Hanoi. If both the
+        // id and name are supplied, both must identify Hanoi.
+        boolean hasHanoiCityId = cityId != null && cityId == 1L;
+        boolean hasHanoiCityName = cityName != null && normalizeText(cityName).contains("ha noi");
+        if (cityId != null && !hasHanoiCityId) {
+            return false;
         }
-
-        if (!isHanoiCity) {
+        if (cityName != null && !hasHanoiCityName) {
             return false;
         }
 
-        // Check District
-        if (districtName == null) {
+        if (!hasHanoiCityId && !hasHanoiCityName) {
             return false;
         }
 
-        String normDistrict = normalizeText(districtName)
-                .replace("quan ", "")
-                .replace("huyen ", "")
-                .replace("thi xa ", "")
+        if (wardName == null || wardName.isBlank()) {
+            return false;
+        }
+
+        return HANOI_CENTER_WARDS.contains(normalizeWardName(wardName));
+    }
+
+    private String normalizeWardName(String wardName) {
+        return normalizeText(wardName)
+                .replaceAll("[^a-z0-9]+", " ")
+                // The address dataset spells the configured "Văn Miếu-QTG"
+                // ward as "Văn Miếu - Quốc Tử Giám".
+                .replace("quoc tu giam", "qtg")
                 .trim();
-
-        return HANOI_CENTER_DISTRICTS.contains(normDistrict);
     }
 }

@@ -10,6 +10,7 @@ import {
     Plus
 } from 'lucide-react';
 import { useRequestStore } from '../store/useRequestStore';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 import { formatCurrency } from '../utils/format';
 import { RequestType } from '../enum/union-types';
 import { ToastService } from '../service/toast.service';
@@ -44,11 +45,10 @@ export default function MyRequests() {
 
     return (
         <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
-            <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
-                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
-                <ChevronRight className="w-3.5 h-3.5" />
-                <span className="text-primary">Yêu cầu của tôi</span>
-            </nav>
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Yêu cầu của tôi'},
+            ]}/>
 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                 <div>

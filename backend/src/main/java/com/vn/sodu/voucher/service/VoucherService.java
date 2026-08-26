@@ -213,7 +213,7 @@ public class VoucherService {
 
                 String badge = null;
                 if (v.getType() == VoucherType.FREE_SHIP) {
-                    badge = v.getGeoScope() == GeoScope.HANOI_CENTER ? "Freeship 11 quận Hà Nội" : "Miễn phí vận chuyển";
+                    badge = v.getGeoScope() == GeoScope.HANOI_CENTER ? "Freeship 42 phường trung tâm Hà Nội" : "Miễn phí vận chuyển";
                 } else if (displayPrice.estimatedDiscount().compareTo(BigDecimal.ZERO) > 0) {
                     badge = "Giảm " + displayPrice.estimatedDiscount().toPlainString() + "đ";
                 }

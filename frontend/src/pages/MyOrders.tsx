@@ -5,6 +5,7 @@ import { CustomerService } from '../service/custom.service';
 import { CustomerOrderListItemDto, CustomerOrderQueryParams } from '../interface/order.model';
 import { PageResponse } from '../interface/api-response';
 import { formatCurrency } from '../utils/format';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 
 const emptyPage: PageResponse<CustomerOrderListItemDto> = {
     content: [],
@@ -126,11 +127,10 @@ export default function MyOrders() {
 
     return (
         <main className="mx-auto w-full min-w-0 max-w-7xl bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
-            <nav className="mb-6 flex items-center gap-2 text-xs font-bold text-on-surface-variant">
-                <Link to="/" className="transition-colors hover:text-primary">Trang chủ</Link>
-                <span>/</span>
-                <span className="text-primary">Đơn hàng của tôi</span>
-            </nav>
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Đơn hàng của tôi'},
+            ]}/>
 
             <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
                 <div>

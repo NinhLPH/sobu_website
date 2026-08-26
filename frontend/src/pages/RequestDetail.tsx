@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, ArrowLeft, Loader2, Save, Trash2, Plus, CheckCircle2, AlertCircle, PackageCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Trash2, Plus, CheckCircle2, AlertCircle, PackageCheck } from 'lucide-react';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 import ImageUploader from '../components/common/ImageUploader';
 import { useRequestStore } from '../store/useRequestStore';
 import { formatCurrency } from '../utils/format';
@@ -208,14 +209,11 @@ export default function RequestDetail() {
 
     return (
         <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
-            {/* Breadcrumb */}
-            <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
-                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
-                <ChevronRight className="w-3.5 h-3.5" />
-                <Link to="/requests" className="hover:text-primary transition-colors">Yêu cầu</Link>
-                <ChevronRight className="w-3.5 h-3.5" />
-                <span className="text-primary">Chi tiết yêu cầu</span>
-            </nav>
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Yêu cầu', to: '/requests'},
+                {label: 'Chi tiết yêu cầu'},
+            ]}/>
 
             {/* Title Bar */}
             <div className="mb-8 flex items-start gap-3 sm:items-center sm:gap-4">

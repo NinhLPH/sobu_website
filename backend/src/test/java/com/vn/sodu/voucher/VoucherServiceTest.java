@@ -88,7 +88,7 @@ class VoucherServiceTest {
         freeShipHanoiVoucher = Voucher.builder()
                 .id(2L)
                 .code("HANOIFREE")
-                .name("Miễn phí vận chuyển 11 quận nội thành Hà Nội")
+                .name("Miễn phí vận chuyển 42 phường trung tâm Hà Nội")
                 .type(VoucherType.FREE_SHIP)
                 .slot(VoucherSlot.SHIPPING)
                 .scope(VoucherScope.ALL)
@@ -245,7 +245,7 @@ class VoucherServiceTest {
                 .shippingFee(new BigDecimal("30000.00"))
                 .items(List.of(serumItem, shirtItem))
                 .customerCityName("Hà Nội")
-                .customerDistrictName("Quận Ba Đình")
+                .customerWardName("Phường Ba Đình")
                 .autoApply(true)
                 .build();
 
@@ -269,7 +269,7 @@ class VoucherServiceTest {
     }
 
     @Test
-    @DisplayName("Hanoi Center FreeShip: Accepted for central districts (Hoan Kiem, Ba Dinh, Cau Giay)")
+    @DisplayName("Hanoi Center FreeShip: Accepted for a configured Hanoi-center ward")
     void testHanoiCenterFreeShip_Valid() {
         when(voucherRepository.findByCodeIgnoreCase("HANOIFREE")).thenReturn(Optional.of(freeShipHanoiVoucher));
 
@@ -278,7 +278,7 @@ class VoucherServiceTest {
                 .subtotal(new BigDecimal("300000.00"))
                 .shippingFee(new BigDecimal("30000.00"))
                 .customerCityName("Thành phố Hà Nội")
-                .customerDistrictName("Quận Cầu Giấy")
+                .customerWardName("Phường Cầu Giấy")
                 .build();
 
         VoucherApplyResponseDto response = voucherService.applyVouchers(request);
@@ -289,8 +289,35 @@ class VoucherServiceTest {
     }
 
     @Test
-    @DisplayName("Hanoi Center FreeShip: Rejected for Long Biên district")
-    void testHanoiCenterFreeShip_LongBienRejected() {
+    @DisplayName("Hanoi Center FreeShip: Every configured ward is eligible after normalization")
+    void testHanoiCenterFreeShip_AllConfiguredWardsAccepted() {
+        List<String> configuredWards = List.of(
+                "Phường Hoàn Kiếm", "Phường Cửa Nam", "Phường Ba Đình", "Phường Ngọc Hà",
+                "Phường Giảng Võ", "Phường Tây Hồ", "Phường Phú Thượng", "Phường Long Biên",
+                "Phường Bồ Đề", "Phường Việt Hưng", "Phường Phúc Lợi", "Phường Đống Đa",
+                "Phường Kim Liên", "Phường Văn Miếu-QTG", "Phường Ô Chợ Dừa", "Phường Láng",
+                "Phường Cầu Giấy", "Phường Nghĩa Đô", "Phường Yên Hòa", "Phường Thanh Xuân",
+                "Phường Khương Đình", "Phường Phương Liệt", "Phường Thượng Cát", "Phường Tây Tựu",
+                "Phường Đông Ngạc", "Phường Xuân Đỉnh", "Phường Phú Diễn", "Phường Từ Liêm",
+                "Phường Xuân Phương", "Phường Tây Mỗ", "Phường Đại Mỗ", "Phường Hai Bà Trưng",
+                "Phường Bạch Mai", "Phường Vĩnh Tuy", "Phường Hoàng Mai", "Phường Vĩnh Hưng",
+                "Phường Tương Mai", "Phường Định Công", "Phường Hoàng Liệt", "Phường Yên Sở",
+                "Phường Lĩnh Nam", "Phường Hồng Hà"
+        );
+
+        assertThat(configuredWards).allSatisfy(ward ->
+                assertThat(voucherGeoService.isHanoiCenter("Thành phố Hà Nội", ward, 1L))
+                        .as(ward)
+                        .isTrue()
+        );
+        assertThat(voucherGeoService.isHanoiCenter(
+                "Thành phố Hà Nội", "Phường Văn Miếu - Quốc Tử Giám", 1L
+        )).isTrue();
+    }
+
+    @Test
+    @DisplayName("Hanoi Center FreeShip: Accepted for Long Biên because it is in the configured ward list")
+    void testHanoiCenterFreeShip_LongBienAccepted() {
         when(voucherRepository.findByCodeIgnoreCase("HANOIFREE")).thenReturn(Optional.of(freeShipHanoiVoucher));
 
         VoucherApplyRequestDto request = VoucherApplyRequestDto.builder()
@@ -298,13 +325,32 @@ class VoucherServiceTest {
                 .subtotal(new BigDecimal("300000.00"))
                 .shippingFee(new BigDecimal("30000.00"))
                 .customerCityName("Hà Nội")
-                .customerDistrictName("Quận Long Biên")
+                .customerWardName("Phường Long Biên")
+                .build();
+
+        VoucherApplyResponseDto response = voucherService.applyVouchers(request);
+
+        assertThat(response.isValid()).isTrue();
+        assertThat(response.getShippingDiscount()).isEqualByComparingTo("30000.00");
+    }
+
+    @Test
+    @DisplayName("Hanoi Center FreeShip: Rejected for a Hanoi ward outside the configured list")
+    void testHanoiCenterFreeShip_UnlistedHanoiWardRejected() {
+        when(voucherRepository.findByCodeIgnoreCase("HANOIFREE")).thenReturn(Optional.of(freeShipHanoiVoucher));
+
+        VoucherApplyRequestDto request = VoucherApplyRequestDto.builder()
+                .shippingVoucherCode("HANOIFREE")
+                .subtotal(new BigDecimal("300000.00"))
+                .shippingFee(new BigDecimal("30000.00"))
+                .customerCityName("Hà Nội")
+                .customerWardName("Phường Chương Mỹ")
                 .build();
 
         VoucherApplyResponseDto response = voucherService.applyVouchers(request);
 
         assertThat(response.isValid()).isFalse();
-        assertThat(response.getMessage()).contains("chỉ áp dụng cho địa chỉ tại 11 quận nội thành Hà Nội");
+        assertThat(response.getMessage()).contains("42 phường trung tâm Hà Nội");
     }
 
     @Test
@@ -317,13 +363,13 @@ class VoucherServiceTest {
                 .subtotal(new BigDecimal("300000.00"))
                 .shippingFee(new BigDecimal("30000.00"))
                 .customerCityName("TP. Hồ Chí Minh")
-                .customerDistrictName("Quận 1")
+                .customerWardName("Phường Bến Nghé")
                 .build();
 
         VoucherApplyResponseDto response = voucherService.applyVouchers(request);
 
         assertThat(response.isValid()).isFalse();
-        assertThat(response.getMessage()).contains("chỉ áp dụng cho địa chỉ tại 11 quận nội thành Hà Nội");
+        assertThat(response.getMessage()).contains("42 phường trung tâm Hà Nội");
     }
 
     @Test

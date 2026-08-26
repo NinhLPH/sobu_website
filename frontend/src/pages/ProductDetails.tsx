@@ -1,6 +1,7 @@
 import {createElement, useState, useEffect, useMemo} from 'react';
 import {useParams, Link} from 'react-router-dom';
-import {Check, ChevronRight, Copy, Loader2, MessageCircle, RefreshCw, Star, ShoppingBag, TicketPercent, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
+import {Check, Copy, Loader2, MessageCircle, RefreshCw, Star, ShoppingBag, TicketPercent, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 import {SiZalo} from 'react-icons/si';
 
 import {useCartStore} from '../store/useCartStore';
@@ -142,14 +143,12 @@ export default function ProductDetail() {
     }
 
     return (
-        <main className="w-full min-w-0 bg-surface px-3 pb-14 pt-24 sm:px-6 sm:pb-16">
-            <nav className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant mb-6">
-                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
-                <ChevronRight className="w-3.5 h-3.5"/>
-                <Link to="/products" className="hover:text-primary transition-colors">Sản phẩm</Link>
-                <ChevronRight className="w-3.5 h-3.5"/>
-                <span className="text-primary">{product.category}</span>
-            </nav>
+        <main className="w-full min-w-0 bg-surface px-4 pb-14 pt-28 sm:px-6 sm:pb-16 sm:pt-32">
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Sản phẩm', to: '/products'},
+                {label: product.category || 'Danh mục sản phẩm'},
+            ]}/>
 
             <div className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="lg:col-span-7 space-y-4">

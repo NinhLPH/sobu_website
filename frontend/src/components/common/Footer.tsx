@@ -55,25 +55,25 @@ export default function Footer() {
     const visibleSocialLinks = Object.entries(socialLinks).filter(([, href]) => Boolean(href));
 
     return (
-        <footer className="mt-auto w-full border-t border-surface-container-high/60 bg-surface-container-high pb-6 pt-16 text-on-surface">
+        <footer className="mt-auto w-full border-t border-surface-container-high/60 bg-surface-container-high pb-5 pt-10 text-on-surface sm:pb-6 sm:pt-16">
             <div className="mx-auto max-w-[1504px] px-4 sm:px-6 lg:px-8">
-                <div className="mb-12 grid grid-cols-1 gap-10 md:grid-cols-12">
+                <div className="mb-8 grid grid-cols-1 gap-8 sm:mb-12 sm:gap-10 md:grid-cols-12">
                     <div className="col-span-1 flex flex-col justify-start pr-0 md:col-span-4 md:pr-10">
                         <Link
                             to="/"
-                            className="mb-4 inline-block w-fit select-none text-3xl font-black tracking-widest text-on-surface transition-colors hover:text-primary lg:text-4xl"
+                            className="mb-3 inline-block w-fit select-none text-2xl font-black tracking-widest text-on-surface transition-colors hover:text-primary sm:mb-4 sm:text-3xl lg:text-4xl"
                         >
                             {siteName}
                         </Link>
 
                         {greetingText && (
-                            <p className="mb-6 max-w-sm text-xs font-semibold leading-relaxed text-on-surface-variant">
+                            <p className="mb-4 max-w-sm text-xs font-semibold leading-relaxed text-on-surface-variant sm:mb-6">
                                 {greetingText}
                             </p>
                         )}
 
                         {newsletterEnabled && newsletterDescription && newsletterSubmitLabel && (
-                            <div className="flex max-w-sm flex-col gap-2.5">
+                            <div className="flex max-w-none flex-col gap-2.5 sm:max-w-sm">
                                 <p className="text-xs font-semibold leading-relaxed text-on-surface-variant">
                                     {newsletterDescription}
                                 </p>
@@ -94,11 +94,11 @@ export default function Footer() {
                         )}
                     </div>
 
-                    <div className="col-span-1 grid grid-cols-1 gap-8 pt-2 sm:grid-cols-3 md:col-span-8">
+                    <div className="col-span-1 grid grid-cols-2 gap-x-5 gap-y-8 border-t border-surface-container-high pt-8 sm:grid-cols-3 sm:gap-8 sm:pt-2 md:col-span-8 md:border-t-0">
                         {companyLinks.length > 0 && (
                             <div>
-                                <h4 className="mb-5 text-[11px] font-black uppercase tracking-widest text-outline">Company</h4>
-                                <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant">
+                                <h4 className="mb-3.5 text-[11px] font-black uppercase tracking-widest text-outline sm:mb-5">Company</h4>
+                                <ul className="space-y-2.5 text-xs font-bold text-on-surface-variant sm:space-y-3.5">
                                     {companyLinks.map((link) => (
                                         <li key={`${link.label}-${link.href}`}>
                                             <FooterNavLink link={link}/>
@@ -110,8 +110,8 @@ export default function Footer() {
 
                         {helpLinks.length > 0 && (
                             <div>
-                                <h4 className="mb-5 text-[11px] font-black uppercase tracking-widest text-outline">Help Center</h4>
-                                <ul className="space-y-3.5 text-xs font-bold text-on-surface-variant">
+                                <h4 className="mb-3.5 text-[11px] font-black uppercase tracking-widest text-outline sm:mb-5">Help Center</h4>
+                                <ul className="space-y-2.5 text-xs font-bold text-on-surface-variant sm:space-y-3.5">
                                     {helpLinks.map((link) => (
                                         <li key={`${link.label}-${link.href}`}>
                                             <FooterNavLink link={link}/>
@@ -121,11 +121,11 @@ export default function Footer() {
                             </div>
                         )}
 
-                        <div>
-                            <h4 className="mb-5 text-[11px] font-black uppercase tracking-widest text-outline">Contact Info</h4>
-                            <ul className="mb-5 space-y-3.5 text-xs font-bold text-on-surface-variant">
+                        <div className="col-span-2 sm:col-span-1">
+                            <h4 className="mb-3.5 text-[11px] font-black uppercase tracking-widest text-outline sm:mb-5">Contact Info</h4>
+                            <ul className="mb-4 space-y-2.5 text-xs font-bold text-on-surface-variant sm:mb-5 sm:space-y-3.5">
                                 {supportHotline && (
-                                    <li className="flex items-start gap-2.5">
+                                    <li className="flex min-w-0 items-start gap-2.5">
                                         <Phone className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
                                         <a href={`tel:${supportHotline.replace(/\s+/g, '')}`} className="hover:text-primary">
                                             {supportHotline}
@@ -133,7 +133,7 @@ export default function Footer() {
                                     </li>
                                 )}
                                 {supportEmail && (
-                                    <li className="flex items-start gap-2.5">
+                                    <li className="flex min-w-0 items-start gap-2.5">
                                         <Mail className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
                                         <a href={`mailto:${supportEmail}`} className="break-all hover:text-primary">
                                             {supportEmail}
@@ -141,13 +141,13 @@ export default function Footer() {
                                     </li>
                                 )}
                                 {companyAddress && (
-                                    <li className="flex items-start gap-2.5">
+                                    <li className="flex min-w-0 items-start gap-2.5">
                                         <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
                                         <span>{companyAddress}</span>
                                     </li>
                                 )}
                                 {workingHours && (
-                                    <li className="flex items-start gap-2.5">
+                                    <li className="flex min-w-0 items-start gap-2.5">
                                         <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
                                         <span>{workingHours}</span>
                                     </li>
@@ -174,7 +174,7 @@ export default function Footer() {
                 </div>
 
                 {(copyrightText || legalLinks.length > 0) && (
-                    <div className="flex flex-col items-center justify-center gap-2 border-t border-surface-container-high pt-6 text-center text-[11px] font-bold text-outline">
+                    <div className="flex flex-col items-center justify-center gap-2 border-t border-surface-container-high pt-5 text-center text-[11px] font-bold text-outline sm:pt-6">
                         {copyrightText && <p>{copyrightText}</p>}
                         {legalLinks.length > 0 && (
                             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">

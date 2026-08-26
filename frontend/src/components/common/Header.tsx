@@ -224,46 +224,48 @@ export default function Header() {
                                 Danh mục <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180"/>
                             </Link>
                             <div
-                                className="fixed left-4 right-4 top-[76px] z-50 flex cursor-default flex-col gap-6 rounded-[2rem] bg-surface-container-lowest p-8 opacity-0 invisible shadow-[0_30px_60px_-15px_rgba(14,48,78,0.15)] transition-all duration-300 group-hover:visible group-hover:opacity-100 xl:absolute xl:-left-20 xl:right-auto xl:top-full xl:w-[950px]">
-                                <div className="grid grid-cols-12 gap-6 min-h-[300px]">
+                                className="fixed left-4 right-4 top-[76px] z-50 flex max-h-[calc(100vh-96px)] cursor-default flex-col gap-6 overflow-y-auto rounded-[2rem] bg-surface-container-lowest p-8 opacity-0 invisible shadow-[0_30px_60px_-15px_rgba(14,48,78,0.15)] transition-all duration-300 group-hover:visible group-hover:opacity-100 xl:absolute xl:-left-20 xl:right-auto xl:top-full xl:w-[950px]">
+                                <div className="grid h-[min(26rem,calc(100vh-12rem))] min-h-0 grid-cols-12 gap-6">
                                     <div
-                                        className="col-span-4 border-r border-surface-container pr-4 flex flex-col gap-1.5">
+                                        className="col-span-4 flex min-h-0 flex-col border-r border-surface-container pr-4">
                                         <span
                                             className="text-[11px] font-black uppercase tracking-wider text-outline mb-2 block px-2">Danh mục chính</span>
-                                        {mainCategories?.map((parent) => {
-                                            const IconComponent = getCategoryIcon(parent.code);
-                                            const isActive = activeParentId === parent.id;
-                                            const hasChildren = (parent.children && parent.children.length > 0) ||
-                                                categories.some(c => {
-                                                    const pId = c.parentId !== undefined ? c.parentId : (c as any).parentID;
-                                                    return pId !== null && pId !== undefined && String(pId) === String(parent.id);
-                                                });
-                                            return (
-                                                <div
-                                                    key={parent.id}
-                                                    onMouseEnter={() => setActiveParentId(parent.id)}
-                                                    className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 cursor-pointer ${
-                                                        isActive ? 'bg-primary text-on-primary shadow-md shadow-primary/20 scale-[1.02]' : 'hover:bg-surface-container text-on-surface'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <IconComponent className="w-5 h-5"/>
-                                                        <span className="font-bold text-sm">{parent.name}</span>
+                                        <div role="region" aria-label="Danh mục chính" className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-2">
+                                            {mainCategories?.map((parent) => {
+                                                const IconComponent = getCategoryIcon(parent.code);
+                                                const isActive = activeParentId === parent.id;
+                                                const hasChildren = (parent.children && parent.children.length > 0) ||
+                                                    categories.some(c => {
+                                                        const pId = c.parentId !== undefined ? c.parentId : (c as any).parentID;
+                                                        return pId !== null && pId !== undefined && String(pId) === String(parent.id);
+                                                    });
+                                                return (
+                                                    <div
+                                                        key={parent.id}
+                                                        onMouseEnter={() => setActiveParentId(parent.id)}
+                                                        className={`flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 transition-all duration-200 ${
+                                                            isActive ? 'scale-[1.02] bg-primary text-on-primary shadow-md shadow-primary/20' : 'text-on-surface hover:bg-surface-container'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <IconComponent className="w-5 h-5"/>
+                                                            <span className="text-sm font-bold">{parent.name}</span>
+                                                        </div>
+                                                        {hasChildren && (
+                                                            <ChevronRight
+                                                                className={`w-4 h-4 ${isActive ? 'text-on-primary' : 'text-outline/60'}`}/>
+                                                        )}
                                                     </div>
-                                                    {hasChildren && (
-                                                        <ChevronRight
-                                                            className={`w-4 h-4 ${isActive ? 'text-on-primary' : 'text-outline/60'}`}/>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
 
-                                    <div className="col-span-8 pl-4 flex flex-col">
+                                    <div className="col-span-8 flex min-h-0 flex-col pl-4">
                                         <span
                                             className="text-[11px] font-black uppercase tracking-wider text-outline mb-4 block">Dòng sản phẩm chi tiết</span>
                                         {activeChildren && activeChildren.length > 0 ? (
-                                            <div className="grid grid-cols-2 gap-3">
+                                            <div role="region" aria-label="Dòng sản phẩm chi tiết" className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto overscroll-contain pr-2">
                                                 {activeChildren.map((child) => (
                                                     <Link key={child.id} to={`/products?category=${child.id}`}
                                                           className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-surface-container-low hover:bg-primary-container/20 border border-transparent hover:border-primary/20 transition-all group/child">

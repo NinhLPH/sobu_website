@@ -164,6 +164,10 @@ const getErrorMessage = (error: any, fallback: string) =>
     error?.message ||
     fallback;
 
+const isInsufficientStockError = (error: any) =>
+    error?.response?.data?.code === 'INSUFFICIENT_STOCK'
+    || /insufficient stock for product/i.test(getErrorMessage(error, ''));
+
 const voucherBenefitText = (voucher: ActiveVoucher) => {
     if (voucher.type === 'FREE_SHIP') {
         return voucher.maxDiscountAmount
@@ -506,7 +510,6 @@ export default function Cart() {
     const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
     const [isApplyingVouchers, setIsApplyingVouchers] = useState(false);
     const [voucherError, setVoucherError] = useState<string | null>(null);
-    const [voucherPreviewRetry, setVoucherPreviewRetry] = useState(0);
     const confirmShippingQuoteRequestRef = useRef(0);
     const voucherPreviewRequestRef = useRef(0);
     const socialLinks = useMemo(
@@ -539,7 +542,11 @@ export default function Cart() {
                 setActiveVouchers(response.data ?? []);
             })
             .catch((error) => {
-                if (!cancelled) setVoucherError(getErrorMessage(error, 'Không thể tải voucher gợi ý.'));
+                if (!cancelled) {
+                    const message = getErrorMessage(error, 'Không thể tải voucher gợi ý.');
+                    setVoucherError(message);
+                    ToastService.error(message);
+                }
             })
             .finally(() => {
                 if (!cancelled) setIsLoadingVouchers(false);
@@ -733,7 +740,9 @@ export default function Cart() {
             })
             .catch((error) => {
                 if (requestId === voucherPreviewRequestRef.current && error?.code !== 'ERR_CANCELED') {
-                    setVoucherError(getErrorMessage(error, 'Không thể tính ưu đãi. Vui lòng thử lại.'));
+                    const message = getErrorMessage(error, 'Không thể tính ưu đãi. Vui lòng thử lại.');
+                    setVoucherError(message);
+                    ToastService.error(message);
                 }
             })
             .finally(() => {
@@ -752,8 +761,7 @@ export default function Cart() {
         isHydratingProducts,
         items,
         shippingVoucherCode,
-        subtotal,
-        voucherPreviewRetry
+        subtotal
     ]);
 
     const applyVoucherCode = (rawCode: string) => {
@@ -962,8 +970,11 @@ export default function Cart() {
                     { replace: true }
                 );
             }
-        } catch {
-            // The cart store exposes the backend error through checkoutError.
+        } catch (error: any) {
+            if (isInsufficientStockError(error)) {
+                clearCheckoutError();
+                ToastService.error('Sản phẩm vượt quá số lượng hiện có trong kho');
+            }
         }
     };
 
@@ -1021,9 +1032,9 @@ export default function Cart() {
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="space-y-8 lg:col-span-7">
-                    {(validationError || checkoutError || locationError || hydrationError || shippingQuoteError || voucherError) && (
+                    {(validationError || checkoutError || locationError || hydrationError || shippingQuoteError) && (
                         <div role="alert" aria-live="assertive" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">
-                            <span>{validationError || checkoutError || locationError || hydrationError || shippingQuoteError || voucherError}</span>
+                            <span>{validationError || checkoutError || locationError || hydrationError || shippingQuoteError}</span>
                             {locationError && (
                                 <button type="button" onClick={() => void retryLocations()} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-error/30 px-3 py-2 transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error/30">
                                     <RefreshCw className="h-3.5 w-3.5" /> Thử lại địa chỉ
@@ -1037,11 +1048,6 @@ export default function Cart() {
                             {shippingQuoteError && (
                                 <button type="button" onClick={() => setShippingQuoteRetry((value) => value + 1)} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-error/30 px-3 py-2 transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error/30">
                                     <RefreshCw className="h-3.5 w-3.5" /> Tính lại phí ship
-                                </button>
-                            )}
-                            {voucherError && !locationError && !hydrationError && !shippingQuoteError && (
-                                <button type="button" onClick={() => setVoucherPreviewRetry((value) => value + 1)} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-error/30 px-3 py-2 transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error/30">
-                                    <RefreshCw className="h-3.5 w-3.5" /> Tính lại ưu đãi
                                 </button>
                             )}
                         </div>
