@@ -47,6 +47,9 @@ class OrderSyncControllerTest {
     private OrderQueryService orderQueryService;
 
     @Mock
+    private com.vn.sodu.order.services.OrderExportService orderExportService;
+
+    @Mock
     private NhanhEnabled nhanhEnabled;
 
     @Test
@@ -58,7 +61,7 @@ class OrderSyncControllerTest {
                 .build();
         when(orderQueryService.listOrders(0, 20, "createdAt", "DESC"))
                 .thenReturn(new PageImpl<>(List.of(dto), PageRequest.of(0, 20), 1));
-        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, orderExportService, nhanhEnabled);
 
         ResponseEntity<ApiResponseDTO<PageResponse<OrderResponseDto>>> response =
                 controller.listOrders(staffAuth(), 0, 20, "createdAt", "DESC");
@@ -78,7 +81,7 @@ class OrderSyncControllerTest {
                 .items(Collections.emptyList())
                 .build();
         when(orderQueryService.getOrderDetail(1L)).thenReturn(dto);
-        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, orderExportService, nhanhEnabled);
 
         ResponseEntity<ApiResponseDTO<OrderResponseDto>> response =
                 controller.getOrderDetail(1L, staffAuth());
@@ -100,7 +103,7 @@ class OrderSyncControllerTest {
                 .nhanhOrderCode("SOBU-REQ-1")
                 .build();
         when(orderSyncService.retryOrderSync(1L)).thenReturn(order);
-        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, orderExportService, nhanhEnabled);
 
         ResponseEntity<ApiResponseDTO<OrderSyncResultDto>> response =
                 controller.retryOrderSync(1L, staffAuth());
@@ -115,7 +118,7 @@ class OrderSyncControllerTest {
 
     @Test
     void retryOrderSyncRejectsNonStaff() {
-        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, nhanhEnabled);
+        OrderSyncController controller = new OrderSyncController(syncServiceProvider(), orderQueryService, orderExportService, nhanhEnabled);
 
         assertThrows(AccessDeniedException.class,
                 () -> controller.retryOrderSync(1L, new UsernamePasswordAuthenticationToken("user", "n/a")));
@@ -126,8 +129,9 @@ class OrderSyncControllerTest {
         doThrow(new com.vn.sodu.integration.NhanhIntegrationDisabledException())
                 .when(nhanhEnabled).requireEnabled();
         OrderSyncController controller = new OrderSyncController(
-                orderSyncServiceProvider,
+                syncServiceProvider(),
                 orderQueryService,
+                orderExportService,
                 nhanhEnabled
         );
 

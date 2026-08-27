@@ -277,8 +277,11 @@ public class NhanhOrderGateway {
     }
 
     private void requireShipping(Order order) {
-        if (order.getCustomerCityId() == null || order.getCustomerDistrictId() == null || order.getCustomerWardId() == null) {
-            throw new IllegalArgumentException("Nhanh sync requires customer city, district, and ward ids");
+        boolean is2Level = order.getLocationVersion() == null
+                || "v2".equalsIgnoreCase(order.getLocationVersion())
+                || "2025.1".equals(order.getLocationVersion());
+        if (order.getCustomerCityId() == null || (!is2Level && order.getCustomerDistrictId() == null) || order.getCustomerWardId() == null) {
+            throw new IllegalArgumentException("Nhanh sync requires customer city, district (for 3-level), and ward ids");
         }
         if (order.getCarrierId() == null || order.getCarrierServiceId() == null) {
             throw new IllegalArgumentException("Nhanh sync requires carrier id and carrier service id");

@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import java.util.List;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,7 +34,52 @@ public class OrderSyncController {
 
     private final ObjectProvider<OrderSyncService> orderSyncServiceProvider;
     private final OrderQueryService orderQueryService;
+    private final com.vn.sodu.order.services.OrderExportService orderExportService;
     private final NhanhEnabled nhanhEnabled;
+
+    @PostMapping("/export/spx")
+    @Operation(
+            summary = "Export orders to SPX Excel",
+            description = "Exports selected orders or filtered orders to SPX mass creation Excel format."
+    )
+    public ResponseEntity<byte[]> exportSpxExcelPost(
+            Authentication authentication,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) com.vn.sodu.order.dtos.ExportOrdersRequestDto requestDto
+    ) {
+        requireStaff(authentication);
+        List<Long> ids = requestDto != null ? requestDto.getIds() : null;
+        String status = requestDto != null ? requestDto.getStatus() : null;
+        String query = requestDto != null ? requestDto.getQuery() : null;
+
+        byte[] excelBytes = orderExportService.exportSpxExcel(ids, status, query);
+        String filename = "SPX_Orders_" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now()) + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
+
+    @GetMapping("/export/spx")
+    @Operation(
+            summary = "Export orders to SPX Excel (GET)",
+            description = "Exports selected orders or filtered orders to SPX mass creation Excel format via query params."
+    )
+    public ResponseEntity<byte[]> exportSpxExcelGet(
+            Authentication authentication,
+            @RequestParam(required = false) List<Long> ids,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String query
+    ) {
+        requireStaff(authentication);
+        byte[] excelBytes = orderExportService.exportSpxExcel(ids, status, query);
+        String filename = "SPX_Orders_" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now()) + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
 
     @GetMapping
     @Operation(

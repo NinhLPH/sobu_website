@@ -24,7 +24,7 @@ class ProductPricingTest {
     }
 
     @Test
-    void returnsRegularPriceBeforeOrAfterValidityWindow() {
+    void returnsNewPriceAsPriorityBeforeOrAfterValidityWindow() {
         Product scheduled = saleProduct();
         scheduled.setSaleValidFrom(NOW.plusMinutes(1));
         Product expired = saleProduct();
@@ -32,8 +32,22 @@ class ProductPricingTest {
 
         assertThat(ProductPricing.isSaleActive(scheduled, NOW)).isFalse();
         assertThat(ProductPricing.isSaleActive(expired, NOW)).isFalse();
-        assertThat(ProductPricing.effectivePrice(scheduled, NOW)).isEqualByComparingTo("100000");
-        assertThat(ProductPricing.effectivePrice(expired, NOW)).isEqualByComparingTo("100000");
+        assertThat(ProductPricing.effectivePrice(scheduled, NOW)).isEqualByComparingTo("80000");
+        assertThat(ProductPricing.effectivePrice(expired, NOW)).isEqualByComparingTo("80000");
+        assertThat(ProductPricing.displayOldPrice(scheduled, NOW)).isNull();
+        assertThat(ProductPricing.displayOldPrice(expired, NOW)).isNull();
+    }
+
+    @Test
+    void handlesOptionalOldPrice() {
+        Product product = new Product();
+        product.setRetailPrice(new BigDecimal("80000"));
+        product.setOldPrice(null);
+
+        assertThat(ProductPricing.hasValidDiscount(product)).isFalse();
+        assertThat(ProductPricing.isSaleActive(product, NOW)).isFalse();
+        assertThat(ProductPricing.effectivePrice(product, NOW)).isEqualByComparingTo("80000");
+        assertThat(ProductPricing.displayOldPrice(product, NOW)).isNull();
     }
 
     @Test

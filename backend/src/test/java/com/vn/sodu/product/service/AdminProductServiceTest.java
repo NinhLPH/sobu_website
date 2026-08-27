@@ -163,6 +163,34 @@ class AdminProductServiceTest {
     }
 
     @Test
+    @DisplayName("Should allow product creation with sale window when oldPrice is omitted")
+    void createProductAllowsNullOldPriceWithSaleDates() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 31, 12, 0);
+        ProductCreateRequest request = ProductCreateRequest.builder()
+                .name("Optional old price")
+                .retailPrice(new BigDecimal("80000"))
+                .oldPrice(null)
+                .saleValidFrom(start)
+                .saleValidThrough(start.plusDays(7))
+                .build();
+
+        Product savedProduct = new Product();
+        savedProduct.setId(2L);
+        savedProduct.setName("Optional old price");
+
+        when(adminProductMapper.toEntity(request)).thenReturn(new Product());
+        when(productRepo.save(any(Product.class))).thenReturn(savedProduct);
+        when(productRepo.findById(2L)).thenReturn(Optional.of(savedProduct));
+        when(productMapper.toDetail(any(), any(), any(), any())).thenReturn(ProductDetailDTO.builder().id(2L).build());
+        when(productImageRepo.findByProductId(2L)).thenReturn(List.of());
+        when(productUnitRepo.findByProductId(2L)).thenReturn(List.of());
+        when(productAttributeRepo.findByProductId(2L)).thenReturn(List.of());
+
+        ProductDetailDTO result = adminProductService.createProduct(request);
+        assertThat(result.getId()).isEqualTo(2L);
+    }
+
+    @Test
     @DisplayName("Should reject reversed sale validity window")
     void createProductRejectsReversedSaleWindow() {
         LocalDateTime start = LocalDateTime.of(2026, 8, 31, 12, 0);

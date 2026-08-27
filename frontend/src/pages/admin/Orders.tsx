@@ -8,6 +8,7 @@ import {
     Loader2,
     RefreshCw
 } from 'lucide-react';
+import { AdminWorkflowService } from '../../service/admin.service';
 import { useAdminStore } from '../../store/useAdminStore';
 import { formatCurrency } from '../../utils/format';
 import {SearchSuggestion} from '../../components/common/SearchSuggestInput';
@@ -116,10 +117,35 @@ export default function AdminOrders() {
     const [syncFilter, setSyncFilter] = useState('ALL');
     const [sortBy, setSortBy] = useState('createdAt');
     const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('DESC');
+    const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
+    const [isExporting, setIsExporting] = useState(false);
     const nhanhEnabled = useIntegrationStore(state => state.nhanhEnabled);
     const integrationLoaded = useIntegrationStore(state => state.loaded);
     const ensureIntegrationLoaded = useIntegrationStore(state => state.ensureLoaded);
     const showNhanhControls = integrationLoaded && nhanhEnabled;
+
+    const handleExportSpx = async () => {
+        try {
+            setIsExporting(true);
+            const payload = selectedOrderIds.length > 0
+                ? { ids: selectedOrderIds }
+                : { status: statusFilter !== 'ALL' ? statusFilter : undefined, query: searchTerm || undefined };
+            const blob = await AdminWorkflowService.exportSpxOrders(payload);
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
+            link.setAttribute('download', `Spx_Orders_${timestamp}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Failed to export Spx Excel', err);
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     useEffect(() => {
         void ensureIntegrationLoaded();
@@ -184,15 +210,26 @@ export default function AdminOrders() {
                 <h1 className="text-2xl font-black uppercase tracking-tight text-on-surface">
                     {showNhanhControls ? 'Quản lý đơn hàng ERP' : 'Quản lý đơn hàng'}
                 </h1>
-                <button
-                    type="button"
-                    onClick={refresh}
-                    disabled={isOrdersLoading}
-                    className="flex items-center gap-1.5 rounded-xl bg-surface-container px-4 py-2 text-xs font-bold text-on-surface transition-colors hover:bg-surface-container-high disabled:opacity-50"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isOrdersLoading ? 'animate-spin' : ''}`} />
-                    Làm mới
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleExportSpx}
+                        disabled={isExporting || isOrdersLoading}
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                        {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                        {selectedOrderIds.length > 0 ? `Xuất Excel SPX (${selectedOrderIds.length})` : 'Xuất Excel SPX'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={refresh}
+                        disabled={isOrdersLoading}
+                        className="flex items-center gap-1.5 rounded-xl bg-surface-container px-4 py-2 text-xs font-bold text-on-surface transition-colors hover:bg-surface-container-high disabled:opacity-50"
+                    >
+                        <RefreshCw className={`h-3.5 w-3.5 ${isOrdersLoading ? 'animate-spin' : ''}`} />
+                        Làm mới
+                    </button>
+                </div>
             </div>
 
             {ordersError && (
@@ -256,6 +293,21 @@ export default function AdminOrders() {
                     <table className="w-full text-left text-xs">
                         <thead className="bg-surface-variant font-bold text-on-surface-variant">
                             <tr>
+                                <th className="px-4 py-4 text-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedOrderIds(filteredOrders.map(o => o.id));
+                                            } else {
+                                                setSelectedOrderIds([]);
+                                            }
+                                        }}
+                                        className="h-4 w-4 rounded border-outline-variant/40 accent-primary"
+                                        aria-label="Chọn tất cả đơn hàng"
+                                    />
+                                </th>
                                 <th className="px-6 py-4">Mã đơn</th>
                                 <th className="px-6 py-4">Khách hàng</th>
                                 <th className="px-6 py-4">Ngày tạo</th>
@@ -268,7 +320,7 @@ export default function AdminOrders() {
                         <tbody>
                             {isOrdersLoading ? (
                                 <tr>
-                                    <td colSpan={showNhanhControls ? 7 : 6} className="px-6 py-16 text-center">
+                                    <td colSpan={showNhanhControls ? 8 : 7} className="px-6 py-16 text-center">
                                         <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-primary" />
                                         <p className="text-[10px] font-bold text-outline">
                                             Đang tải danh sách đơn hàng...
@@ -280,6 +332,21 @@ export default function AdminOrders() {
                                     key={order.id}
                                     className="border-b border-outline-variant/20 hover:bg-surface-container-lowest/50"
                                 >
+                                    <td className="px-4 py-4 text-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedOrderIds.includes(order.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedOrderIds(prev => [...prev, order.id]);
+                                                } else {
+                                                    setSelectedOrderIds(prev => prev.filter(id => id !== order.id));
+                                                }
+                                            }}
+                                            className="h-4 w-4 rounded border-outline-variant/40 accent-primary"
+                                            aria-label={`Chọn đơn hàng ${order.orderCode || order.id}`}
+                                        />
+                                    </td>
                                     <td className="px-6 py-4 font-bold">
                                         <p className="font-black text-primary">
                                             #{order.orderCode || order.id}
@@ -352,7 +419,7 @@ export default function AdminOrders() {
                             ))}
                             {!isOrdersLoading && filteredOrders.length === 0 && (
                                 <tr>
-                                    <td colSpan={showNhanhControls ? 7 : 6} className="px-6 py-16 text-center font-bold text-outline">
+                                    <td colSpan={showNhanhControls ? 8 : 7} className="px-6 py-16 text-center font-bold text-outline">
                                         <FileText className="mx-auto mb-2 h-8 w-8 text-outline/30" />
                                         Không tìm thấy đơn hàng nào.
                                     </td>

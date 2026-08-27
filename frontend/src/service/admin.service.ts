@@ -76,5 +76,13 @@ export const AdminWorkflowService = {
         return apiClient.post(
             `/v1/api/admin/payments/${encodeURIComponent(paymentCode)}/mock/confirm`
         );
+    },
+
+    exportSpxOrders: (
+        data?: { ids?: number[]; status?: string; query?: string }
+    ): Promise<Blob> => {
+        return apiClient.post('/api/admin/orders/export/spx', data, {
+            responseType: 'blob'
+        });
     }
 };

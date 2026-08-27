@@ -374,9 +374,6 @@ public class AdminProductService {
         if (oldPrice != null && oldPrice.compareTo(price) <= 0) {
             throw new BadRequestException("oldPrice must be greater than price");
         }
-        if ((saleValidFrom != null || saleValidThrough != null) && oldPrice == null) {
-            throw new BadRequestException("A sale validity period requires oldPrice");
-        }
         if (saleValidFrom != null && saleValidThrough != null && saleValidThrough.isBefore(saleValidFrom)) {
             throw new BadRequestException("saleValidThrough must not be before saleValidFrom");
         }

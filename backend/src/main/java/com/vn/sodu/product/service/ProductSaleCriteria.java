@@ -43,11 +43,7 @@ final class ProductSaleCriteria {
     }
 
     static Expression<BigDecimal> effectivePrice(Root<Product> root, CriteriaBuilder cb, LocalDateTime now) {
-        CriteriaBuilder.Case<BigDecimal> price = cb.selectCase();
-        return price
-                .when(activeSale(root, cb, now), root.<BigDecimal>get("retailPrice"))
-                .when(validDiscount(root, cb), root.<BigDecimal>get("oldPrice"))
-                .otherwise(root.<BigDecimal>get("retailPrice"));
+        return cb.coalesce(root.<BigDecimal>get("retailPrice"), root.<BigDecimal>get("oldPrice"));
     }
 
     static boolean isComputedSort(String sortBy) {

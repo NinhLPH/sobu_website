@@ -57,9 +57,9 @@ full_name = VALUES(full_name),
 status = VALUES(status);
 
 INSERT INTO customers (id, account_id, gender, birthday, province, district, ward, street, total_money, points, tier_id) VALUES
-(1, 4, 2, '1996-04-12', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé', '12 Lê Lợi', 6250000, 625, 2),
-(2, 5, 1, '1992-09-21', 'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Hàng Trống', '26 Tràng Thi', 18400000, 1840, 3),
-(3, 6, 2, '2000-01-08', 'Đà Nẵng', 'Quận Hải Châu', 'Phường Hải Châu I', '08 Bạch Đằng', 450000, 45, 1)
+(1, 4, 2, '1996-04-12', 'Thành phố Hồ Chí Minh', NULL, 'Phường Bàn Cờ', '12 Lê Lợi', 6250000, 625, 2),
+(2, 5, 1, '1992-09-21', 'Thành phố Hà Nội', NULL, 'Phường Hoàn Kiếm', '26 Tràng Thi', 18400000, 1840, 3),
+(3, 6, 2, '2000-01-08', 'Thành phố Đà Nẵng', NULL, 'Phường Hải Châu', '08 Bạch Đằng', 450000, 45, 1)
 ON DUPLICATE KEY UPDATE
 gender = VALUES(gender),
 birthday = VALUES(birthday),
@@ -312,18 +312,18 @@ location_version, nhanh_order_id, nhanh_order_code, sync_error, last_sync_messag
 ) VALUES
 (1, 'SOBU-ORD-0001', 'SOBU-ORD-0001', 1, 'NORMAL', 'PROCESSING', 'SYNCED', 'NORMAL_ORDER_CREATED', 738000, 0, 0,
 738000, 0, 'PAID', 'Đơn hàng từ yêu cầu SOBU-REQ-0001.',
-'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé',
-79, 760, 26734, 8, 1, 'v1', 'NH-10001', 'NH-SODU-10001', NULL, 'Nhanh normal order created successfully.', '2026-05-18 09:45:00',
+'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'Thành phố Hồ Chí Minh', NULL, 'Phường Bàn Cờ',
+79, NULL, 27154, 8, 1, '2025.1', 'NH-10001', 'NH-SODU-10001', NULL, 'Nhanh normal order created successfully.', '2026-05-18 09:45:00',
 0, '2026-05-18 09:30:00', '2026-05-18 09:45:00'),
 (2, 'SOBU-ORD-0002', 'SOBU-ORD-0002', 2, 'PREORDER', 'READY_FOR_FINAL_PAYMENT', 'SYNCED', 'PREORDER_DEPOSIT_CREATED', 498000, 100000, 0,
 100000, 398000, 'PENDING', 'Đơn đặt trước từ yêu cầu SOBU-REQ-0002.',
-'Trần Gia Minh', '0912000002', 'minh.tran@example.com', '26 Tràng Thi', 'Hà Nội', 'Quận Hoàn Kiếm', 'Phường Hàng Trống',
-1, 1, 1, 8, 1, 'v1', 'NH-10002', 'NH-SODU-10002', NULL, 'Nhanh preorder deposit order created successfully.', '2026-05-19 14:30:00',
+'Trần Gia Minh', '0912000002', 'minh.tran@example.com', '26 Tràng Thi', 'Thành phố Hà Nội', NULL, 'Phường Hoàn Kiếm',
+1, NULL, 70, 8, 1, '2025.1', 'NH-10002', 'NH-SODU-10002', NULL, 'Nhanh preorder deposit order created successfully.', '2026-05-19 14:30:00',
 0, '2026-05-19 14:10:00', '2026-05-20 09:10:00'),
 (3, 'SOBU-ORD-0003', 'SOBU-ORD-0003', NULL, 'NORMAL', 'DELIVERED', 'SYNCED', 'NORMAL_ORDER_CREATED', 518000, 0, 35000,
 518000, 0, 'PAID', 'Đơn hàng mẫu đã giao thành công — dùng để test review.',
-'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'TP. Hồ Chí Minh', 'Quận 1', 'Phường Bến Nghé',
-79, 760, 26734, 8, 1, 'v1', NULL, NULL, NULL, NULL, NULL,
+'Nguyễn Hoàng Linh', '0912000001', 'linh.nguyen@example.com', '12 Lê Lợi', 'Thành phố Hồ Chí Minh', NULL, 'Phường Bàn Cờ',
+79, NULL, 27154, 8, 1, '2025.1', NULL, NULL, NULL, NULL, NULL,
 0, '2026-06-15 09:00:00', '2026-06-20 15:30:00')
 ON DUPLICATE KEY UPDATE
 app_order_id = VALUES(app_order_id),

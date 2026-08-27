@@ -49,10 +49,10 @@ public final class ProductPricing {
         if (product == null) {
             return null;
         }
-        if (isSaleActive(product, now)) {
+        if (product.getRetailPrice() != null) {
             return product.getRetailPrice();
         }
-        return hasValidDiscount(product) ? product.getOldPrice() : product.getRetailPrice();
+        return product.getOldPrice();
     }
 
     public static BigDecimal displayOldPrice(Product product) {
@@ -68,15 +68,12 @@ public final class ProductPricing {
     }
 
     static PriceView resolve(Product product, LocalDateTime now) {
-        boolean onSale = isSaleActive(product, now);
-        BigDecimal price;
         if (product == null) {
-            price = null;
-        } else if (onSale) {
-            price = product.getRetailPrice();
-        } else {
-            price = hasValidDiscount(product) ? product.getOldPrice() : product.getRetailPrice();
+            return new PriceView(null, null, false);
         }
-        return new PriceView(price, onSale ? product.getOldPrice() : null, onSale);
+        boolean onSale = isSaleActive(product, now);
+        BigDecimal price = effectivePrice(product, now);
+        BigDecimal oldPrice = onSale ? product.getOldPrice() : null;
+        return new PriceView(price, oldPrice, onSale);
     }
 }
