@@ -6,6 +6,7 @@ services:
   mysql:
     image: ${MYSQL_IMAGE:-mysql:8.4}
     container_name: ${MYSQL_CONTAINER_NAME:-sobu-mysql}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     restart: unless-stopped
 
     environment:

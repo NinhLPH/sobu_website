@@ -154,7 +154,13 @@ public class InventoryService {
 
     @Transactional(readOnly = true)
     public InventoryBalanceDto getBalance(Long productId) {
-        Product product = requireProduct(productId);
+        if (productId == null) {
+            throw new BadRequestException("Product id is required");
+        }
+        // Use plain findById (no lock) — a PESSIMISTIC_WRITE lock (FOR UPDATE) is
+        // illegal inside a read-only transaction and is unnecessary for a balance query.
+        Product product = productRepo.findById(productId)
+                .orElseThrow(() -> new NotFoundException("Product not found with id: " + productId));
         double remain = safe(product.getStockRemain());
         double available = safe(product.getStockAvailable());
         return InventoryBalanceDto.builder()
@@ -167,7 +173,13 @@ public class InventoryService {
 
     @Transactional(readOnly = true)
     public List<InventoryAdjustmentDto> getLedger(Long productId) {
-        requireProduct(productId);
+        if (productId == null) {
+            throw new BadRequestException("Product id is required");
+        }
+        // Use plain findById (no lock) — same reason as getBalance.
+        if (!productRepo.existsById(productId)) {
+            throw new NotFoundException("Product not found with id: " + productId);
+        }
         return ledgerRepository.findByProductIdOrderByIdDesc(productId)
                 .stream()
                 .map(this::toDto)
