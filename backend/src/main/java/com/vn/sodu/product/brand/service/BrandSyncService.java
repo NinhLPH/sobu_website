@@ -9,9 +9,7 @@ import com.vn.sodu.product.brand.mapper.BrandMapper;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -48,13 +46,10 @@ public class BrandSyncService {
 
         int success = 0;
         int failed = 0;
-        Set<Long> syncedBrandIds = new HashSet<>();
-
         for (NhanhBrandDTO dto : brands) {
             try {
                 if (syncOne(dto)) {
                     success++;
-                    syncedBrandIds.add(dto.getId());
                 } else {
                     failed++;
                 }
@@ -68,7 +63,7 @@ public class BrandSyncService {
         int parentFailed = 0;
         for (NhanhBrandDTO dto : brands) {
             try {
-                if (resolveParent(dto, syncedBrandIds)) {
+                if (resolveParent(dto)) {
                     parentResolved++;
                 } else {
                     parentFailed++;
@@ -114,7 +109,7 @@ public class BrandSyncService {
     }
 
     @Transactional
-    boolean resolveParent(NhanhBrandDTO dto, Set<Long> syncedBrandIds) {
+    boolean resolveParent(NhanhBrandDTO dto) {
         if (dto == null || dto.getId() == null) {
             return false;
         }
@@ -124,26 +119,21 @@ public class BrandSyncService {
             return true;
         }
 
-        // Try to find parent by external_id if not in synced set and not by PK
-        Long parentPk = parentId;
-        if (!syncedBrandIds.contains(parentId) && !brandRepo.existsById(parentId)) {
-            // Parent might have been created with IDENTITY PK, look up by external_id
-            java.util.Optional<Brand> parentByExternal = brandRepo.findByExternalId(parentId);
-            if (parentByExternal.isPresent()) {
-                parentPk = parentByExternal.get().getId();
-            } else {
-                log.warn("Skipping parent assignment for brandId={} because parentId={} is missing",
-                        dto.getId(), parentId);
-                return false;
-            }
-        }
-
-        Brand brand = brandMapper.toEntity(dto);
-        if (brand == null) {
-            log.warn("Skipping parent assignment because mapper returned null for id={}", dto.getId());
+        java.util.Optional<Brand> childByExternal = brandRepo.findByExternalId(dto.getId());
+        if (childByExternal.isEmpty()) {
+            log.warn("Skipping parent assignment because brand externalId={} is missing", dto.getId());
             return false;
         }
 
+        java.util.Optional<Brand> parentByExternal = brandRepo.findByExternalId(parentId);
+        if (parentByExternal.isEmpty()) {
+            log.warn("Skipping parent assignment for brand externalId={} because parent externalId={} is missing",
+                    dto.getId(), parentId);
+            return false;
+        }
+
+        Brand brand = childByExternal.get();
+        Long parentPk = parentByExternal.get().getId();
         brand.setParentId(parentPk);
         brand.setParent(null);
         brandRepo.save(brand);

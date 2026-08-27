@@ -1,4 +1,4 @@
-import {BrowserRouter as Router, Routes, Route, Navigate} from 'react-router-dom';
+import {BrowserRouter as Router, Routes, Route, Navigate, useLocation} from 'react-router-dom';
 
 import LoginPage from './pages/LoginPage';
 import Cart from './pages/Cart';
@@ -11,6 +11,9 @@ import AdminLayout from "./components/admin/AdminLayout";
 import AdminProducts from "./pages/admin/Products";
 import AdminCategories from "./pages/admin/Categories";
 import AdminBrands from "./pages/admin/Brands";
+import AdminBadges from "./pages/admin/Badges";
+import AdminVouchers from "./pages/admin/Vouchers";
+import AdminInventory from "./pages/admin/Inventory";
 import AdminOrders from "./pages/admin/Orders";
 import AdminRequests from "./pages/admin/Requests";
 import AdminRequestDetail from "./pages/admin/RequestDetails";
@@ -42,18 +45,24 @@ import AdminStaticPages from './pages/admin/StaticPages';
 import AdminReviews from './pages/admin/Reviews';
 import AdminShipping from './pages/admin/Shipping';
 import AdminSupport from './pages/admin/Support';
+import {ConfirmDialogProvider} from './components/common/ConfirmDialog';
+import {listenToSystemTheme} from './store/useThemeStore';
 
-export default function App() {
+function AppContent() {
     const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
+    const location = useLocation();
+    const isAdminRoute = location.pathname.startsWith('/admin');
 
     useEffect(() => {
         void fetchConfigs();
     }, [fetchConfigs]);
 
+    useEffect(() => listenToSystemTheme(), []);
+
     return (
-        <Router>
+        <ConfirmDialogProvider>
             <ScrollToTop/>
-            <div className="flex flex-col min-h-screen">
+            <div className={`flex min-h-screen flex-col ${isAdminRoute ? 'admin-app-shell' : ''}`}>
                 <Header/>
                 <Routes>
                     <Route path="/login" element={<LoginPage/>}/>
@@ -99,6 +108,9 @@ export default function App() {
                             <Route path="products" element={<AdminProducts/>}/>
                             <Route path="categories" element={<AdminCategories/>}/>
                             <Route path="brands" element={<AdminBrands/>}/>
+                            <Route path="badges" element={<AdminBadges/>}/>
+                            <Route path="vouchers" element={<AdminVouchers/>}/>
+                            <Route path="inventory" element={<AdminInventory/>}/>
                             <Route path="orders" element={<AdminOrders/>}/>
                             <Route path="orders/:id" element={<AdminOrderDetail/>}/>
                             <Route path="requests" element={<AdminRequests/>}/>
@@ -106,17 +118,23 @@ export default function App() {
                             <Route path="reviews" element={<AdminReviews/>}/>
                             <Route path="support" element={<AdminSupport/>}/>
                             <Route path="shipping" element={<AdminShipping/>}/>
-                            <Route path="banners" element={<AdminBanners/>}/>
-                            <Route path="configs" element={<AdminConfigs/>}/>
-                            <Route path="static-pages" element={<AdminStaticPages/>}/>
+                            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+                                <Route path="banners" element={<AdminBanners/>}/>
+                                <Route path="configs" element={<AdminConfigs/>}/>
+                                <Route path="static-pages" element={<AdminStaticPages/>}/>
+                            </Route>
                             <Route path="sync" element={<AdminSync/>}/>
                             <Route path="nhanh/callback" element={<AdminNhanhCallback/>}/>
                         </Route>
                     </Route>
                 </Routes>
-                <Footer/>
+                {!isAdminRoute && <Footer/>}
                 <Toast/>
             </div>
-        </Router>
+        </ConfirmDialogProvider>
     );
+}
+
+export default function App() {
+    return <Router><AppContent/></Router>;
 }

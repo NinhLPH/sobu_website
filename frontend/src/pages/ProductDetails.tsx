@@ -1,6 +1,7 @@
 import {createElement, useState, useEffect, useMemo} from 'react';
 import {useParams, Link} from 'react-router-dom';
-import {Check, ChevronRight, MessageCircle, Star, ShoppingBag, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
+import {Check, Copy, Loader2, MessageCircle, RefreshCw, Star, ShoppingBag, TicketPercent, Truck, ShieldCheck, Minus, Plus} from 'lucide-react';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 import {SiZalo} from 'react-icons/si';
 
 import {useCartStore} from '../store/useCartStore';
@@ -9,9 +10,17 @@ import ProductSlider from "../components/common/ProductSlider";
 import {useProductStore} from '../store/useProductStore';
 import {usePublicUiStore} from '../store/usePublicUiStore';
 import {PublicCatalogService} from '../service/public-catalog.service';
-import {mapListItemToProductModel, mapDetailToProductModel, ProductModel} from '../interface/product.model';
+import {
+    getDiscountPercent,
+    isSaleProduct,
+    mapListItemToProductModel,
+    mapDetailToProductModel,
+    ProductModel
+} from '../interface/product.model';
 import ProductReviewSection from '../components/reviews/ProductReviewSection';
 import {parseJsonConfig} from '../utils/website-config';
+import {VoucherService} from '../service/voucher.service';
+import {ProductVoucherSummary} from '../interface/voucher.model';
 
 type SocialLinks = Record<string, string>;
 
@@ -22,6 +31,11 @@ export default function ProductDetail() {
     const addToCart = useCartStore(state => state.addToCart);
     const [mainImage, setMainImage] = useState('');
     const [loadingDetail, setLoadingDetail] = useState(true);
+    const [productVouchers, setProductVouchers] = useState<ProductVoucherSummary[]>([]);
+    const [loadingVouchers, setLoadingVouchers] = useState(false);
+    const [voucherError, setVoucherError] = useState('');
+    const [voucherRetry, setVoucherRetry] = useState(0);
+    const [copyAnnouncement, setCopyAnnouncement] = useState('');
     const configMap = usePublicUiStore((state) => state.configMap);
     const socialLinks = parseJsonConfig<SocialLinks>(configMap, 'social_links', {});
     const facebookConsultationUrl = socialLinks.facebook?.trim() || '';
@@ -58,6 +72,34 @@ export default function ProductDetail() {
         }
     }, [id, product]);
 
+    useEffect(() => {
+        if (!product) return;
+        const controller = new AbortController();
+        setLoadingVouchers(true);
+        setVoucherError('');
+        setProductVouchers([]);
+
+        void VoucherService.getForProduct(product.id, {
+            categoryId: product.categoryId ? Number(product.categoryId) : undefined,
+            oldPrice: product.originalPrice,
+            price: product.price
+        }, controller.signal)
+            .then(response => {
+                if (!response.success) throw new Error(response.message || 'Không thể tải voucher sản phẩm.');
+                setProductVouchers(response.data ?? []);
+            })
+            .catch(error => {
+                if (error?.code !== 'ERR_CANCELED') {
+                    setVoucherError(error?.response?.data?.message || error?.message || 'Không thể tải voucher sản phẩm.');
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoadingVouchers(false);
+            });
+
+        return () => controller.abort();
+    }, [product, voucherRetry]);
+
     const relatedProducts = useMemo(() => {
         return products
             .filter(p => String(p.id) !== id)
@@ -73,6 +115,24 @@ export default function ProductDetail() {
         }
     };
 
+    const copyVoucherCode = async (code: string) => {
+        try {
+            await navigator.clipboard.writeText(code);
+            setCopyAnnouncement(`Đã sao chép mã ${code}.`);
+        } catch {
+            setCopyAnnouncement(`Không thể sao chép mã ${code}. Vui lòng sao chép thủ công.`);
+        }
+    };
+
+    const voucherBenefit = (voucher: ProductVoucherSummary) => {
+        if (voucher.type === 'FREE_SHIP') return voucher.badgeText || 'Miễn phí vận chuyển';
+        if (voucher.type === 'DISCOUNT_PERCENT') return `Giảm ${voucher.value ?? 0}%`;
+        return `Giảm ${formatCurrency(voucher.value ?? 0)}`;
+    };
+
+    const isSale = product ? isSaleProduct(product) : false;
+    const discountPercent = product ? getDiscountPercent(product) : 0;
+
     if (loadingDetail || !product) {
         return (
             <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
@@ -83,14 +143,12 @@ export default function ProductDetail() {
     }
 
     return (
-        <main className="w-full min-w-0 bg-surface px-3 pb-14 pt-24 sm:px-6 sm:pb-16">
-            <nav className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant mb-6">
-                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
-                <ChevronRight className="w-3.5 h-3.5"/>
-                <Link to="/products" className="hover:text-primary transition-colors">Sản phẩm</Link>
-                <ChevronRight className="w-3.5 h-3.5"/>
-                <span className="text-primary">{product.category}</span>
-            </nav>
+        <main className="w-full min-w-0 bg-surface px-4 pb-14 pt-28 sm:px-6 sm:pb-16 sm:pt-32">
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Sản phẩm', to: '/products'},
+                {label: product.category || 'Danh mục sản phẩm'},
+            ]}/>
 
             <div className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="lg:col-span-7 space-y-4">
@@ -98,11 +156,20 @@ export default function ProductDetail() {
                     <div
                         className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface-container-lowest p-4 shadow-[0_20px_50px_-15px_rgba(14,48,78,0.12)] sm:aspect-[4/3] sm:p-8">
                         <img className="w-full h-full object-contain" src={mainImage} alt={product.name}/>
-                        <div className="absolute top-6 left-6 flex flex-col gap-2">
-                            {product.isNew && (
+                        <div className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] flex-wrap gap-2 sm:left-6 sm:top-6">
+                            {product.manualTag && (
                                 <span
-                                    className="rounded-full bg-primary px-3 py-1 text-[9px] font-black uppercase tracking-widest text-on-primary shadow-md sm:px-3.5 sm:py-1.5 sm:text-[10px]">
-                                    Mới
+                                    className="rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest shadow-md sm:px-3.5 sm:py-1.5 sm:text-[10px]"
+                                    style={{
+                                        backgroundColor: product.manualTag.backgroundColor,
+                                        color: product.manualTag.textColor
+                                    }}>
+                                    {product.manualTag.label}
+                                </span>
+                            )}
+                            {isSale && (
+                                <span className="rounded-full bg-error px-3 py-1 text-[9px] font-black uppercase tracking-widest text-on-error shadow-md sm:px-3.5 sm:py-1.5 sm:text-[10px]">
+                                    SALE -{discountPercent}%
                                 </span>
                             )}
                         </div>
@@ -142,12 +209,74 @@ export default function ProductDetail() {
                         <span className="text-2xl font-black leading-none tracking-tight text-primary sm:text-3xl">
                             {formatCurrency(product.price)}
                         </span>
-                        {product.originalPrice && (
+                        {isSale && product.originalPrice != null && (
                             <span className="text-sm text-outline line-through font-bold">
                                 {formatCurrency(product.originalPrice)}
                             </span>
                         )}
+                        {isSale && (
+                            <span className="rounded-full bg-error/10 px-2.5 py-1 text-xs font-black text-error">
+                                Tiết kiệm {discountPercent}%
+                            </span>
+                        )}
                     </div>
+
+                    <section aria-labelledby="product-voucher-title" className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <h2 id="product-voucher-title" className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-on-surface">
+                                <TicketPercent className="h-4 w-4 text-primary"/> Ưu đãi cho sản phẩm
+                            </h2>
+                            {loadingVouchers && <Loader2 aria-label="Đang tải voucher" className="h-4 w-4 animate-spin text-primary"/>}
+                        </div>
+                        <p className="mt-1 text-[11px] font-semibold leading-relaxed text-on-surface-variant">
+                            Giá cuối cùng được xác nhận theo giỏ hàng và địa chỉ tại bước thanh toán.
+                        </p>
+
+                        {voucherError ? (
+                            <div role="alert" className="mt-3 rounded-xl border border-error/20 bg-error/5 p-3 text-xs font-semibold text-error">
+                                <p>{voucherError}</p>
+                                <button type="button" onClick={() => setVoucherRetry(value => value + 1)} className="mt-2 inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-error/20 px-3 font-black transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error/30">
+                                    <RefreshCw className="h-3.5 w-3.5"/> Thử lại
+                                </button>
+                            </div>
+                        ) : !loadingVouchers && productVouchers.length === 0 ? (
+                            <p className="mt-3 rounded-xl bg-surface-container-lowest px-3 py-3 text-xs font-semibold text-outline">Hiện chưa có voucher riêng cho sản phẩm này.</p>
+                        ) : (
+                            <div className="mt-3 space-y-2">
+                                {productVouchers.map(voucher => {
+                                    const showEstimatedPrice = voucher.slot === 'ITEM'
+                                        && voucher.effectivePrice != null
+                                        && voucher.effectivePrice >= 0;
+                                    return <article key={voucher.id} className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-sm">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <strong className="font-mono text-sm text-primary">{voucher.code}</strong>
+                                                    {voucher.autoApply && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary">Tự động</span>}
+                                                </div>
+                                                <p className="mt-1 text-xs font-bold text-on-surface">{voucher.name}</p>
+                                            </div>
+                                            <button type="button" onClick={() => void copyVoucherCode(voucher.code)} aria-label={`Sao chép mã ${voucher.code}`} className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-primary/10 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/30">
+                                                <Copy className="h-4 w-4"/>
+                                            </button>
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-semibold text-on-surface-variant">
+                                            <span className="font-black text-emerald-700">{voucherBenefit(voucher)}</span>
+                                            {(voucher.minOrderValue ?? 0) > 0 && <span>Đơn tối thiểu {formatCurrency(voucher.minOrderValue ?? 0)}</span>}
+                                            {(voucher.maxDiscountAmount ?? 0) > 0 && <span>Tối đa {formatCurrency(voucher.maxDiscountAmount ?? 0)}</span>}
+                                            {voucher.endDate && <span>Hạn {new Date(voucher.endDate).toLocaleDateString('vi-VN')}</span>}
+                                        </div>
+                                        {showEstimatedPrice && (
+                                            <p className="mt-2 border-t border-dashed border-outline-variant/30 pt-2 text-[11px] font-semibold text-on-surface-variant">
+                                                Giá dự kiến khi đủ điều kiện: <strong className="text-primary">{formatCurrency(voucher.effectivePrice ?? 0)}</strong>
+                                            </p>
+                                        )}
+                                    </article>;
+                                })}
+                            </div>
+                        )}
+                        <p className="sr-only" aria-live="polite">{copyAnnouncement}</p>
+                    </section>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-surface-container-low p-3.5 rounded-xl">

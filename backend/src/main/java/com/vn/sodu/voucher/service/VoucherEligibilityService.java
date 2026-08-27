@@ -89,12 +89,11 @@ public class VoucherEligibilityService {
             boolean eligible = voucherGeoService.isAddressEligible(
                     voucher.getGeoScope(),
                     request.getCustomerCityName(),
-                    request.getCustomerDistrictName(),
-                    request.getCustomerCityId(),
-                    request.getCustomerDistrictId()
+                    request.getCustomerWardName(),
+                    request.getCustomerCityId()
             );
             if (!eligible) {
-                return "mã miễn phí vận chuyển chỉ áp dụng cho địa chỉ tại 11 quận nội thành Hà Nội";
+                return "mã miễn phí vận chuyển chỉ áp dụng cho 42 phường trung tâm Hà Nội";
             }
         }
 

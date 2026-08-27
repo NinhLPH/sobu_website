@@ -11,11 +11,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -74,27 +71,30 @@ class BrandSyncServiceTest {
     }
 
     @Test
-    @DisplayName("Should sync child before parent without FK failure then resolve parent")
-    void testSyncBrandsResolvesParentAfterBaseBrands() {
-        NhanhBrandDTO childDto = new NhanhBrandDTO(2L, 1L, "C", "Child", 1, 1L);
-        NhanhBrandDTO parentDto = new NhanhBrandDTO(1L, null, "P", "Parent", 1, 1L);
-        Brand childBase = Brand.builder().id(2L).parentId(1L).name("Child").build();
-        Brand parentBase = Brand.builder().id(1L).name("Parent").build();
-        Brand childWithParent = Brand.builder().id(2L).parentId(1L).name("Child").build();
+    @DisplayName("Should resolve parent external id to local primary key without remapping child")
+    void testResolveParentUsesPersistedLocalEntities() {
+        NhanhBrandDTO childDto = new NhanhBrandDTO(200L, 100L, "C", "Child", 1, 1L);
+        Brand child = Brand.builder().id(42L).externalId(200L).name("Child").build();
+        Brand parent = Brand.builder().id(17L).externalId(100L).name("Parent").build();
+        when(brandRepo.findByExternalId(200L)).thenReturn(java.util.Optional.of(child));
+        when(brandRepo.findByExternalId(100L)).thenReturn(java.util.Optional.of(parent));
 
-        BrandSyncService spyService = spy(brandSyncService);
-        doReturn(Arrays.asList(childDto, parentDto)).when(spyService).fetchAllBrands();
-        when(brandMapper.toEntity(childDto)).thenReturn(childBase, childWithParent);
-        when(brandMapper.toEntity(parentDto)).thenReturn(parentBase);
-        when(nhanhEnabled.isEnabled()).thenReturn(true);
+        assertTrue(brandSyncService.resolveParent(childDto));
 
-        spyService.syncBrands();
+        verify(brandRepo).save(argThat(brand ->
+                brand.getId().equals(42L) && brand.getParentId().equals(17L)));
+        verifyNoInteractions(brandMapper);
+    }
 
-        InOrder inOrder = inOrder(brandRepo);
-        inOrder.verify(brandRepo).save(argThat(brand ->
-                brand.getId().equals(2L) && brand.getParentId() == null));
-        inOrder.verify(brandRepo).save(argThat(brand -> brand.getId().equals(1L)));
-        inOrder.verify(brandRepo).save(argThat(brand ->
-                brand.getId().equals(2L) && brand.getParentId().equals(1L)));
+    @Test
+    @DisplayName("Should not update child brand when parent external id is missing")
+    void testResolveParentSkipsMissingParent() {
+        NhanhBrandDTO childDto = new NhanhBrandDTO(200L, 100L, "C", "Child", 1, 1L);
+        Brand child = Brand.builder().id(42L).externalId(200L).name("Child").build();
+        when(brandRepo.findByExternalId(200L)).thenReturn(java.util.Optional.of(child));
+        when(brandRepo.findByExternalId(100L)).thenReturn(java.util.Optional.empty());
+
+        assertFalse(brandSyncService.resolveParent(childDto));
+        verify(brandRepo, never()).save(any(Brand.class));
     }
 }

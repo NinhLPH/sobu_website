@@ -75,7 +75,7 @@ export const REQUEST_STATUS_VIEWS: Record<RequestStatus, RequestWorkflowView> = 
         label: 'Đã hủy',
         description: 'Yêu cầu đã được hủy và không còn xử lý.',
         actor: 'SYSTEM',
-        tone: 'bg-gray-50 text-gray-700 border-gray-200'
+        tone: 'bg-surface-container-low text-on-surface-variant border-outline-variant/40'
     }
 };
 

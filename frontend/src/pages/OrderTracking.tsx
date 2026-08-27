@@ -1,8 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import {useParams, useSearchParams} from 'react-router-dom';
 import {
     CreditCard,
-    ChevronRight,
     ExternalLink,
     Loader2,
     MapPin,
@@ -20,7 +19,9 @@ import {
 import { PaymentMethod } from '../enum/union-types';
 import { usePaymentStore } from '../store/usePaymentStore';
 import { formatCurrency } from '../utils/format';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
+import {useConfirmDialog} from '../components/common/ConfirmDialog';
 
 type TrackingType = 'internal' | 'nhanh';
 
@@ -129,6 +130,7 @@ const paymentTypeLabels: Record<OrderPaymentType, string> = {
 };
 
 export default function OrderTracking() {
+    const confirm = useConfirmDialog();
     const { orderId: routeOrderId } = useParams<{ orderId?: string }>();
     const [searchParams] = useSearchParams();
     const initialOrderId = routeOrderId || searchParams.get('orderId') || '';
@@ -263,7 +265,7 @@ export default function OrderTracking() {
     };
 
     const handleCancelOrder = async () => {
-        if (!orderDetail || !window.confirm('Bạn chắc chắn muốn hủy đơn hàng này?')) {
+        if (!orderDetail || !await confirm({title: 'Hủy đơn hàng?', message: 'Đơn hàng sẽ được hủy và tồn kho được hoàn lại theo xử lý của hệ thống.', confirmLabel: 'Hủy đơn hàng', tone: 'danger'})) {
             return;
         }
 
@@ -317,6 +319,9 @@ export default function OrderTracking() {
     const currentStep = getStatusStep(orderDetail?.status);
     const totalAmount = orderDetail?.totalAmount ?? 0;
     const shippingFee = orderDetail?.shippingFee ?? 0;
+    const discountAmount = orderDetail?.discountAmount ?? 0;
+    const shippingDiscountAmount = orderDetail?.shippingDiscountAmount ?? 0;
+    const originalSubtotal = Math.max(0, totalAmount + discountAmount + shippingDiscountAmount - shippingFee);
     const paidAmount = orderDetail?.paidAmount ?? orderDetail?.depositAmount ?? 0;
     const remainingAmount = orderDetail?.remainingAmount ?? Math.max(0, totalAmount - paidAmount);
     const availablePaymentTypes = orderDetail
@@ -328,26 +333,24 @@ export default function OrderTracking() {
     );
 
     return (
-        <main className="mx-auto w-full min-w-0 max-w-4xl bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
-            <nav className="mb-6 flex items-center gap-2 text-xs font-bold text-on-surface-variant">
-                <Link to="/" className="transition-colors hover:text-primary">Trang chủ</Link>
-                <ChevronRight className="h-3.5 w-3.5" />
-                <Link to="/orders" className="transition-colors hover:text-primary">Đơn hàng của tôi</Link>
-                <ChevronRight className="h-3.5 w-3.5" />
-                <span className="text-primary">Chi tiết đơn hàng</span>
-            </nav>
+        <main className="mx-auto w-full min-w-0 max-w-7xl bg-surface px-4 pb-16 pt-28 sm:px-6 sm:pb-20 sm:pt-32">
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Đơn hàng của tôi', to: '/orders'},
+                {label: 'Chi tiết đơn hàng'},
+            ]}/>
 
-            <div className="mx-auto mb-10 max-w-xl text-center">
-                <h1 className="mb-2 text-3xl font-black uppercase tracking-tight text-on-surface">
+            <div className="mb-6">
+                <h1 className="text-3xl font-black uppercase tracking-tight text-on-surface">
                     Tra cứu đơn hàng
                 </h1>
-                <p className="text-xs font-bold text-outline">
+                <p className="mt-1 text-xs font-semibold text-outline">
                     Chọn loại mã bạn đang có. Việc tra cứu yêu cầu đăng nhập và đơn hàng phải thuộc tài khoản hiện tại.
                 </p>
             </div>
 
-            <form onSubmit={handleSearch} className="mx-auto mb-12 max-w-xl space-y-3">
-                <div className="grid grid-cols-2 gap-2 rounded-xl bg-surface-container p-1">
+            <form onSubmit={handleSearch} className="mb-6 rounded-2xl border border-outline-variant/30 bg-surface p-4 shadow-sm">
+                <div className="mb-3 flex w-fit max-w-full gap-2 rounded-xl bg-surface-container p-1">
                     <button
                         type="button"
                         onClick={() => {
@@ -355,10 +358,10 @@ export default function OrderTracking() {
                             setTrackingError(null);
                         }}
                         disabled={isLoading}
-                        className={`rounded-lg px-3 py-2 text-xs font-black transition-colors ${
+                        className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed ${
                             trackingType === 'internal'
-                                ? 'bg-white text-primary shadow-sm'
-                                : 'text-outline'
+                                ? 'bg-primary text-on-primary shadow-sm'
+                                : 'text-on-surface-variant hover:bg-surface-container-lowest'
                         }`}
                     >
                         ID đơn SOBU
@@ -370,20 +373,22 @@ export default function OrderTracking() {
                             setTrackingError(null);
                         }}
                         disabled={isLoading}
-                        className={`rounded-lg px-3 py-2 text-xs font-black transition-colors ${
+                        className={`cursor-pointer rounded-lg px-3 py-2 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed ${
                             trackingType === 'nhanh'
-                                ? 'bg-white text-primary shadow-sm'
-                                : 'text-outline'
+                                ? 'bg-primary text-on-primary shadow-sm'
+                                : 'text-on-surface-variant hover:bg-surface-container-lowest'
                         }`}
                     >
                         Nhanh ID / code
                     </button>
                 </div>
 
-                <div className="flex gap-3 rounded-2xl border border-surface-container/60 bg-surface-container-lowest p-2 shadow-md">
-                    <div className="flex flex-1 items-center gap-3 pl-3">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5">
                         <Search className="h-5 w-5 text-outline" />
+                        <label className="sr-only" htmlFor="order-tracking-reference">Mã đơn hàng</label>
                         <input
+                            id="order-tracking-reference"
                             type="text"
                             value={reference}
                             onChange={(event) => {
@@ -392,27 +397,27 @@ export default function OrderTracking() {
                             }}
                             disabled={isLoading}
                             placeholder={trackingType === 'internal' ? 'Ví dụ: 123' : 'Ví dụ: NH001'}
-                            className="w-full border-none bg-transparent text-xs font-semibold text-on-surface outline-none placeholder:text-outline/40"
+                            className="w-full border-none bg-transparent text-sm font-medium text-on-surface outline-none placeholder:text-outline/60"
                             required
                         />
                     </div>
                     <button
                         type="submit"
                         disabled={isLoading || !reference.trim()}
-                        className="flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-primary to-primary-container px-6 py-3 text-xs font-black uppercase tracking-widest text-white disabled:opacity-50"
+                        className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-black text-on-primary transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tra cứu'}
                     </button>
                 </div>
 
                 {trackingError && (
-                    <p className="text-center text-xs font-bold text-error">{trackingError}</p>
+                    <p role="alert" className="mt-3 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">{trackingError}</p>
                 )}
             </form>
 
             {orderDetail && (
-                <section className="space-y-8 rounded-[2rem] border border-surface-container/60 bg-surface-container-lowest p-6 shadow-md sm:p-8">
-                    <div className="flex flex-col items-start justify-between gap-4 border-b border-surface-container pb-6 sm:flex-row sm:items-center">
+                <section className="space-y-6 overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface p-4 shadow-sm sm:p-6">
+                    <div className="flex flex-col items-start justify-between gap-4 border-b border-outline-variant/20 pb-5 sm:flex-row sm:items-center">
                         <div>
                             <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
                                 Mã đơn: #{orderDetail.orderCode || orderDetail.id}
@@ -436,7 +441,7 @@ export default function OrderTracking() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 rounded-2xl bg-surface-container p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-3 rounded-xl border border-surface-container bg-surface-container-lowest p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p className="text-xs font-black uppercase tracking-wider text-on-surface">
                                 Hủy đơn hàng
@@ -456,7 +461,7 @@ export default function OrderTracking() {
                             type="button"
                             onClick={handleCancelOrder}
                             disabled={!canCancelOrder(orderDetail) || isCancellingOrder}
-                            className="flex items-center justify-center gap-2 rounded-xl border border-error/20 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-error transition-colors hover:bg-error/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-error/20 px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-error transition-colors hover:bg-error/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {isCancellingOrder ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4"/>}
                             {orderDetail.status === 'CANCELLED' ? 'Đã hủy đơn' : 'Hủy đơn'}
@@ -464,7 +469,7 @@ export default function OrderTracking() {
                     </div>
 
                     {orderDetail.status !== 'CANCELLED' && currentStep > 0 && (
-                        <div className="relative mx-auto max-w-2xl py-4">
+                        <div className="relative mx-auto max-w-3xl border-y border-outline-variant/20 py-6">
                             <div className="absolute left-0 top-1/2 z-0 h-1 w-full -translate-y-1/2 rounded-full bg-surface-container" />
                             <div
                                 className="absolute left-0 top-1/2 z-0 h-1 -translate-y-1/2 rounded-full bg-primary transition-all"
@@ -499,9 +504,9 @@ export default function OrderTracking() {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 gap-8 pt-4 lg:grid-cols-12">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                         <div className="space-y-4 lg:col-span-7">
-                            <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-on-surface">
+                            <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-on-surface">
                                 <Package className="h-4 w-4 text-primary" /> Sản phẩm trong đơn
                             </h2>
                             {orderDetail.items && orderDetail.items.length > 0 ? (
@@ -509,7 +514,7 @@ export default function OrderTracking() {
                                     {orderDetail.items.map((item) => (
                                         <div
                                             key={item.id}
-                                            className="flex items-center justify-between gap-4 rounded-2xl bg-surface-container p-4 text-xs font-bold"
+                                            className="flex items-center justify-between gap-4 rounded-xl border border-surface-container bg-surface-container-lowest p-4 text-xs font-bold"
                                         >
                                             <div>
                                                 <p className="text-on-surface">{item.name}</p>
@@ -529,17 +534,17 @@ export default function OrderTracking() {
                                     ))}
                                 </div>
                             ) : (
-                                <p className="rounded-xl bg-surface-container p-4 text-xs font-semibold text-outline">
+                                <p className="rounded-xl border border-surface-container bg-surface-container-lowest p-4 text-xs font-semibold text-outline">
                                     API chưa trả chi tiết sản phẩm cho đơn hàng này.
                                 </p>
                             )}
                         </div>
 
                         <div className="space-y-5 lg:col-span-5">
-                            <h2 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-on-surface">
+                            <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-on-surface">
                                 <MapPin className="h-4 w-4 text-primary" /> Thông tin giao nhận
                             </h2>
-                            <div className="space-y-3 rounded-2xl bg-surface-container p-5 text-xs font-bold text-outline">
+                            <div className="space-y-3 rounded-xl border border-surface-container bg-surface-container-lowest p-4 text-xs font-bold text-outline">
                                 <div>
                                     <p className="text-[9px] uppercase">Người nhận</p>
                                     <p className="mt-0.5 text-sm font-black text-on-surface">
@@ -560,12 +565,22 @@ export default function OrderTracking() {
                                 </div>
                                 <div className="space-y-2 border-t border-outline-variant/20 pt-3.5">
                                     <div className="flex justify-between">
-                                        <span>Tổng đơn:</span>
-                                        <span className="text-on-surface">{formatCurrency(totalAmount)}</span>
+                                        <span>Tạm tính:</span>
+                                        <span className="text-on-surface">{formatCurrency(originalSubtotal)}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Phí vận chuyển:</span>
+                                        <span>Phí vận chuyển gốc:</span>
                                         <span className="text-on-surface">{formatCurrency(shippingFee)}</span>
+                                    </div>
+                                    {discountAmount > 0 && <div className="flex justify-between text-emerald-700"><span>Giảm sản phẩm/toàn đơn:</span><span>-{formatCurrency(discountAmount)}</span></div>}
+                                    {shippingDiscountAmount > 0 && <div className="flex justify-between text-emerald-700"><span>Giảm phí vận chuyển:</span><span>-{formatCurrency(shippingDiscountAmount)}</span></div>}
+                                    {(orderDetail.discountVoucherCode || orderDetail.shippingVoucherCode) && <div className="flex flex-wrap gap-2 py-1" aria-label="Voucher đã áp dụng">
+                                        {orderDetail.discountVoucherCode && <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] font-black text-primary">{orderDetail.discountVoucherCode}</span>}
+                                        {orderDetail.shippingVoucherCode && <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] font-black text-primary">{orderDetail.shippingVoucherCode}</span>}
+                                    </div>}
+                                    <div className="flex justify-between border-t border-outline-variant/20 pt-2 font-black text-on-surface">
+                                        <span>Tổng thanh toán:</span>
+                                        <span>{formatCurrency(totalAmount)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Đã thanh toán:</span>
@@ -580,7 +595,7 @@ export default function OrderTracking() {
                         </div>
                     </div>
 
-                    <section className="space-y-5 border-t border-surface-container pt-6">
+                    <section className="space-y-5 border-t border-outline-variant/20 pt-6">
                         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                             <div>
                                 <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-on-surface">
@@ -595,7 +610,7 @@ export default function OrderTracking() {
                                 type="button"
                                 onClick={handleRefreshPayments}
                                 disabled={isLoadingPayments || isCreatingPayment}
-                                className="flex items-center justify-center gap-2 rounded-xl border border-primary/20 px-4 py-2 text-[10px] font-black uppercase text-primary disabled:opacity-50"
+                                className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-primary/20 px-4 py-2 text-[10px] font-black uppercase text-primary transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 <RefreshCw className={`h-3.5 w-3.5 ${isLoadingPayments ? 'animate-spin' : ''}`} />
                                 Làm mới
@@ -625,7 +640,7 @@ export default function OrderTracking() {
                         )}
 
                         {availablePaymentTypes.length > 0 && (
-                            <div className="grid gap-3 rounded-2xl bg-surface-container p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                            <div className="grid gap-3 rounded-xl border border-surface-container bg-surface-container-lowest p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                                 <label className="space-y-1.5 text-[10px] font-black uppercase text-outline">
                                     Loại thanh toán
                                     <select
@@ -639,7 +654,7 @@ export default function OrderTracking() {
                                             clearPaymentError();
                                         }}
                                         disabled={isCreatingPayment}
-                                        className="w-full rounded-xl border border-outline-variant/20 bg-white px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none"
+                                        className="w-full rounded-xl border border-outline-variant/20 bg-surface px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none"
                                     >
                                         {availablePaymentTypes.map(type => (
                                             <option key={type} value={type}>
@@ -661,7 +676,7 @@ export default function OrderTracking() {
                                             paymentType === 'DEPOSIT' ||
                                             Boolean(selectedPendingPayment)
                                         }
-                                        className="w-full rounded-xl border border-outline-variant/20 bg-white px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none disabled:opacity-60"
+                                        className="w-full rounded-xl border border-outline-variant/20 bg-surface px-3 py-2.5 text-xs font-bold normal-case text-on-surface outline-none disabled:opacity-60"
                                     >
                                         <option value="ONLINE">ONLINE - PayOS</option>
                                         {paymentType !== 'DEPOSIT' && (
@@ -673,7 +688,7 @@ export default function OrderTracking() {
                                     type="button"
                                     onClick={handleCreatePayment}
                                     disabled={isCreatingPayment || isLoadingPayments}
-                                    className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-[10px] font-black uppercase tracking-wider text-white disabled:opacity-50"
+                                    className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-[10px] font-black uppercase tracking-wider text-on-primary transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {isCreatingPayment
                                         ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -701,7 +716,7 @@ export default function OrderTracking() {
                                 {payments.map((payment: OrderPaymentResponseDto) => (
                                     <div
                                         key={payment.id}
-                                        className="grid gap-3 rounded-2xl border border-surface-container bg-white p-4 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
+                                        className="grid gap-3 rounded-xl border border-surface-container bg-surface-container-lowest p-4 text-xs sm:grid-cols-[1fr_auto] sm:items-center"
                                     >
                                         <div>
                                             <div className="flex flex-wrap items-center gap-2">
@@ -729,7 +744,7 @@ export default function OrderTracking() {
                                                 <button
                                                     type="button"
                                                     onClick={() => redirectToPaymentCheckout(payment)}
-                                                    className="mt-2 inline-flex items-center gap-1 font-black uppercase text-primary hover:underline"
+                                                    className="mt-2 inline-flex cursor-pointer items-center gap-1 font-black uppercase text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                                                 >
                                                     Mở PayOS <ExternalLink className="h-3 w-3" />
                                                 </button>
@@ -739,7 +754,7 @@ export default function OrderTracking() {
                                 ))}
                             </div>
                         ) : (
-                            <p className="rounded-xl bg-surface-container p-4 text-xs font-semibold text-outline">
+                            <p className="rounded-xl border border-surface-container bg-surface-container-lowest p-4 text-xs font-semibold text-outline">
                                 Đơn hàng chưa có giao dịch thanh toán.
                             </p>
                         )}

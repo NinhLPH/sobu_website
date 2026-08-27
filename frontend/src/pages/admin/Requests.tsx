@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Eye, FileText, Loader2, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, FileText, Loader2 } from 'lucide-react';
 import { useRequestStore } from '../../store/useRequestStore';
 import { RequestStatusBadge } from '../../components/request/RequestWorkflow';
 import { REQUEST_STATUS_VIEWS } from '../../utils/request-workflow';
 import { formatCurrency } from '../../utils/format';
-import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+import {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+import {AdminFilterGroup, AdminFilterReset, AdminFilterSelect, AdminSearch, AdminToolbar} from '../../components/admin/AdminUi';
 
 const typeLabels: Record<string, string> = {
     NORMAL: 'Thông thường',
@@ -69,38 +70,32 @@ export default function AdminRequests() {
                 </div>
             </header>
 
-            <section className="rounded-2xl border border-outline-variant/30 bg-white p-4 shadow-sm">
-                <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_220px_200px]">
-                    <div className="relative flex items-center gap-2 rounded-xl bg-surface-container px-4 py-2.5">
-                        <Search className="h-4 w-4 text-outline" />
-                        <SearchSuggestInput
-                            value={search}
-                            onChange={setSearch}
-                            onSubmit={setSearch}
-                            suggestions={searchSuggestions}
-                            className="w-full border-0 bg-transparent text-xs font-semibold outline-none"
-                            placeholder="Mã yêu cầu, SĐT hoặc sản phẩm..."
-                            ariaLabel="Tìm trong trang hiện tại"
-                        />
-                    </div>
-                    <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border-0 bg-surface-container px-4 py-2.5 text-xs font-bold">
+            <section className="overflow-visible rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
+                <AdminToolbar className="rounded-2xl border-b-0">
+                    <AdminSearch value={search} onChange={value => { setSearch(value); setPage(0); }}
+                                 onSubmit={value => { setSearch(value); setPage(0); }} suggestions={searchSuggestions}
+                                 placeholder="Mã yêu cầu, SĐT hoặc sản phẩm..." ariaLabel="Tìm trong trang hiện tại"/>
+                    <AdminFilterGroup>
+                    <AdminFilterSelect label="Lọc theo trạng thái yêu cầu" value={status} onChange={value => { setStatus(value); setPage(0); }}>
                         <option value="ALL">Tất cả trạng thái</option>
                         {Object.entries(REQUEST_STATUS_VIEWS).map(([value, view]) => (
                             <option key={value} value={value}>{view.label}</option>
                         ))}
-                    </select>
-                    <select value={type} onChange={(event) => setType(event.target.value)} className="rounded-xl border-0 bg-surface-container px-4 py-2.5 text-xs font-bold">
+                    </AdminFilterSelect>
+                    <AdminFilterSelect label="Lọc theo loại yêu cầu" value={type} onChange={value => { setType(value); setPage(0); }}>
                         <option value="ALL">Tất cả loại yêu cầu</option>
                         <option value="CUSTOM">Custom theo yêu cầu</option>
                         <option value="FINDING">Tìm đồ hộ</option>
                         <option value="PREORDER">Đặt trước</option>
-                    </select>
-                </div>
+                    </AdminFilterSelect>
+                    <AdminFilterReset disabled={!search && status === 'ALL' && type === 'ALL'} onClick={() => { setSearch(''); setStatus('ALL'); setType('ALL'); setPage(0); }}/>
+                    </AdminFilterGroup>
+                </AdminToolbar>
             </section>
 
             {error && <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">{error}</div>}
 
-            <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                 <div className="space-y-3 p-3 md:hidden">
                     {filteredRequests.map((request) => (
                         <article key={request.id} className="rounded-xl border border-outline-variant/30 p-4">

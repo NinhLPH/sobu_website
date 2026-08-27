@@ -129,8 +129,9 @@ public class PaymentCalculationService {
         if (order == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
-        BigDecimal totalAmount = normalizeMoney(order.getTotalAmount());
-        BigDecimal shippingFee = normalizeMoney(order.getShippingFee());
-        return normalizeMoney(totalAmount.add(shippingFee));
+        // Order.totalAmount is persisted from VoucherApplyResponseDto.finalTotal,
+        // which already includes the final (post-discount) shipping fee. Adding
+        // shippingFee here would charge the customer for shipping twice.
+        return normalizeMoney(order.getTotalAmount());
     }
 }

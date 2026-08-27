@@ -1,4 +1,4 @@
-import React, { KeyboardEvent, useEffect, useId, useMemo, useState } from 'react';
+import { KeyboardEvent, useEffect, useId, useMemo, useState } from 'react';
 import { Check, ChevronDown, Loader2, Plus, Search } from 'lucide-react';
 import { ProductListItemDTO } from '../../interface/product.model';
 

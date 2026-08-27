@@ -1,7 +1,7 @@
 import {FormEvent, useEffect, useState} from 'react';
-import {Award, ChevronRight, Mail, Phone, UserRound} from 'lucide-react';
-import {Link} from 'react-router-dom';
+import {Award, Mail, Phone, UserRound} from 'lucide-react';
 import {useAuthStore} from '../store/useAuthStore';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 
 const emptyValue = 'Chưa cập nhật';
 
@@ -77,11 +77,10 @@ export default function UserProfile() {
 
     return (
         <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
-            <nav className="mb-6 flex items-center gap-2 text-xs font-bold text-on-surface-variant">
-                <Link to="/" className="transition-colors hover:text-primary">Trang chủ</Link>
-                <ChevronRight className="h-3.5 w-3.5"/>
-                <span className="text-primary">Hồ sơ cá nhân</span>
-            </nav>
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Hồ sơ cá nhân'},
+            ]}/>
 
             <section className="mx-auto max-w-4xl">
                 <div className="mb-8">

@@ -1,304 +1,450 @@
-import {useState, useEffect, useMemo} from 'react';
-import {Edit, Trash2, Search, X} from 'lucide-react';
+import {FormEvent, useCallback, useEffect, useState} from 'react';
+import {Archive, Edit3, Eye, ImageOff, Loader2, Plus, Power} from 'lucide-react';
+import {
+    AdminBrand,
+    AdminCategory,
+    AdminProductDetail,
+    AdminProductListItem,
+    ProductBadge,
+    ProductWriteRequest
+} from '../../interface/admin-catalog.model';
+import {AdminCatalogService} from '../../service/admin-catalog.service';
+import {ToastService} from '../../service/toast.service';
+import {formatCurrency} from '../../utils/format';
+import {getPublicImageUrl} from '../../utils/file-url';
+import {InventoryDashboardService, inventoryQuantity} from '../../service/inventory-dashboard.service';
+import {StockIndicator} from '../../components/admin/StockIndicator';
+import {
+    AdminButton,
+    AdminCard,
+    AdminEmpty,
+    AdminError,
+    AdminLoading,
+    AdminModal,
+    AdminPage,
+    AdminPagination,
+    AdminSearch,
+    AdminStatus,
+    AdminToolbar,
+    Field,
+    getApiError,
+    inputClass
+} from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
-import {ProductModel, mapListItemToProductModel} from "../../interface/product.model";
-import {CategoryModel, mapCategoryDtoToModel} from "../../interface/category.model";
-import {useProductStore} from '../../store/useProductStore';
-import {formatCurrency} from "../../utils/format";
-import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+const emptyForm: ProductWriteRequest = {
+    code: '',
+    name: '',
+    retailPrice: 0,
+    oldPrice: null,
+    saleValidFrom: null,
+    saleValidThrough: null,
+    categoryId: null,
+    brandId: null,
+    badgeId: null,
+    description: '',
+    avatarImage: '',
+    active: true,
+    status: 'ACTIVE'
+};
+const numberOrNull = (value: string) => value === '' ? null : Number(value);
+
+function ProductThumbnail({path, name, className}: { path?: string | null; name: string; className: string }) {
+    const [failed, setFailed] = useState(false);
+    const source = path ? getPublicImageUrl(path) : '';
+
+    if (!source || failed) {
+        return <div className={`${className} flex items-center justify-center bg-surface-container text-outline`}
+                    role="img" aria-label={`Không có ảnh cho ${name}`}>
+            <ImageOff className="h-5 w-5" aria-hidden="true"/>
+        </div>;
+    }
+
+    return <div className={`${className} overflow-hidden bg-surface-container p-1`}>
+        <img src={source} alt="" className="h-full w-full object-contain" onError={() => setFailed(true)}/>
+    </div>;
+}
 
 export default function AdminProducts() {
-    const { products: dbProducts, categories: dbCategories, fetchProducts, fetchCategories } = useProductStore();
-    
-    const [localProducts, setLocalProducts] = useState<ProductModel[]>([]);
-    const [localCategories, setLocalCategories] = useState<CategoryModel[]>([]);
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingProduct, setEditingProduct] = useState<Partial<ProductModel> | null>(null);
+    const confirm = useConfirmDialog();
+    const [items, setItems] = useState<AdminProductListItem[]>([]);
+    const [categories, setCategories] = useState<AdminCategory[]>([]);
+    const [brands, setBrands] = useState<AdminBrand[]>([]);
+    const [badges, setBadges] = useState<ProductBadge[]>([]);
+    const [query, setQuery] = useState('');
+    const [page, setPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [modal, setModal] = useState<'form' | 'detail' | null>(null);
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [form, setForm] = useState<ProductWriteRequest>(emptyForm);
+    const [detail, setDetail] = useState<AdminProductDetail | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [lowStockThreshold, setLowStockThreshold] = useState(5);
+    const [pendingActiveIds, setPendingActiveIds] = useState<number[]>([]);
 
     useEffect(() => {
-        fetchProducts();
-        fetchCategories();
-    }, [fetchProducts, fetchCategories]);
+        const controller = new AbortController();
+        InventoryDashboardService.getLowStockThreshold(controller.signal)
+            .then(value => {
+                if (!controller.signal.aborted) setLowStockThreshold(value);
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, []);
 
-    useEffect(() => {
-        if (dbProducts && dbProducts.length > 0) {
-            setLocalProducts(dbProducts.map(mapListItemToProductModel));
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const [products, categoryData, brandData, badgeData] = await Promise.all([
+                AdminCatalogService.getProducts({page, pageSize: 20, search: query || undefined}),
+                AdminCatalogService.getCategories(), AdminCatalogService.getBrands(), AdminCatalogService.getBadges(),
+            ]);
+            setItems(products.content || []);
+            setTotalPages(products.totalPages || 0);
+            setCategories(categoryData || []);
+            setBrands(brandData || []);
+            setBadges(badgeData || []);
+        } catch (e) {
+            setError(getApiError(e, 'Không thể tải danh sách sản phẩm.'));
+        } finally {
+            setLoading(false);
         }
-    }, [dbProducts]);
+    }, [page, query]);
 
     useEffect(() => {
-        if (dbCategories && dbCategories.length > 0) {
-            setLocalCategories(dbCategories.map(mapCategoryDtoToModel));
-        }
-    }, [dbCategories]);
+        const timer = window.setTimeout(() => void load(), 250);
+        return () => window.clearTimeout(timer);
+    }, [load]);
 
-    // Flatten categories for dropdown
-    const flatCategories: { id: string; name: string }[] = [];
-    const flatten = (cats: CategoryModel[], prefix = '') => {
-        cats.forEach(c => {
-            flatCategories.push({ id: c.id, name: `${prefix}${c.name}` });
-            if (c.children) flatten(c.children, `${prefix}${c.name} > `);
-        });
+    const openCreate = () => {
+        setEditingId(null);
+        setForm({...emptyForm});
+        setModal('form');
     };
-    flatten(localCategories);
-
-    const filteredProducts = localProducts.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const searchSuggestions = useMemo<SearchSuggestion[]>(() => localProducts.map((product) => ({
-        id: product.id,
-        label: product.name,
-        description: [product.id, product.category, product.brand].filter(Boolean).join(' • '),
-        searchValue: product.name,
-    })), [localProducts]);
-
-    const handleOpenModal = (product?: ProductModel) => {
-        if (product) {
-            setEditingProduct({ ...product });
-        } else {
-            setEditingProduct({
-                id: `PROD-${Math.floor(Math.random() * 10000)}`,
-                name: '',
-                price: 0,
-                categoryId: flatCategories[0]?.id || '',
-                category: flatCategories[0]?.name || '',
-                brand: '',
-                imageUrl: '',
-                description: '',
-                stock: 0,
+    const openEdit = async (id: number) => {
+        setSaving(true);
+        try {
+            const p = await AdminCatalogService.getProduct(id);
+            setEditingId(id);
+            setForm({
+                code: p.code || '',
+                barcode: p.barcode || '',
+                name: p.name,
+                otherName: p.otherName || '',
+                categoryId: p.categoryId,
+                brandId: p.brandId,
+                badgeId: p.badgeId,
+                retailPrice: p.retailPrice ?? p.price ?? 0,
+                importPrice: p.importPrice,
+                wholesalePrice: p.wholesalePrice,
+                oldPrice: p.oldPrice,
+                saleValidFrom: p.saleValidFrom?.slice(0, 16) || null,
+                saleValidThrough: p.saleValidThrough?.slice(0, 16) || null,
+                vat: p.vat,
+                avatarImage: p.avatarImage || '',
+                images: p.images || [],
+                description: p.description || '',
+                content: p.content || '',
+                length: p.length,
+                width: p.width,
+                height: p.height,
+                weight: p.weight,
+                status: p.status || 'ACTIVE',
+                active: p.active !== false
             });
-        }
-        setIsModalOpen(true);
-    };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setEditingProduct(null);
-    };
-
-    const handleSave = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingProduct) return;
-
-        // Find category name based on categoryId to keep them in sync
-        const cat = flatCategories.find(c => c.id === editingProduct.categoryId);
-        const productToSave = { ...editingProduct, category: cat ? cat.name : editingProduct.category } as ProductModel;
-
-        if (localProducts.some(p => p.id === productToSave.id)) {
-            setLocalProducts(prev => prev.map(p => p.id === productToSave.id ? productToSave : p));
-        } else {
-            setLocalProducts(prev => [...prev, productToSave]);
-        }
-        handleCloseModal();
-    };
-
-    const handleDelete = (id: string) => {
-        if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-            setLocalProducts(prev => prev.filter(p => p.id !== id));
+            setModal('form');
+        } catch (e) {
+            ToastService.error(getApiError(e, 'Không thể tải sản phẩm.'));
+        } finally {
+            setSaving(false);
         }
     };
+    const openDetail = async (id: number) => {
+        setSaving(true);
+        try {
+            setDetail(await AdminCatalogService.getProduct(id));
+            setModal('detail');
+        } catch (e) {
+            ToastService.error(getApiError(e));
+        } finally {
+            setSaving(false);
+        }
+    };
+    const submit = async (event: FormEvent) => {
+        event.preventDefault();
+        if (form.oldPrice != null && form.oldPrice <= form.retailPrice) {
+            ToastService.error('Giá cũ phải lớn hơn giá bán mới.');
+            return;
+        }
+        if (form.saleValidFrom && form.saleValidThrough
+            && new Date(form.saleValidThrough) < new Date(form.saleValidFrom)) {
+            ToastService.error('Thời điểm kết thúc sale không được trước thời điểm bắt đầu.');
+            return;
+        }
+        setSaving(true);
+        try {
+            editingId ? await AdminCatalogService.updateProduct(editingId, form) : await AdminCatalogService.createProduct(form);
+            ToastService.success(editingId ? 'Đã cập nhật sản phẩm.' : 'Đã tạo sản phẩm.');
+            setModal(null);
+            await load();
+        } catch (e) {
+            ToastService.error(getApiError(e, 'Không thể lưu sản phẩm.'));
+        } finally {
+            setSaving(false);
+        }
+    };
+    const toggle = async (item: AdminProductListItem) => {
+        if (pendingActiveIds.includes(item.id)) return;
+        setPendingActiveIds(previous => [...previous, item.id]);
+        try {
+            const updated = await AdminCatalogService.setProductActive(item.id, item.active === false, 'Cập nhật từ trang quản trị');
+            setItems(previous => previous.map(product => product.id === item.id
+                ? {...product, ...updated, active: updated.active !== false}
+                : product));
+            ToastService.success('Đã cập nhật trạng thái sản phẩm.');
+        } catch (e) {
+            ToastService.error(getApiError(e));
+        } finally {
+            setPendingActiveIds(previous => previous.filter(id => id !== item.id));
+        }
+    };
+    const archive = async (item: AdminProductListItem) => {
+        if (!await confirm({title: 'Lưu trữ sản phẩm?', message: `Sản phẩm “${item.name}” sẽ ngừng hiển thị để bán.`, confirmLabel: 'Lưu trữ', tone: 'warning'})) return;
+        try {
+            await AdminCatalogService.archiveProduct(item.id, 'Lưu trữ từ trang quản trị');
+            ToastService.success('Đã lưu trữ sản phẩm.');
+            await load();
+        } catch (e) {
+            ToastService.error(getApiError(e));
+        }
+    };
+    const set = <K extends keyof ProductWriteRequest>(key: K, value: ProductWriteRequest[K]) => setForm(prev => ({
+        ...prev,
+        [key]: value
+    }));
 
-
-    return (
-        <div className="pt-6 space-y-6">
-
-            <div className="relative flex items-center gap-3 rounded-xl border border-outline-variant/30 bg-white p-4">
-                <Search className="text-outline w-5 h-5"/>
-                <SearchSuggestInput
-                    placeholder="Tìm kiếm sản phẩm..."
-                    className="bg-transparent border-none outline-none w-full text-sm"
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    onSubmit={setSearchTerm}
-                    suggestions={searchSuggestions}
-                    ariaLabel="Tìm kiếm sản phẩm quản trị"
-                />
-            </div>
-
-            <div className="bg-white rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-surface-variant font-bold text-on-surface-variant">
-                        <tr>
-                            <th className="px-6 py-4">Mã SP</th>
-                            <th className="px-6 py-4">Hình ảnh</th>
-                            <th className="px-6 py-4">Tên sản phẩm</th>
-                            <th className="px-6 py-4">Danh mục</th>
-                            <th className="px-6 py-4 text-right">Giá bán</th>
-                            <th className="px-6 py-4 text-right">Tồn kho</th>
-                            <th className="px-6 py-4 text-center">Hành động</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {filteredProducts.map(product => (
-                            <tr key={product.id}
-                                className="border-b border-outline-variant/20 hover:bg-surface-container-lowest/50">
-                                <td className="px-6 py-4 font-medium">{product.id}</td>
-                                <td className="px-6 py-4">
-                                    <img src={product.imageUrl} alt={product.name}
-                                         className="w-12 h-12 rounded object-contain bg-surface-container"/>
-                                </td>
-                                <td className="px-6 py-4 font-bold text-on-surface">{product.name}</td>
-                                <td className="px-6 py-4 text-outline">{product.category}</td>
-                                <td className="px-6 py-4 text-right text-primary font-bold">{formatCurrency(product.price)}</td>
-                                <td className="px-6 py-4 text-right">{product.stock}</td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center justify-center gap-3">
-                                        <button onClick={() => handleOpenModal(product)}
-                                                className="text-secondary hover:text-primary transition-colors">
-                                            <Edit className="w-4 h-4"/>
-                                        </button>
-                                        <button onClick={() => handleDelete(product.id)}
-                                                className="text-error-dim hover:text-error transition-colors">
-                                            <Trash2 className="w-4 h-4"/>
-                                        </button>
+    return <AdminPage title="Sản phẩm"
+                      description="Quản lý thông tin bán hàng, giá niêm yết/giá bán và tag hiển thị của sản phẩm."
+                      actions={<AdminButton onClick={openCreate}><Plus className="h-4 w-4"/>Thêm sản
+                          phẩm</AdminButton>}>
+        <AdminCard>
+            <AdminToolbar><AdminSearch
+                value={query} onChange={value => {
+                setQuery(value);
+                setPage(0);
+            }} placeholder="Tìm theo tên hoặc mã sản phẩm" ariaLabel="Tìm kiếm sản phẩm quản trị"/>
+                <div className="self-center whitespace-nowrap text-xs text-outline">{items.length} sản phẩm trên trang
+                </div>
+            </AdminToolbar>
+            {loading ? <AdminLoading/> : error ?
+                <AdminError message={error} onRetry={() => void load()}/> : !items.length ?
+                    <AdminEmpty title="Chưa có sản phẩm phù hợp"
+                                description="Thử từ khóa khác hoặc thêm sản phẩm mới."/> :
+                    <><div className="hidden overflow-x-auto md:block">
+                        <table className="w-full min-w-[920px] text-left text-sm">
+                            <thead className="bg-surface-container text-xs uppercase tracking-wide text-outline">
+                            <tr>
+                                <th className="px-4 py-3">Sản phẩm</th>
+                                <th className="px-4 py-3">Phân loại</th>
+                                <th className="px-4 py-3 text-right">Giá bán</th>
+                                <th className="px-4 py-3 text-right">Tồn khả dụng</th>
+                                <th className="px-4 py-3">Trạng thái</th>
+                                <th className="px-4 py-3 text-right">Thao tác</th>
+                            </tr>
+                            </thead>
+                            <tbody>{items.map(item => <tr key={item.id}
+                                                          className="border-t border-outline-variant/25 hover:bg-surface-container-low">
+                                <td className="px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                        <ProductThumbnail path={item.avatarImage} name={item.name}
+                                                          className="h-12 w-12 shrink-0 rounded-lg"/>
+                                        <div><p className="max-w-xs font-bold text-on-surface">{item.name}</p><p
+                                            className="text-xs text-outline">{item.code || `#${item.id}`}{item.badgeName && item.badgeName.toUpperCase() !== 'SALE' ? ` · ${item.badgeName}` : ''}</p>
+                                        </div>
                                     </div>
                                 </td>
-                            </tr>
-                        ))}
-                        {filteredProducts.length === 0 && (
-                            <tr>
-                                <td colSpan={7} className="px-6 py-8 text-center text-on-surface-variant">
-                                    Không tìm thấy sản phẩm nào.
+                                <td className="px-4 py-3 text-outline">{item.categoryName || '—'}<br/><span
+                                    className="text-xs">{item.brandName || 'Chưa có thương hiệu'}</span></td>
+                                <td className="px-4 py-3 text-right"><strong
+                                    className="text-primary">{formatCurrency(item.retailPrice ?? item.price ?? 0)}</strong>{item.oldPrice != null && item.oldPrice > (item.retailPrice ?? item.price ?? 0) ?
+                                    <div
+                                        className="text-xs text-outline"><span className="line-through">{formatCurrency(item.oldPrice)}</span><span className="ml-1 font-black text-error">SALE</span></div> : null}
                                 </td>
-                            </tr>
-                        )}
-                        </tbody>
-                    </table>
+                                <td className="px-4 py-3 text-right"><StockIndicator stock={inventoryQuantity(item)} threshold={lowStockThreshold}/></td>
+                                <td className="px-4 py-3"><AdminStatus active={item.active !== false}/></td>
+                                <td className="px-4 py-3">
+                                    <div className="flex justify-end gap-1">
+                                        <button onClick={() => void openDetail(item.id)}
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                aria-label={`Xem chi tiết ${item.name}`} title="Xem chi tiết"><Eye className="h-4 w-4"/></button>
+                                        <button onClick={() => void openEdit(item.id)}
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                                aria-label={`Chỉnh sửa ${item.name}`} title="Chỉnh sửa"><Edit3 className="h-4 w-4"/></button>
+                                        <button onClick={() => void toggle(item)} disabled={pendingActiveIds.includes(item.id)}
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-wait disabled:opacity-50"
+                                                aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`} title="Đổi trạng thái">
+                                            {pendingActiveIds.includes(item.id) ? <Loader2 className="h-4 w-4 animate-spin"/> : <Power className="h-4 w-4"/>}
+                                        </button>
+                                        <button onClick={() => void archive(item)}
+                                                className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline transition-colors hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30"
+                                                aria-label={`Lưu trữ ${item.name}`} title="Lưu trữ"><Archive className="h-4 w-4"/></button>
+                                    </div>
+                                </td>
+                            </tr>)}</tbody>
+                        </table>
+                    </div>
+                    <div className="space-y-3 p-4 md:hidden">
+                        {items.map(item => <article key={item.id} className="rounded-xl border border-outline-variant/35 bg-surface p-4 shadow-sm">
+                            <div className="flex items-start gap-3">
+                                <ProductThumbnail path={item.avatarImage} name={item.name}
+                                                  className="h-14 w-14 shrink-0 rounded-lg"/>
+                                <div className="min-w-0 flex-1"><h2 className="font-black text-on-surface">{item.name}</h2><p className="mt-1 text-xs text-outline">{item.code || `#${item.id}`} · {item.categoryName || 'Chưa phân loại'}</p></div>
+                                <AdminStatus active={item.active !== false}/>
+                            </div>
+                            <dl className="mt-4 grid grid-cols-2 gap-3 border-y border-outline-variant/25 py-3 text-xs">
+                                <div><dt className="font-bold uppercase text-outline">Giá bán</dt><dd className="mt-1 font-black text-primary">{formatCurrency(item.retailPrice ?? item.price ?? 0)}</dd></div>
+                                <div className="text-right"><dt className="font-bold uppercase text-outline">Tồn khả dụng</dt><dd className="mt-1"><StockIndicator stock={inventoryQuantity(item)} threshold={lowStockThreshold}/></dd></div>
+                            </dl>
+                            <div className="mt-3 flex justify-end gap-1">
+                                <button onClick={() => void openDetail(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`Xem chi tiết ${item.name}`}><Eye className="h-4 w-4"/></button>
+                                <button onClick={() => void openEdit(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30" aria-label={`Chỉnh sửa ${item.name}`}><Edit3 className="h-4 w-4"/></button>
+                                <button onClick={() => void toggle(item)} disabled={pendingActiveIds.includes(item.id)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-surface-container hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-wait disabled:opacity-50" aria-label={`${item.active === false ? 'Kích hoạt' : 'Tạm dừng'} ${item.name}`}>{pendingActiveIds.includes(item.id) ? <Loader2 className="h-4 w-4 animate-spin"/> : <Power className="h-4 w-4"/>}</button>
+                                <button onClick={() => void archive(item)} className="flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-lg text-outline hover:bg-error/10 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/30" aria-label={`Lưu trữ ${item.name}`}><Archive className="h-4 w-4"/></button>
+                            </div>
+                        </article>)}
+                    </div></>}
+            <AdminPagination page={page} totalPages={totalPages} onChange={setPage}/></AdminCard>
+
+        <AdminModal open={modal === 'form'} onClose={() => setModal(null)}
+                    title={editingId ? 'Cập nhật sản phẩm' : 'Thêm sản phẩm'}
+                    description="Các trường giá dùng VNĐ. Giá cũ phải lớn hơn giá bán để hiển thị trạng thái giảm giá."
+                    size="xl">
+            <form onSubmit={submit} className="space-y-6 p-5">
+                <div className="grid gap-4 md:grid-cols-2"><Field label="Mã sản phẩm"><input required
+                                                                                             className={inputClass}
+                                                                                             value={form.code}
+                                                                                             onChange={e => set('code', e.target.value.toUpperCase())}/></Field><Field
+                    label="Tên sản phẩm"><input required className={inputClass} value={form.name}
+                                                onChange={e => set('name', e.target.value)}/></Field><Field
+                    label="Danh mục"><select className={inputClass} value={form.categoryId ?? ''}
+                                             onChange={e => set('categoryId', numberOrNull(e.target.value))}>
+                    <option value="">Chưa phân loại</option>
+                    {categories.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field
+                    label="Thương hiệu"><select className={inputClass} value={form.brandId ?? ''}
+                                                onChange={e => set('brandId', numberOrNull(e.target.value))}>
+                    <option value="">Chưa có</option>
+                    {brands.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field
+                    label="Giá bán mới"><input required min={0} type="number" className={inputClass}
+                                               value={form.retailPrice}
+                                               onChange={e => set('retailPrice', Number(e.target.value))}/></Field><Field
+                    label="Giá thường (giá cũ)" hint="SALE tự hiển thị khi giá thường lớn hơn giá bán"><input min={0} type="number"
+                                                                                      className={inputClass}
+                                                                                      value={form.oldPrice ?? ''}
+                                                                                      onChange={e => {
+                                                                                          const value = numberOrNull(e.target.value);
+                                                                                          set('oldPrice', value);
+                                                                                          if (value == null) {
+                                                                                              set('saleValidFrom', null);
+                                                                                              set('saleValidThrough', null);
+                                                                                          }
+                                                                                      }}/></Field><Field
+                    label="Tag thủ công" hint="Tối đa một tag HOT, NEW hoặc tùy chỉnh"><select className={inputClass} value={form.badgeId ?? ''}
+                                                 onChange={e => set('badgeId', numberOrNull(e.target.value))}>
+                    <option value="">Không có tag</option>
+                    {badges.filter(x => x.status === 1 && x.name.toUpperCase() !== 'SALE').map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select></Field><Field label="Ảnh đại diện (URL hoặc path)"><input className={inputClass}
+                                                                                    value={form.avatarImage || ''}
+                                                                                    onChange={e => set('avatarImage', e.target.value)}/></Field>
                 </div>
-            </div>
-            {/* ProductModel Modal */}
-            {isModalOpen && editingProduct && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-outline-variant/30 sticky top-0 bg-white">
-                            <h2 className="text-xl font-bold text-on-surface">
-                                {localProducts.some(p => p.id === editingProduct.id) ? 'Cập nhật sản phẩm' : 'Thêm sản phẩm mới'}
-                            </h2>
-                            <button onClick={handleCloseModal} className="text-outline hover:text-error transition-colors">
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSave} className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-outline uppercase mb-1">Mã sản phẩm</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={editingProduct.id || ''}
-                                        onChange={e => setEditingProduct({...editingProduct, id: e.target.value})}
-                                        disabled={localProducts.some(p => p.id === editingProduct.id)}
-                                        className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-outline uppercase mb-1">Tên sản phẩm</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={editingProduct.name || ''}
-                                        onChange={e => setEditingProduct({...editingProduct, name: e.target.value})}
-                                        className="w-full border border-outline-variant rounded p-2 text-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-outline uppercase mb-1">Danh mục</label>
-                                    <select
-                                        required
-                                        value={editingProduct.categoryId || ''}
-                                        onChange={e => setEditingProduct({...editingProduct, categoryId: e.target.value})}
-                                        className="w-full border border-outline-variant rounded p-2 text-sm"
-                                    >
-                                        <option value="" disabled>Chọn danh mục</option>
-                                        {flatCategories.map(cat => (
-                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-outline uppercase mb-1">Thương hiệu</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={editingProduct.brand || ''}
-                                        onChange={e => setEditingProduct({...editingProduct, brand: e.target.value})}
-                                        className="w-full border border-outline-variant rounded p-2 text-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-outline uppercase mb-1">Giá bán (đ)</label>
-                                    <input
-                                        type="number"
-                                        required min={0}
-                                        value={editingProduct.price || ''}
-                                        onChange={e => setEditingProduct({...editingProduct, price: Number(e.target.value)})}
-                                        className="w-full border border-outline-variant rounded p-2 text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-outline uppercase mb-1">Giá gốc (đ)</label>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        value={editingProduct.originalPrice || ''}
-                                        onChange={e => setEditingProduct({...editingProduct, originalPrice: Number(e.target.value)})}
-                                        className="w-full border border-outline-variant rounded p-2 text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-outline uppercase mb-1">Tồn kho</label>
-                                    <input
-                                        type="number"
-                                        required min={0}
-                                        value={editingProduct.stock || ''}
-                                        onChange={e => setEditingProduct({...editingProduct, stock: Number(e.target.value)})}
-                                        className="w-full border border-outline-variant rounded p-2 text-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">URL Hình ảnh</label>
-                                <input
-                                    type="url"
-                                    required
-                                    value={editingProduct.imageUrl || ''}
-                                    onChange={e => setEditingProduct({...editingProduct, imageUrl: e.target.value})}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Mô tả</label>
-                                <textarea
-                                    required
-                                    value={editingProduct.description || ''}
-                                    onChange={e => setEditingProduct({...editingProduct, description: e.target.value})}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm min-h-[100px]"
-                                />
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/30">
-                                <button type="button" onClick={handleCloseModal} className="px-4 py-2 font-bold text-on-surface-variant hover:text-on-surface">
-                                    Huỷ bỏ
-                                </button>
-                                <button type="submit" className="px-6 py-2 bg-primary text-white font-bold rounded hover:brightness-110">
-                                    Lưu sản phẩm
-                                </button>
-                            </div>
-                        </form>
+                <div className="rounded-xl border border-outline-variant/35 bg-surface-container-low p-4">
+                    <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                        <div><p className="text-sm font-black text-on-surface">Thời hạn sale</p><p className="mt-1 text-xs text-outline">Bỏ trống một đầu để không giới hạn thời điểm bắt đầu hoặc kết thúc.</p></div>
+                        {form.oldPrice != null && form.oldPrice > form.retailPrice && form.retailPrice >= 0 &&
+                            <span className="w-fit rounded-full bg-error px-3 py-1 text-[10px] font-black uppercase tracking-wider text-on-error">SALE tự động</span>}
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <Field label="Bắt đầu sale"><input type="datetime-local" className={inputClass}
+                                                           disabled={form.oldPrice == null}
+                                                           value={form.saleValidFrom || ''}
+                                                           onChange={e => set('saleValidFrom', e.target.value || null)}/></Field>
+                        <Field label="Kết thúc sale"><input type="datetime-local" className={inputClass}
+                                                            disabled={form.oldPrice == null}
+                                                            min={form.saleValidFrom || undefined}
+                                                            value={form.saleValidThrough || ''}
+                                                            onChange={e => set('saleValidThrough', e.target.value || null)}/></Field>
                     </div>
                 </div>
-            )}
-        </div>
-    );
+                <details className="rounded-xl border border-outline-variant/35 bg-surface-container-low p-4">
+                    <summary className="cursor-pointer text-sm font-black text-on-surface">Thông tin nâng cao</summary>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2"><Field label="Mã vạch"><input className={inputClass}
+                                                                                                  value={form.barcode || ''}
+                                                                                                  onChange={e => set('barcode', e.target.value)}/></Field><Field
+                        label="Tên khác"><input className={inputClass} value={form.otherName || ''}
+                                                onChange={e => set('otherName', e.target.value)}/></Field><Field
+                        label="Giá nhập"><input min={0} type="number" className={inputClass}
+                                                value={form.importPrice ?? ''}
+                                                onChange={e => set('importPrice', numberOrNull(e.target.value))}/></Field><Field
+                        label="Giá bán sỉ"><input min={0} type="number" className={inputClass}
+                                                  value={form.wholesalePrice ?? ''}
+                                                  onChange={e => set('wholesalePrice', numberOrNull(e.target.value))}/></Field><Field
+                        label="VAT (%)"><input min={0} type="number" className={inputClass} value={form.vat ?? ''}
+                                               onChange={e => set('vat', numberOrNull(e.target.value))}/></Field><Field
+                        label="Trạng thái ERP"><input className={inputClass} value={form.status || ''}
+                                                      onChange={e => set('status', e.target.value)}/></Field><Field
+                        label="Dài (mm)"><input min={0} type="number" className={inputClass} value={form.length ?? ''}
+                                                onChange={e => set('length', numberOrNull(e.target.value))}/></Field><Field
+                        label="Rộng (mm)"><input min={0} type="number" className={inputClass} value={form.width ?? ''}
+                                                 onChange={e => set('width', numberOrNull(e.target.value))}/></Field><Field
+                        label="Cao (mm)"><input min={0} type="number" className={inputClass} value={form.height ?? ''}
+                                                onChange={e => set('height', numberOrNull(e.target.value))}/></Field><Field
+                        label="Khối lượng (g)"><input min={0} type="number" className={inputClass}
+                                                      value={form.weight ?? ''}
+                                                      onChange={e => set('weight', numberOrNull(e.target.value))}/></Field>
+                    </div>
+                    <div className="mt-4"><Field label="Album ảnh" hint="Mỗi dòng là một URL hoặc path ảnh"><textarea
+                        className={`${inputClass} min-h-24 py-2`} value={(form.images || []).join('\n')}
+                        onChange={e => set('images', e.target.value.split('\n').map(x => x.trim()).filter(Boolean))}/></Field>
+                    </div>
+                </details>
+                <Field label="Mô tả ngắn"><textarea className={`${inputClass} min-h-24 py-2`}
+                                                    value={form.description || ''}
+                                                    onChange={e => set('description', e.target.value)}/></Field><Field
+                label="Nội dung chi tiết"><textarea className={`${inputClass} min-h-32 py-2`} value={form.content || ''}
+                                                    onChange={e => set('content', e.target.value)}/></Field><label
+                className="flex items-center gap-3 text-sm font-bold"><input type="checkbox"
+                                                                             checked={form.active !== false}
+                                                                             onChange={e => set('active', e.target.checked)}
+                                                                             className="h-4 w-4 accent-primary"/>Cho
+                phép hiển thị/bán sản phẩm</label>
+                <div className="flex justify-end gap-2 border-t border-outline-variant/30 pt-4"><AdminButton
+                    type="button" variant="secondary" onClick={() => setModal(null)}>Hủy</AdminButton><AdminButton
+                    type="submit" disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu sản phẩm'}</AdminButton></div>
+            </form>
+        </AdminModal>
+
+        <AdminModal open={modal === 'detail'} onClose={() => setModal(null)} title="Chi tiết sản phẩm"
+                    size="lg">{detail && <div className="grid gap-5 p-5 sm:grid-cols-[180px_1fr]">
+            <div className="aspect-square rounded-xl bg-surface-container p-3">{detail.avatarImage &&
+                <img src={getPublicImageUrl(detail.avatarImage)} alt={detail.name}
+                     className="h-full w-full object-contain"/>}</div>
+            <div><h3 className="text-xl font-black">{detail.name}</h3><p
+                className="mt-1 text-sm text-outline">{detail.code} · {detail.categoryName || 'Chưa phân loại'} · {detail.brandName || 'Chưa có thương hiệu'}</p>
+                <div className="mt-4 flex items-end gap-3"><span
+                    className="text-xl font-black text-primary">{formatCurrency(detail.retailPrice ?? detail.price ?? 0)}</span>{detail.oldPrice != null && detail.oldPrice > (detail.retailPrice ?? detail.price ?? 0) ?
+                    <span className="text-sm text-outline line-through">{formatCurrency(detail.oldPrice)}</span> : null}
+                </div>
+                {(detail.saleValidFrom || detail.saleValidThrough) && <p className="mt-2 text-xs font-medium text-outline">Hiệu lực sale: {detail.saleValidFrom ? new Date(detail.saleValidFrom).toLocaleString('vi-VN') : 'không giới hạn'} – {detail.saleValidThrough ? new Date(detail.saleValidThrough).toLocaleString('vi-VN') : 'không giới hạn'}</p>}
+                <div className="mt-4 flex flex-wrap items-center gap-2"><AdminStatus active={detail.active !== false}/>{detail.badgeName && detail.badgeName.toUpperCase() !== 'SALE' &&
+                    <span className="ml-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold" style={{
+                        backgroundColor: detail.badgeColor || '#00618e',
+                        color: detail.badgeTextColor || '#ffffff'
+                    }}>{detail.badgeName}</span>}{detail.oldPrice != null && detail.oldPrice > (detail.retailPrice ?? detail.price ?? 0) &&
+                    <span className="inline-flex rounded-full bg-error px-2.5 py-1 text-xs font-black text-on-error">SALE hệ thống</span>}</div>
+                <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-on-surface-variant">{detail.description || 'Chưa có mô tả.'}</p>
+            </div>
+        </div>}</AdminModal>
+    </AdminPage>;
 }

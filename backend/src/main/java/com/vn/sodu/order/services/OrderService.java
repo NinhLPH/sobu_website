@@ -16,6 +16,7 @@ import com.vn.sodu.payment.PaymentMethod;
 import com.vn.sodu.payment.service.PaymentCheckoutCreationException;
 import com.vn.sodu.payment.service.PaymentService;
 import com.vn.sodu.product.Product;
+import com.vn.sodu.product.service.ProductPricing;
 import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.request.OrderType;
 import com.vn.sodu.request.Request;
@@ -292,14 +293,14 @@ public class OrderService {
         if (itemDto.getProductId() != null) {
             Product product = productRepo.findById(itemDto.getProductId())
                     .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + itemDto.getProductId()));
-            return new ResolvedOrderItem(product.getId(), null, product.getName(), money(product.getRetailPrice()));
+            return new ResolvedOrderItem(product.getId(), null, product.getName(), money(ProductPricing.effectivePrice(product)));
         }
         if (nhanhProductId != null && !nhanhProductId.isBlank()) {
             try {
                 Optional<Product> product = productRepo.findByExternalId(Long.parseLong(nhanhProductId));
                 if (product.isPresent()) {
                     Product found = product.get();
-                    return new ResolvedOrderItem(found.getId(), nhanhProductId, found.getName(), money(found.getRetailPrice()));
+                    return new ResolvedOrderItem(found.getId(), nhanhProductId, found.getName(), money(ProductPricing.effectivePrice(found)));
                 }
             } catch (NumberFormatException ignored) {
                 // fall through to legacy snapshot

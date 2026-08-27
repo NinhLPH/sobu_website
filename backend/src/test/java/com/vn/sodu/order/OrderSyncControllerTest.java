@@ -29,6 +29,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,6 +119,24 @@ class OrderSyncControllerTest {
 
         assertThrows(AccessDeniedException.class,
                 () -> controller.retryOrderSync(1L, new UsernamePasswordAuthenticationToken("user", "n/a")));
+    }
+
+    @Test
+    void retryOrderSyncRejectsLocalModeBeforeResolvingSyncService() {
+        doThrow(new com.vn.sodu.integration.NhanhIntegrationDisabledException())
+                .when(nhanhEnabled).requireEnabled();
+        OrderSyncController controller = new OrderSyncController(
+                orderSyncServiceProvider,
+                orderQueryService,
+                nhanhEnabled
+        );
+
+        assertThrows(
+                com.vn.sodu.integration.NhanhIntegrationDisabledException.class,
+                () -> controller.retryOrderSync(1L, staffAuth())
+        );
+        verify(orderSyncServiceProvider, never()).getIfAvailable();
+        verify(orderSyncService, never()).retryOrderSync(1L);
     }
 
     private ObjectProvider<OrderSyncService> syncServiceProvider() {

@@ -204,13 +204,16 @@ public class VoucherService {
         List<VoucherSummaryDTO> list = new ArrayList<>();
 
         for (Voucher v : activeVouchers) {
-            if (v.getType() == VoucherType.FREE_SHIP || eligibilityService.isVoucherApplicableToProduct(v, productId, categoryId)) {
+            boolean eligible = v.getType() == VoucherType.FREE_SHIP
+                    ? eligibilityService.validateGeneralEligibility(v) == null
+                    : eligibilityService.isVoucherApplicableToProduct(v, productId, categoryId);
+            if (eligible) {
                 VoucherDiscountCalculator.ProductDisplayPriceResult displayPrice =
                         discountCalculator.calculateProductDisplayPrice(v, oldPrice, retailPrice);
 
                 String badge = null;
                 if (v.getType() == VoucherType.FREE_SHIP) {
-                    badge = v.getGeoScope() == GeoScope.HANOI_CENTER ? "Freeship 11 quận Hà Nội" : "Miễn phí vận chuyển";
+                    badge = v.getGeoScope() == GeoScope.HANOI_CENTER ? "Freeship 42 phường trung tâm Hà Nội" : "Miễn phí vận chuyển";
                 } else if (displayPrice.estimatedDiscount().compareTo(BigDecimal.ZERO) > 0) {
                     badge = "Giảm " + displayPrice.estimatedDiscount().toPlainString() + "đ";
                 }

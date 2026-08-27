@@ -40,9 +40,10 @@ export const AdminWorkflowService = {
     },
 
     getAdminOrders: (
-        params?: AdminOrderQueryParams
+        params?: AdminOrderQueryParams,
+        signal?: AbortSignal
     ): Promise<ApiResponseDTO<PageResponse<OrderResponseDto>>> => {
-        return apiClient.get('/api/admin/orders', {params});
+        return apiClient.get('/api/admin/orders', {params, signal});
     },
 
     getAdminOrderDetail: (

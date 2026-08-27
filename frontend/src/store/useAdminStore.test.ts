@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { AdminWorkflowService } from '../service/admin.service';
 import { useAdminStore } from './useAdminStore';
+import {useIntegrationStore} from './useIntegrationStore';
 
 jest.mock('../service/admin.service');
 
@@ -9,6 +10,8 @@ const mockedAdminWorkflowService = jest.mocked(AdminWorkflowService);
 describe('useAdminStore order sync', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        useIntegrationStore.setState({nhanhEnabled: true, loaded: true, loading: false});
+        useAdminStore.getState().clearNhanhHistory();
         useAdminStore.setState({
             currentOrderDetail: {
                 id: 12,
@@ -25,6 +28,92 @@ describe('useAdminStore order sync', () => {
             ordersError: null,
             orderActionMessage: null
         });
+    });
+
+    it('loads paginated Nhanh history, filters local defaults and deduplicates requests', async () => {
+        mockedAdminWorkflowService.getAdminOrders
+            .mockResolvedValueOnce({
+                success: true,
+                message: 'Page 1',
+                data: {
+                    content: [
+                        {id: 1, orderCode: 'LOCAL', syncStatus: 'PENDING', nhanhSyncStage: 'NONE'},
+                        {id: 2, orderCode: 'OLD-1', syncStatus: 'FAILED', syncError: 'Timeout', lastSyncAt: '2026-08-20T10:00:00Z'}
+                    ],
+                    pageNumber: 0,
+                    pageSize: 100,
+                    totalElements: 3,
+                    totalPages: 2
+                }
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                message: 'Page 2',
+                data: {
+                    content: [
+                        {id: 3, orderCode: 'OLD-2', syncStatus: 'SYNCED', nhanhOrderId: '900', lastSyncAt: '2026-08-22T10:00:00Z'}
+                    ],
+                    pageNumber: 1,
+                    pageSize: 100,
+                    totalElements: 3,
+                    totalPages: 2
+                }
+            });
+
+        const firstRequest = useAdminStore.getState().fetchNhanhHistory();
+        const duplicateRequest = useAdminStore.getState().fetchNhanhHistory();
+        expect(duplicateRequest).toBe(firstRequest);
+        await firstRequest;
+
+        expect(mockedAdminWorkflowService.getAdminOrders).toHaveBeenCalledTimes(2);
+        expect(useAdminStore.getState().nhanhHistoryOrders.map(order => order.id)).toEqual([3, 2]);
+        expect(useAdminStore.getState().nhanhHistoryError).toBeNull();
+    });
+
+    it('does not call retry API when Nhanh is disabled', async () => {
+        useIntegrationStore.setState({nhanhEnabled: false, loaded: true, loading: false});
+
+        await expect(useAdminStore.getState().retryOrderSync(12))
+            .rejects.toThrow('Tích hợp Nhanh.vn đang tắt.');
+        expect(mockedAdminWorkflowService.retryOrderSync).not.toHaveBeenCalled();
+    });
+
+    it('ignores a stale history response after a forced reload', async () => {
+        let resolveFirst!: (value: any) => void;
+        mockedAdminWorkflowService.getAdminOrders
+            .mockReturnValueOnce(new Promise<any>(resolve => {
+                resolveFirst = resolve;
+            }))
+            .mockResolvedValueOnce({
+                success: true,
+                message: 'Fresh history',
+                data: {
+                    content: [{id: 5, orderCode: 'FRESH', syncStatus: 'SYNCED', nhanhOrderId: '500'}],
+                    pageNumber: 0,
+                    pageSize: 100,
+                    totalElements: 1,
+                    totalPages: 1
+                }
+            });
+
+        const staleRequest = useAdminStore.getState().fetchNhanhHistory();
+        const freshRequest = useAdminStore.getState().fetchNhanhHistory(true);
+        await freshRequest;
+
+        resolveFirst({
+            success: true,
+            message: 'Stale history',
+            data: {
+                content: [{id: 4, orderCode: 'STALE', syncStatus: 'FAILED', syncError: 'Old'}],
+                pageNumber: 0,
+                pageSize: 100,
+                totalElements: 1,
+                totalPages: 1
+            }
+        });
+        await staleRequest;
+
+        expect(useAdminStore.getState().nhanhHistoryOrders.map(order => order.id)).toEqual([5]);
     });
 
     it('loads order detail and persisted payment history together', async () => {

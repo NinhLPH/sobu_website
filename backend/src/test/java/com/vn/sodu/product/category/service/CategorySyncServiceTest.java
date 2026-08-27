@@ -117,18 +117,35 @@ class CategorySyncServiceTest {
     }
 
     @Test
-    @DisplayName("Should preserve positive parent id when saving child category")
-    void testSyncOnePreservesPositiveParentId() {
-        NhanhCategoryDTO dto = new NhanhCategoryDTO(2L, 1L, "C", "Child", 1, null, null, 1);
-        Category category = Category.builder().id(2L).name("Child").build();
+    @DisplayName("Should resolve parent external id to local primary key")
+    void testSyncOneResolvesParentExternalIdToLocalPrimaryKey() {
+        NhanhCategoryDTO dto = new NhanhCategoryDTO(200L, 100L, "C", "Child", 1, null, null, 1);
+        Category category = Category.builder().id(42L).externalId(200L).name("Child").build();
+        Category parent = Category.builder().id(17L).externalId(100L).name("Parent").build();
         when(categoryMapper.toEntity(dto)).thenReturn(category);
+        when(categoryRepo.findByExternalId(200L)).thenReturn(java.util.Optional.of(category));
+        when(categoryRepo.findByExternalId(100L)).thenReturn(java.util.Optional.of(parent));
 
         boolean synced = categorySyncService.syncOne(dto);
 
         assertTrue(synced);
         ArgumentCaptor<Category> categoryCaptor = ArgumentCaptor.forClass(Category.class);
         verify(categoryRepo).save(categoryCaptor.capture());
-        assertEquals(1L, categoryCaptor.getValue().getParentId());
+        assertEquals(42L, categoryCaptor.getValue().getId());
+        assertEquals(17L, categoryCaptor.getValue().getParentId());
         assertNull(categoryCaptor.getValue().getParent());
+    }
+
+    @Test
+    @DisplayName("Should not save child category when parent external id is missing")
+    void testSyncOneSkipsMissingParentExternalId() {
+        NhanhCategoryDTO dto = new NhanhCategoryDTO(200L, 100L, "C", "Child", 1, null, null, 1);
+        Category category = Category.builder().id(42L).externalId(200L).name("Child").build();
+        when(categoryMapper.toEntity(dto)).thenReturn(category);
+        when(categoryRepo.findByExternalId(200L)).thenReturn(java.util.Optional.of(category));
+        when(categoryRepo.findByExternalId(100L)).thenReturn(java.util.Optional.empty());
+
+        assertFalse(categorySyncService.syncOne(dto));
+        verify(categoryRepo, never()).save(any(Category.class));
     }
 }

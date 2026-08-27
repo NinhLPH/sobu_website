@@ -1,5 +1,9 @@
 import { create } from 'zustand';
-import { CartItem, ProductModel } from '../interface/product.model';
+import {
+    CartItem,
+    mapDetailToProductModel,
+    ProductModel
+} from '../interface/product.model';
 import {
     CreateNormalOrderDto,
     OrderShippingLocationDto,
@@ -12,6 +16,8 @@ import { CartItemDto } from '../interface/cart.dto';
 import { authStorage } from '../utils/auth-storage';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { cartFallback } from '../utils/cart-fallback';
+import { PublicCatalogService } from '../service/public-catalog.service';
+import { useIntegrationStore } from './useIntegrationStore';
 
 type CheckoutDetails =
     Omit<CreateNormalOrderDto, 'items' | keyof OrderShippingLocationDto>
@@ -57,11 +63,14 @@ interface CartState {
     isUsingFallback: boolean;
     isLoading: boolean;
     isSubmitting: boolean;
+    isHydratingProducts: boolean;
+    hydrationError: string | null;
     checkoutError: string | null;
     lastCreatedOrder: OrderResponseDto | null;
     pendingOrderKey: string | null;
     pendingOrderFingerprint: string | null;
     fetchCart: () => Promise<void>;
+    hydrateProducts: () => Promise<void>;
     addToCart: (product: ProductModel, quantity?: number) => Promise<void>;
     removeFromCart: (productId: string) => Promise<void>;
     updateQuantity: (productId: string, quantity: number) => Promise<void>;
@@ -77,6 +86,8 @@ export const useCartStore = create<CartState>((set, get) => ({
     isUsingFallback: false,
     isLoading: false,
     isSubmitting: false,
+    isHydratingProducts: false,
+    hydrationError: null,
     checkoutError: null,
     lastCreatedOrder: null,
     pendingOrderKey: null,
@@ -116,6 +127,33 @@ export const useCartStore = create<CartState>((set, get) => ({
 
             set({ items: [], isLoading: false, isUsingFallback: true });
             cartFallback.save([]);
+        }
+    },
+
+    hydrateProducts: async () => {
+        const currentItems = get().items;
+        if (currentItems.length === 0 || get().isHydratingProducts) return;
+        set({ isHydratingProducts: true, hydrationError: null });
+        try {
+            const items = await Promise.all(currentItems.map(async (item) => {
+                const detail = await PublicCatalogService.getProductDetail(item.product.id);
+                return {
+                    product: {
+                        ...item.product,
+                        ...mapDetailToProductModel(detail)
+                    },
+                    quantity: item.quantity
+                };
+            }));
+            set({ items, isHydratingProducts: false, hydrationError: null });
+        } catch (error) {
+            set({
+                isHydratingProducts: false,
+                hydrationError: getErrorMessage(
+                    error,
+                    'Không thể cập nhật thông tin sản phẩm. Vui lòng thử lại.'
+                )
+            });
         }
     },
 
@@ -299,10 +337,22 @@ export const useCartStore = create<CartState>((set, get) => ({
             throw new Error(message);
         }
 
+        const nhanhEnabled = useIntegrationStore.getState().nhanhEnabled;
+        if (!nhanhEnabled && items.some(({ product }) => {
+            const id = Number(product.id);
+            return !Number.isInteger(id) || id <= 0;
+        })) {
+            const message = 'Giỏ hàng có sản phẩm không hợp lệ. Vui lòng tải lại trang.';
+            set({ checkoutError: message });
+            throw new Error(message);
+        }
+
         const payload: CreateNormalOrderDto = {
             ...details,
             items: items.map(({ product, quantity }) => ({
-                nhanhProductId: product.nhanhProductId || product.id,
+                ...(!nhanhEnabled
+                    ? { productId: Number(product.id) }
+                    : { nhanhProductId: product.nhanhProductId || product.id }),
                 name: product.name,
                 price: product.price,
                 discount: 0,

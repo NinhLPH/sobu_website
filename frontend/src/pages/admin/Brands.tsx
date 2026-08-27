@@ -1,229 +1,156 @@
-import {useState, useEffect, useMemo} from 'react';
-import {Plus, Edit, Trash2, Search, X} from 'lucide-react';
+import {FormEvent, useCallback, useEffect, useMemo, useState} from 'react';
+import {Edit3, Plus, Power, Trash2} from 'lucide-react';
+import {AdminBrand, BrandWriteRequest} from '../../interface/admin-catalog.model';
+import {AdminCatalogService} from '../../service/admin-catalog.service';
+import {ToastService} from '../../service/toast.service';
+import {
+    AdminButton,
+    AdminCard,
+    AdminEmpty,
+    AdminError,
+    AdminLoading,
+    AdminModal,
+    AdminPage,
+    AdminSearch,
+    AdminStatus,
+    AdminToolbar,
+    Field,
+    getApiError,
+    inputClass
+} from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
-import {useProductStore} from '../../store/useProductStore';
-import {BrandListItemDTO} from '../../interface/brand.model';
-import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
-
+const initial: BrandWriteRequest = {code: '', name: '', parentId: null, status: 1};
 export default function AdminBrands() {
-    const { brands: dbBrands, fetchBrands } = useProductStore();
-    
-    const [localBrands, setLocalBrands] = useState<BrandListItemDTO[]>([]);
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingBrand, setEditingBrand] = useState<Partial<BrandListItemDTO> | null>(null);
-
-    useEffect(() => {
-        fetchBrands();
-    }, [fetchBrands]);
-
-    useEffect(() => {
-        if (dbBrands && dbBrands.length > 0) {
-            setLocalBrands(dbBrands);
+    const confirm = useConfirmDialog();
+    const [items, setItems] = useState<AdminBrand[]>([]);
+    const [query, setQuery] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [open, setOpen] = useState(false);
+    const [id, setId] = useState<number | null>(null);
+    const [form, setForm] = useState<BrandWriteRequest>(initial);
+    const [saving, setSaving] = useState(false);
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            setItems(await AdminCatalogService.getBrands());
+        } catch (e) {
+            setError(getApiError(e));
+        } finally {
+            setLoading(false);
         }
-    }, [dbBrands]);
-
-    const filteredBrands = localBrands.filter(b => 
-        b.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        b.code.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const searchSuggestions = useMemo<SearchSuggestion[]>(() => localBrands.map((brand) => ({
-        id: brand.id,
-        label: brand.name,
-        description: brand.code,
-        searchValue: brand.name,
-    })), [localBrands]);
-
-    const handleOpenModal = (brand?: BrandListItemDTO) => {
-        if (brand) {
-            setEditingBrand({ ...brand });
-        } else {
-            setEditingBrand({
-                id: Math.floor(Math.random() * 10000),
-                name: '',
-                code: '',
-                status: 1
-            });
-        }
-        setIsModalOpen(true);
+    }, []);
+    useEffect(() => {
+        void load();
+    }, [load]);
+    const visible = useMemo(() => items.filter(x => `${x.name} ${x.code}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
+    const edit = (x?: AdminBrand) => {
+        setId(x?.id ?? null);
+        setForm(x ? {code: x.code, name: x.name, parentId: x.parentId, status: x.status} : initial);
+        setOpen(true);
     };
-
-    const handleCloseModal = () => {
-        setIsModalOpen(false);
-        setEditingBrand(null);
-    };
-
-    const handleSave = (e: React.FormEvent) => {
+    const submit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!editingBrand) return;
-
-        const brandToSave = editingBrand as BrandListItemDTO;
-
-        if (localBrands.some(b => b.id === brandToSave.id)) {
-            setLocalBrands(prev => prev.map(b => b.id === brandToSave.id ? brandToSave : b));
-        } else {
-            setLocalBrands(prev => [...prev, brandToSave]);
-        }
-        handleCloseModal();
-    };
-
-    const handleDelete = (id: number) => {
-        if (window.confirm('Bạn có chắc chắn muốn xóa thương hiệu này?')) {
-            setLocalBrands(prev => prev.filter(b => b.id !== id));
+        setSaving(true);
+        try {
+            id ? await AdminCatalogService.updateBrand(id, form) : await AdminCatalogService.createBrand(form);
+            ToastService.success(id ? 'Đã cập nhật thương hiệu.' : 'Đã tạo thương hiệu.');
+            setOpen(false);
+            await load();
+        } catch (err) {
+            ToastService.error(getApiError(err));
+        } finally {
+            setSaving(false);
         }
     };
-
-    return (
-        <div className="pt-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold text-on-surface">Quản lý Thương hiệu</h1>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="bg-primary text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:brightness-110">
-                    <Plus className="w-5 h-5"/> Thêm thương hiệu
-                </button>
-            </div>
-
-            <div className="relative flex items-center gap-3 rounded-xl border border-outline-variant/30 bg-white p-4">
-                <Search className="text-outline w-5 h-5"/>
-                <SearchSuggestInput
-                    placeholder="Tìm kiếm thương hiệu..."
-                    className="bg-transparent border-none outline-none w-full text-sm"
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    onSubmit={setSearchTerm}
-                    suggestions={searchSuggestions}
-                    ariaLabel="Tìm kiếm thương hiệu quản trị"
-                />
-            </div>
-
-            <div className="bg-white rounded-xl border border-outline-variant/30 overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-surface-variant font-bold text-on-surface-variant">
+    const remove = async (x: AdminBrand) => {
+        if (!await confirm({title: 'Xóa thương hiệu?', message: `Thương hiệu “${x.name}” sẽ bị xóa khỏi hệ thống.`, confirmLabel: 'Xóa thương hiệu', tone: 'danger'})) return;
+        try {
+            await AdminCatalogService.deleteBrand(x.id);
+            ToastService.success('Đã xóa thương hiệu.');
+            await load();
+        } catch (e) {
+            ToastService.error(getApiError(e, 'Không thể xóa thương hiệu đang được sử dụng.'));
+        }
+    };
+    const toggle = async (x: AdminBrand) => {
+        try {
+            await AdminCatalogService.setBrandStatus(x.id, x.status === 1 ? 0 : 1);
+            await load();
+        } catch (e) {
+            ToastService.error(getApiError(e));
+        }
+    };
+    return <AdminPage title="Thương hiệu" description="Quản lý nhãn hiệu và quan hệ thương hiệu cha–con của catalog."
+                      actions={<AdminButton onClick={() => edit()}><Plus className="h-4 w-4"/>Thêm thương
+                          hiệu</AdminButton>}><AdminCard>
+        <AdminToolbar><AdminSearch value={query} onChange={setQuery}
+                                   placeholder="Tìm thương hiệu theo tên hoặc mã"
+                                   ariaLabel="Tìm kiếm thương hiệu quản trị"/></AdminToolbar>
+        {loading ? <AdminLoading/> : error ?
+            <AdminError message={error} onRetry={() => void load()}/> : !visible.length ?
+                <AdminEmpty title="Không có thương hiệu"/> : <div className="overflow-x-auto">
+                    <table className="w-full min-w-[620px] text-sm">
+                        <thead className="bg-surface-container text-left text-xs uppercase text-outline">
                         <tr>
-                            <th className="px-6 py-4">Mã TH</th>
-                            <th className="px-6 py-4">Mã Code</th>
-                            <th className="px-6 py-4">Tên thương hiệu</th>
-                            <th className="px-6 py-4 text-center">Trạng thái</th>
-                            <th className="px-6 py-4 text-center">Hành động</th>
+                            <th className="px-4 py-3">Mã</th>
+                            <th className="px-4 py-3">Tên thương hiệu</th>
+                            <th className="px-4 py-3">Thương hiệu cha</th>
+                            <th className="px-4 py-3">Trạng thái</th>
+                            <th className="px-4 py-3 text-right">Thao tác</th>
                         </tr>
                         </thead>
-                        <tbody>
-                        {filteredBrands.map(brand => (
-                            <tr key={brand.id}
-                                className="border-b border-outline-variant/20 hover:bg-surface-container-lowest/50">
-                                <td className="px-6 py-4 font-medium">{brand.id}</td>
-                                <td className="px-6 py-4 font-mono text-xs text-outline">{brand.code}</td>
-                                <td className="px-6 py-4 font-bold text-on-surface">{brand.name}</td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                                        brand.status === 1 
-                                            ? 'bg-primary/10 text-primary' 
-                                            : 'bg-outline-variant/35 text-outline'
-                                    }`}>
-                                        {brand.status === 1 ? 'Hoạt động' : 'Ngừng hoạt động'}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center justify-center gap-3">
-                                        <button onClick={() => handleOpenModal(brand)}
-                                                className="text-secondary hover:text-primary transition-colors">
-                                            <Edit className="w-4 h-4"/>
-                                        </button>
-                                        <button onClick={() => handleDelete(brand.id)}
-                                                className="text-error-dim hover:text-error transition-colors">
-                                            <Trash2 className="w-4 h-4"/>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {filteredBrands.length === 0 && (
-                            <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-on-surface-variant">
-                                    Không tìm thấy thương hiệu nào.
-                                </td>
-                            </tr>
-                        )}
-                        </tbody>
+                        <tbody>{visible.map(x => <tr key={x.id} className="border-t border-outline-variant/25">
+                            <td className="px-4 py-3 font-mono text-xs">{x.code}</td>
+                            <td className="px-4 py-3 font-bold">{x.name}</td>
+                            <td className="px-4 py-3 text-outline">{items.find(p => p.id === x.parentId)?.name || '—'}</td>
+                            <td className="px-4 py-3"><AdminStatus active={x.status === 1}/></td>
+                            <td className="px-4 py-3">
+                                <div className="flex justify-end">
+                                    <button onClick={() => edit(x)}
+                                            className="rounded-lg p-2 text-outline hover:text-primary"><Edit3
+                                        className="h-4 w-4"/></button>
+                                    <button onClick={() => void toggle(x)}
+                                            className="rounded-lg p-2 text-outline hover:text-primary"><Power
+                                        className="h-4 w-4"/></button>
+                                    <button onClick={() => void remove(x)}
+                                            className="rounded-lg p-2 text-outline hover:text-error"><Trash2
+                                        className="h-4 w-4"/></button>
+                                </div>
+                            </td>
+                        </tr>)}</tbody>
                     </table>
-                </div>
-            </div>
-
-            {/* BrandListItemDTO Modal */}
-            {isModalOpen && editingBrand && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-                        <div className="flex justify-between items-center p-6 border-b border-outline-variant/30">
-                            <h2 className="text-xl font-bold text-on-surface">
-                                {localBrands.some(b => b.id === editingBrand.id) ? 'Cập nhật thương hiệu' : 'Thêm thương hiệu mới'}
-                            </h2>
-                            <button onClick={handleCloseModal} className="text-outline hover:text-error transition-colors">
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSave} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Mã thương hiệu</label>
-                                <input
-                                    type="number"
-                                    required
-                                    value={editingBrand.id || ''}
-                                    onChange={e => setEditingBrand({...editingBrand, id: Number(e.target.value)})}
-                                    disabled={localBrands.some(b => b.id === editingBrand.id)}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm disabled:bg-surface-variant"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Tên thương hiệu</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editingBrand.name || ''}
-                                    onChange={e => setEditingBrand({...editingBrand, name: e.target.value})}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Mã Code (Slug)</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editingBrand.code || ''}
-                                    onChange={e => setEditingBrand({...editingBrand, code: e.target.value})}
-                                    placeholder="Ví dụ: HOTWHEELS, TOMICA..."
-                                    className="w-full border border-outline-variant rounded p-2 text-sm uppercase"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-outline uppercase mb-1">Trạng thái</label>
-                                <select
-                                    required
-                                    value={editingBrand.status}
-                                    onChange={e => setEditingBrand({...editingBrand, status: Number(e.target.value)})}
-                                    className="w-full border border-outline-variant rounded p-2 text-sm"
-                                >
-                                    <option value={1}>Hoạt động</option>
-                                    <option value={0}>Ngừng hoạt động</option>
-                                </select>
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-4 border-t border-outline-variant/30 mt-6">
-                                <button type="button" onClick={handleCloseModal} className="px-4 py-2 font-bold text-on-surface-variant hover:text-on-surface">
-                                    Hủy bỏ
-                                </button>
-                                <button type="submit" className="px-6 py-2 bg-primary text-white font-bold rounded hover:brightness-110">
-                                    Lưu thương hiệu
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+                </div>}</AdminCard>
+        <AdminModal open={open} onClose={() => setOpen(false)} title={id ? 'Cập nhật thương hiệu' : 'Thêm thương hiệu'}
+                    size="md">
+            <form onSubmit={submit} className="space-y-4 p-5"><Field label="Mã thương hiệu"><input required
+                                                                                                   className={inputClass}
+                                                                                                   value={form.code}
+                                                                                                   onChange={e => setForm({
+                                                                                                       ...form,
+                                                                                                       code: e.target.value.toUpperCase()
+                                                                                                   })}/></Field><Field
+                label="Tên thương hiệu"><input required className={inputClass} value={form.name}
+                                               onChange={e => setForm({...form, name: e.target.value})}/></Field><Field
+                label="Thương hiệu cha"><select className={inputClass} value={form.parentId ?? ''}
+                                                onChange={e => setForm({
+                                                    ...form,
+                                                    parentId: e.target.value ? Number(e.target.value) : null
+                                                })}>
+                <option value="">Không có</option>
+                {items.filter(x => x.id !== id).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select></Field><label className="flex gap-2 text-sm font-bold"><input type="checkbox"
+                                                                                    checked={form.status === 1}
+                                                                                    onChange={e => setForm({
+                                                                                        ...form,
+                                                                                        status: e.target.checked ? 1 : 0
+                                                                                    })}/>Hoạt động</label>
+                <div className="flex justify-end gap-2 border-t border-outline-variant/30 pt-4"><AdminButton
+                    type="button" variant="secondary" onClick={() => setOpen(false)}>Hủy</AdminButton><AdminButton
+                    type="submit" disabled={saving}>Lưu thương hiệu</AdminButton></div>
+            </form>
+        </AdminModal>
+    </AdminPage>;
 }

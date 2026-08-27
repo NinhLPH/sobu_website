@@ -3,6 +3,7 @@ package com.vn.sodu.product.service;
 import com.vn.sodu.audit.AuditAction;
 import com.vn.sodu.audit.AuditService;
 import com.vn.sodu.global.exception.NotFoundException;
+import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.ProductAttribute;
 import com.vn.sodu.product.ProductImage;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -144,6 +146,37 @@ class AdminProductServiceTest {
         ProductDetailDTO result = adminProductService.createProduct(request);
 
         assertThat(result.getActive()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should reject invalid sale price pair")
+    void createProductRejectsInvalidSalePricePair() {
+        ProductCreateRequest request = ProductCreateRequest.builder()
+                .name("Invalid sale")
+                .retailPrice(new BigDecimal("100000"))
+                .oldPrice(new BigDecimal("90000"))
+                .build();
+
+        assertThatThrownBy(() -> adminProductService.createProduct(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("oldPrice must be greater than price");
+    }
+
+    @Test
+    @DisplayName("Should reject reversed sale validity window")
+    void createProductRejectsReversedSaleWindow() {
+        LocalDateTime start = LocalDateTime.of(2026, 8, 31, 12, 0);
+        ProductCreateRequest request = ProductCreateRequest.builder()
+                .name("Invalid sale window")
+                .retailPrice(new BigDecimal("80000"))
+                .oldPrice(new BigDecimal("100000"))
+                .saleValidFrom(start)
+                .saleValidThrough(start.minusMinutes(1))
+                .build();
+
+        assertThatThrownBy(() -> adminProductService.createProduct(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("saleValidThrough");
     }
 
     @Test

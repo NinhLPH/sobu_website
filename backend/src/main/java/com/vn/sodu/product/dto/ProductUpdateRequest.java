@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -27,6 +28,8 @@ public class ProductUpdateRequest {
     private BigDecimal importPrice;
     private BigDecimal wholesalePrice;
     private BigDecimal oldPrice;
+    private LocalDateTime saleValidFrom;
+    private LocalDateTime saleValidThrough;
     private Integer vat;
     private String avatarImage;
     private List<String> images;

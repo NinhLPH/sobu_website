@@ -164,6 +164,40 @@
 }
 
 @layer components {
+  :root {
+    --app-header-height: 6rem;
+  }
+
+  .admin-surface {
+    margin-top: var(--app-header-height);
+    min-height: calc(100dvh - var(--app-header-height));
+  }
+
+  .admin-workspace {
+    min-height: calc(100dvh - var(--app-header-height));
+  }
+
+  @media (min-width: 1024px) {
+    .admin-app-shell {
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    .admin-surface,
+    .admin-workspace {
+      height: calc(100dvh - var(--app-header-height));
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .admin-workspace > aside,
+    .admin-workspace > main {
+      height: 100%;
+      min-height: 0;
+      scrollbar-gutter: stable;
+    }
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
   }

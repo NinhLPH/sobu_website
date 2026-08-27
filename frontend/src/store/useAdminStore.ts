@@ -12,6 +12,7 @@ import { PageResponse } from '../interface/api-response';
 import { AdminWorkflowService } from '../service/admin.service';
 import { useIntegrationStore } from './useIntegrationStore';
 import { mockProducts, mockCategories, mockRequests } from '../data/mockData';
+import {compareNhanhHistoryNewestFirst, hasNhanhHistory} from '../utils/order-sync';
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message || error?.message || fallback;
@@ -20,6 +21,15 @@ const ACTIONABLE_SYNC_STATUSES = new Set(['FAILED', 'NEED_RECONCILE', 'DEAD']);
 
 const isActionableSyncOrder = (order: OrderResponseDto) =>
     Boolean(order.syncStatus && ACTIONABLE_SYNC_STATUSES.has(order.syncStatus));
+
+let nhanhHistoryController: AbortController | null = null;
+let nhanhHistoryRequest: Promise<void> | null = null;
+let nhanhHistorySequence = 0;
+
+const isCanceledRequest = (error: any) =>
+    error?.name === 'CanceledError'
+    || error?.name === 'AbortError'
+    || error?.code === 'ERR_CANCELED';
 
 const mergeSyncResult = (
     order: OrderResponseDto,
@@ -82,6 +92,7 @@ interface AdminState {
     isAdminPaymentsLoading: boolean;
     adminPaymentsError: string | null;
     orderSyncQueue: OrderResponseDto[];
+    nhanhHistoryOrders: OrderResponseDto[];
     pendingOrderSyncCount: number;
     ordersPage: Omit<PageResponse<OrderResponseDto>, 'content'>;
     isOrdersLoading: boolean;
@@ -90,6 +101,8 @@ interface AdminState {
     retryingOrderIds: number[];
     isOrderSyncQueueLoading: boolean;
     orderSyncQueueError: string | null;
+    isNhanhHistoryLoading: boolean;
+    nhanhHistoryError: string | null;
     orderSyncBatchProgress: OrderSyncBatchProgress | null;
     orderSyncBatchResult: OrderSyncBatchResult | null;
     isCreatingFinalPayment: boolean;
@@ -108,6 +121,8 @@ interface AdminState {
     fetchOrderDetail: (id: string | number) => Promise<void>;
     fetchOrderPayments: (id: string | number) => Promise<OrderPaymentResponseDto[]>;
     fetchOrderSyncQueue: () => Promise<void>;
+    fetchNhanhHistory: (force?: boolean) => Promise<void>;
+    clearNhanhHistory: () => void;
     retryOrderSync: (id: string | number) => Promise<OrderSyncResultDto>;
     retryOrderSyncBatch: (ids: Array<string | number>) => Promise<OrderSyncBatchResult>;
     createPreorderFinalPayment: (id: string | number) => Promise<OrderPaymentResponseDto>;
@@ -127,6 +142,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     isAdminPaymentsLoading: false,
     adminPaymentsError: null,
     orderSyncQueue: [],
+    nhanhHistoryOrders: [],
     pendingOrderSyncCount: 0,
     ordersPage: {
         pageNumber: 0,
@@ -144,6 +160,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     retryingOrderIds: [],
     isOrderSyncQueueLoading: false,
     orderSyncQueueError: null,
+    isNhanhHistoryLoading: false,
+    nhanhHistoryError: null,
     orderSyncBatchProgress: null,
     orderSyncBatchResult: null,
     isCreatingFinalPayment: false,
@@ -342,6 +360,85 @@ export const useAdminStore = create<AdminState>((set, get) => ({
                 isOrderSyncQueueLoading: false
             });
         }
+    },
+
+    fetchNhanhHistory: (force = false) => {
+        if (nhanhHistoryRequest && !force) {
+            return nhanhHistoryRequest;
+        }
+
+        if (force) {
+            nhanhHistoryController?.abort();
+        }
+
+        const controller = new AbortController();
+        nhanhHistoryController = controller;
+        const sequence = ++nhanhHistorySequence;
+
+        set({isNhanhHistoryLoading: true, nhanhHistoryError: null});
+
+        const request = (async () => {
+            try {
+                const orders: OrderResponseDto[] = [];
+                let page = 0;
+                let totalPages = 1;
+
+                while (page < totalPages) {
+                    const response = await AdminWorkflowService.getAdminOrders({
+                        page,
+                        size: 100,
+                        sortBy: 'updatedAt',
+                        sortDirection: 'DESC'
+                    }, controller.signal);
+                    const data = response.data;
+                    orders.push(...(data.content ?? []));
+                    totalPages = Math.max(data.totalPages ?? 1, 1);
+                    page += 1;
+                }
+
+                if (sequence !== nhanhHistorySequence || controller.signal.aborted) {
+                    return;
+                }
+
+                set({
+                    nhanhHistoryOrders: orders
+                        .filter(hasNhanhHistory)
+                        .sort(compareNhanhHistoryNewestFirst),
+                    isNhanhHistoryLoading: false,
+                    nhanhHistoryError: null
+                });
+            } catch (error) {
+                if (sequence !== nhanhHistorySequence || isCanceledRequest(error)) {
+                    return;
+                }
+                set({
+                    isNhanhHistoryLoading: false,
+                    nhanhHistoryError: getErrorMessage(error, 'Không thể tải lịch sử đồng bộ Nhanh.vn.')
+                });
+            } finally {
+                if (sequence === nhanhHistorySequence) {
+                    nhanhHistoryRequest = null;
+                    if (nhanhHistoryController === controller) {
+                        nhanhHistoryController = null;
+                    }
+                }
+            }
+        })();
+
+        nhanhHistoryRequest = request;
+        return request;
+    },
+
+    clearNhanhHistory: () => {
+        nhanhHistoryController?.abort();
+        nhanhHistoryController = null;
+        nhanhHistoryRequest = null;
+        nhanhHistorySequence += 1;
+        set({
+            nhanhHistoryOrders: [],
+            isNhanhHistoryLoading: false,
+            nhanhHistoryError: null
+        });
     },
 
     retryOrderSync: async (id) => {

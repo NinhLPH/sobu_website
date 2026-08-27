@@ -178,7 +178,7 @@ export default function AdminRequestDetail() {
         <main className="space-y-6 pb-12 pt-6">
             <Link to="/admin/requests" className="inline-flex items-center gap-2 text-xs font-black uppercase text-outline hover:text-primary"><ArrowLeft className="h-4 w-4" /> Danh sách yêu cầu</Link>
 
-            <header className="rounded-3xl border border-outline-variant/30 bg-white p-5 shadow-sm sm:p-7">
+            <header className="rounded-3xl border border-outline-variant/30 bg-surface p-5 shadow-sm sm:p-7">
                 <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
                     <div>
                         <div className="flex flex-wrap items-center gap-3">
@@ -201,7 +201,7 @@ export default function AdminRequestDetail() {
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="space-y-6">
-                    <section className="rounded-3xl border border-outline-variant/30 bg-white p-5 shadow-sm sm:p-6">
+                    <section className="rounded-3xl border border-outline-variant/30 bg-surface p-5 shadow-sm sm:p-6">
                         <h2 className="text-sm font-black uppercase tracking-wide text-on-surface">Nội dung khách hàng gửi</h2>
                         <div className="mt-5 rounded-2xl bg-surface-container p-4 text-sm font-semibold leading-relaxed text-on-surface">
                             {request.customRequirements || 'Không có mô tả bổ sung.'}
@@ -216,7 +216,7 @@ export default function AdminRequestDetail() {
                         </div>
                     </section>
 
-                    <section className="rounded-3xl border border-outline-variant/30 bg-white p-5 shadow-sm sm:p-6">
+                    <section className="rounded-3xl border border-outline-variant/30 bg-surface p-5 shadow-sm sm:p-6">
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                             <div>
                                 <h2 className="text-sm font-black uppercase tracking-wide text-on-surface">Sản phẩm & báo giá</h2>
@@ -267,11 +267,11 @@ export default function AdminRequestDetail() {
                             <p className="mt-2 text-xs font-semibold leading-relaxed text-outline">{statusView.description}</p>
                             {primaryAction.requiresDeposit && (
                                 <label className="mt-5 block text-[10px] font-black uppercase text-outline">Số tiền cọc (VND)
-                                    <input aria-label="Số tiền cọc (VND)" type="number" min="0" max={request.totalAmount} value={deposit} onChange={(event) => setDeposit(event.target.value)} className="mt-1 w-full rounded-xl border border-primary/20 bg-white px-4 py-3 text-sm font-black text-on-surface" />
+                                    <input aria-label="Số tiền cọc (VND)" type="number" min="0" max={request.totalAmount} value={deposit} onChange={(event) => setDeposit(event.target.value)} className="mt-1 w-full rounded-xl border border-primary/20 bg-surface px-4 py-3 text-sm font-black text-on-surface" />
                                 </label>
                             )}
                             <label className="mt-4 block text-[10px] font-black uppercase text-outline">Ghi chú xử lý
-                                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 w-full resize-none rounded-xl border border-primary/20 bg-white px-4 py-3 text-xs" />
+                                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="mt-1 w-full resize-none rounded-xl border border-primary/20 bg-surface px-4 py-3 text-xs text-on-surface" />
                             </label>
                             <button type="submit" disabled={isSubmitting} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-black uppercase text-white disabled:opacity-50">
                                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} {primaryAction.label}
@@ -279,7 +279,7 @@ export default function AdminRequestDetail() {
                         </form>
                     )}
 
-                    <section className="rounded-3xl border border-outline-variant/30 bg-white p-5 shadow-sm">
+                    <section className="rounded-3xl border border-outline-variant/30 bg-surface p-5 shadow-sm">
                         <h2 className="text-xs font-black uppercase text-on-surface">Thông tin hệ thống</h2>
                         <dl className="mt-4 space-y-3 text-xs">
                             <div className="flex justify-between gap-3"><dt className="text-outline">Ngày tạo</dt><dd className="text-right font-bold">{new Date(request.createdAt).toLocaleString('vi-VN')}</dd></div>
@@ -291,12 +291,12 @@ export default function AdminRequestDetail() {
                     {(request.status !== 'REJECTED' && request.status !== 'CANCELLED') && (
                         <form onSubmit={(event) => void submitDangerAction(event)} className="rounded-3xl border border-red-200 bg-red-50/50 p-5">
                             <h2 className="flex items-center gap-2 text-xs font-black uppercase text-red-800"><ShieldAlert className="h-4 w-4" /> Xử lý ngoại lệ</h2>
-                            <select value={dangerAction} onChange={(event) => setDangerAction(event.target.value as 'REJECTED' | 'CANCELLED')} className="mt-4 w-full rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs font-bold">
+                            <select value={dangerAction} onChange={(event) => setDangerAction(event.target.value as 'REJECTED' | 'CANCELLED')} className="mt-4 w-full rounded-xl border border-error/30 bg-surface px-3 py-2.5 text-xs font-bold text-on-surface">
                                 {request.status !== 'APPROVED' && <option value="REJECTED">Từ chối yêu cầu</option>}
                                 <option value="CANCELLED">Hủy yêu cầu</option>
                             </select>
-                            <textarea aria-label="Lý do xử lý ngoại lệ" value={dangerReason} onChange={(event) => setDangerReason(event.target.value)} rows={3} className="mt-3 w-full resize-none rounded-xl border border-red-200 bg-white px-3 py-2.5 text-xs" placeholder="Nhập lý do bắt buộc..." />
-                            <button type="submit" disabled={isSubmitting} className="mt-3 w-full rounded-xl border border-red-300 bg-white px-4 py-2.5 text-[10px] font-black uppercase text-red-700 disabled:opacity-50">Xác nhận xử lý</button>
+                            <textarea aria-label="Lý do xử lý ngoại lệ" value={dangerReason} onChange={(event) => setDangerReason(event.target.value)} rows={3} className="mt-3 w-full resize-none rounded-xl border border-error/30 bg-surface px-3 py-2.5 text-xs text-on-surface" placeholder="Nhập lý do bắt buộc..." />
+                            <button type="submit" disabled={isSubmitting} className="mt-3 w-full rounded-xl border border-error/40 bg-surface px-4 py-2.5 text-[10px] font-black uppercase text-error disabled:opacity-50">Xác nhận xử lý</button>
                         </form>
                     )}
                 </aside>

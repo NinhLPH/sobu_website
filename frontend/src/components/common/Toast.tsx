@@ -1,8 +1,10 @@
 import { ToastContainer, Slide } from 'react-toastify';
 // @ts-ignore
 import 'react-toastify/dist/ReactToastify.css';
+import {useThemeStore} from '../../store/useThemeStore';
 
 export default function Toast() {
+    const theme = useThemeStore(state => state.theme);
     return (
         <ToastContainer
             position="bottom-right"
@@ -15,7 +17,7 @@ export default function Toast() {
             pauseOnFocusLoss
             draggable
             pauseOnHover
-            theme="light"
+            theme={theme}
             transition={Slide}
             toastStyle={{
                 borderRadius: '8px',

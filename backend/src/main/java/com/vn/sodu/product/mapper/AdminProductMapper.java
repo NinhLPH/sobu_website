@@ -33,6 +33,8 @@ public class AdminProductMapper {
         product.setImportPrice(request.getImportPrice());
         product.setWholesalePrice(request.getWholesalePrice());
         product.setOldPrice(request.getOldPrice());
+        product.setSaleValidFrom(request.getSaleValidFrom());
+        product.setSaleValidThrough(request.getSaleValidThrough());
         product.setVat(request.getVat());
         product.setAvatarImage(request.getAvatarImage());
         product.setDescription(request.getDescription());
@@ -63,7 +65,9 @@ public class AdminProductMapper {
         if (request.getRetailPrice() != null) product.setRetailPrice(request.getRetailPrice());
         if (request.getImportPrice() != null) product.setImportPrice(request.getImportPrice());
         if (request.getWholesalePrice() != null) product.setWholesalePrice(request.getWholesalePrice());
-        if (request.getOldPrice() != null) product.setOldPrice(request.getOldPrice());
+        product.setOldPrice(request.getOldPrice());
+        product.setSaleValidFrom(request.getSaleValidFrom());
+        product.setSaleValidThrough(request.getSaleValidThrough());
         if (request.getVat() != null) product.setVat(request.getVat());
         if (request.getAvatarImage() != null) product.setAvatarImage(request.getAvatarImage());
         if (request.getDescription() != null) product.setDescription(request.getDescription());
