@@ -32,6 +32,9 @@ jest.mock('./pages/ProductList', () => () => null);
 jest.mock('./pages/ProductDetails', () => () => null);
 jest.mock('./pages/BlogList', () => () => null);
 jest.mock('./pages/BlogDetail', () => () => null);
+jest.mock('./pages/CategoryLanding', () => () => null);
+jest.mock('./pages/BrandLanding', () => () => null);
+jest.mock('./pages/NotFound', () => () => null);
 jest.mock('./pages/ServicesLandingPage', () => () => null);
 jest.mock('./pages/Membership', () => () => null);
 jest.mock('./pages/OrderTracking', () => () => null);
@@ -54,7 +57,9 @@ jest.mock('./pages/admin/NhanhCallback', () => () => null);
 jest.mock('./pages/admin/Banners', () => () => null);
 jest.mock('./pages/admin/Configs', () => () => null);
 jest.mock('./pages/admin/StaticPages', () => () => null);
+jest.mock('./pages/admin/Articles', () => () => null);
 jest.mock('./pages/admin/Support', () => () => null);
+jest.mock('./components/common/SeoHead', () => () => null);
 
 describe('App route layout', () => {
     it('places customer routes inside SiteLayout and keeps auth/admin routes outside', () => {

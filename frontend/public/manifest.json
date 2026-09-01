@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "SOBU",
+  "name": "SOBU - Mô hình sưu tầm & dịch vụ collector",
+  "description": "Mô hình sưu tầm, phụ kiện và dịch vụ dành cho collector.",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +21,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#0e304e",
+  "background_color": "#f8fafc"
 }

@@ -104,7 +104,7 @@ export default function Header() {
     const mainCategories = useMemo(() => {
         return categories?.filter(cat => {
             const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
-            return pId === null || pId === undefined;
+            return cat.status !== 0 && (pId === null || pId === undefined);
         }) || [];
     }, [categories]);
 
@@ -114,7 +114,7 @@ export default function Header() {
         // Find matching subcategories by parent ID (check both parentId and parentID)
         const subCats = categories.filter(cat => {
             const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
-            return pId !== null && pId !== undefined && String(pId) === String(activeParentId);
+            return cat.status !== 0 && pId !== null && pId !== undefined && String(pId) === String(activeParentId);
         });
 
         if (subCats.length > 0) {
@@ -124,7 +124,7 @@ export default function Header() {
         // Fallback to .children array if it exists inside the parent object
         const parent = categories.find(cat => String(cat.id) === String(activeParentId));
         if (parent && parent.children && parent.children.length > 0) {
-            return parent.children;
+            return parent.children.filter(child => child.status !== 0);
         }
 
         return [];
@@ -247,10 +247,10 @@ export default function Header() {
                                                             isActive ? 'scale-[1.02] bg-primary text-on-primary shadow-md shadow-primary/20' : 'text-on-surface hover:bg-surface-container'
                                                         }`}
                                                     >
-                                                        <div className="flex items-center gap-3">
+                                                        <Link to={`/category/${parent.slug || parent.id}`} className="flex min-w-0 items-center gap-3">
                                                             <IconComponent className="w-5 h-5"/>
-                                                            <span className="text-sm font-bold">{parent.name}</span>
-                                                        </div>
+                                                            <span className="truncate text-sm font-bold">{parent.name}</span>
+                                                        </Link>
                                                         {hasChildren && (
                                                             <ChevronRight
                                                                 className={`w-4 h-4 ${isActive ? 'text-on-primary' : 'text-outline/60'}`}/>
@@ -267,7 +267,7 @@ export default function Header() {
                                         {activeChildren && activeChildren.length > 0 ? (
                                             <div role="region" aria-label="Dòng sản phẩm chi tiết" className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto overscroll-contain pr-2">
                                                 {activeChildren.map((child) => (
-                                                    <Link key={child.id} to={`/products?category=${child.id}`}
+                                                    <Link key={child.id} to={`/category/${child.slug || child.id}`}
                                                           className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-surface-container-low hover:bg-primary-container/20 border border-transparent hover:border-primary/20 transition-all group/child">
                                                         <span
                                                             className="text-sm font-bold text-on-surface group-hover/child:text-primary transition-colors">{child.name}</span>
@@ -291,8 +291,8 @@ export default function Header() {
                                     <span
                                         className="text-[11px] font-black uppercase tracking-wider text-outline mb-3 block">Thương hiệu phân phối</span>
                                     <div className="grid grid-cols-6 gap-x-4 gap-y-2 font-semibold">
-                                        {brands?.map((brand) => (
-                                            <Link key={brand.id} to={`/products?brand=${brand.id}`}
+                                        {brands?.filter(brand => brand.status !== 0).map((brand) => (
+                                            <Link key={brand.id} to={`/brand/${brand.slug || brand.id}`}
                                                   className="text-xs text-on-surface-variant hover:text-primary transition-colors truncate">• {brand.name}</Link>
                                         ))}
                                     </div>

@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {ChevronLeft, ChevronRight, Star} from 'lucide-react';
-import {HERO_SLIDES, mockBlogs, placeholderImages} from '../data/mockData';
+import {HERO_SLIDES, placeholderImages} from '../data/mockData';
 import ProductSlider from '../components/common/ProductSlider';
 import {useProductStore} from '../store/useProductStore';
 import {mapListItemToProductModel} from '../interface/product.model';
@@ -14,6 +14,10 @@ import BannerMedia from '../components/common/BannerMedia';
 import BannerCarousel from '../components/common/BannerCarousel';
 import {ReviewService} from '../service/review.service';
 import {ReviewResponseDto} from '../interface/review.model';
+import {ArticleDTO} from '../interface/article.model';
+import {ArticleService} from '../service/article.service';
+import {getPublicImageUrl} from '../utils/file-url';
+import SeoHead from '../components/common/SeoHead';
 
 interface SectionHeaderProps {
     title: string;
@@ -53,10 +57,10 @@ const DEFAULT_CUSTOM_TERTIARY = 'https://images.unsplash.com/photo-1532581140115
 const DEFAULT_CATEGORY_CARDS: CategoryCardConfig[] = [
     {label: 'Marvel', href: '/category/marvel', bannerPosition: 'home_category_card_01'},
     {label: 'DC', href: '/category/dc', bannerPosition: 'home_category_card_02'},
-    {label: 'Hot Wheels', href: '/category/hot wheels', bannerPosition: 'home_category_card_03'},
+    {label: 'Hot Wheels', href: '/category/hot-wheels', bannerPosition: 'home_category_card_03'},
     {label: 'Transformer', href: '/category/transformer', bannerPosition: 'home_category_card_04'},
     {label: 'Naruto', href: '/category/naruto', bannerPosition: 'home_category_card_05'},
-    {label: 'Pacific Rim', href: '/category/pacific rim', bannerPosition: 'home_category_card_06'},
+    {label: 'Pacific Rim', href: '/category/pacific-rim', bannerPosition: 'home_category_card_06'},
 ];
 
 const CATEGORY_CARD_POSITIONS: BannerPosition[] = [
@@ -280,6 +284,7 @@ export default function HomePage() {
     const [current, setCurrent] = useState(0);
     const [homeReviews, setHomeReviews] = useState<ReviewResponseDto[]>([]);
     const [homeReviewsError, setHomeReviewsError] = useState<string | null>(null);
+    const [latestArticles, setLatestArticles] = useState<ArticleDTO[]>([]);
     const {products, fetchProducts} = useProductStore();
     const banners = usePublicUiStore((state) => state.banners);
     const configMap = usePublicUiStore((state) => state.configMap);
@@ -295,6 +300,18 @@ export default function HomePage() {
     useEffect(() => {
         fetchProducts();
     }, [fetchProducts]);
+
+    useEffect(() => {
+        let active = true;
+        ArticleService.getPublishedArticles({page: 0, size: 4})
+            .then(response => {
+                if (active) setLatestArticles((response.content || []).slice(0, 4));
+            })
+            .catch(() => {
+                if (active) setLatestArticles([]);
+            });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
@@ -392,6 +409,12 @@ export default function HomePage() {
 
     return (
         <main className="w-full min-w-0 space-y-10 bg-surface pb-16 pt-24 sm:space-y-20 sm:pb-24">
+            <SeoHead
+                title={readConfig(configMap, 'seo_default_title', 'SOBU - Mô hình sưu tầm và dịch vụ collector')}
+                description={readConfig(configMap, 'seo_default_description', 'Khám phá mô hình sưu tầm, phụ kiện và dịch vụ chăm sóc mô hình tại SOBU.')}
+                canonicalPath="/"
+                type="website"
+            />
             <section className="group/hero relative mx-4 flex h-[300px] items-center justify-center sm:mx-6 sm:h-[400px] md:h-[500px]">
                 <div className="absolute bottom-8 left-[5%] top-8 z-0 w-[80%] rounded-3xl bg-outline-variant/20"/>
                 <div className="absolute bottom-8 right-[5%] top-8 z-0 w-[80%] rounded-3xl bg-outline-variant/30"/>
@@ -585,14 +608,14 @@ export default function HomePage() {
                     {readConfig(configMap, 'home_news_title', 'Tin Tuc')}
                 </h2>
                 <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-4">
-                    {mockBlogs.slice(0, 4).map((blog) => (
+                    {latestArticles.map((blog) => (
                         <Link
-                            to={`/blog/${blog.id}`}
+                            to={`/blog/${blog.slug}`}
                             key={blog.id}
                             className="group flex flex-col overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container-lowest shadow-sm transition-all hover:shadow-md sm:rounded-2xl"
                         >
                             <div className="aspect-[16/10] w-full overflow-hidden bg-surface-container-low">
-                                <img src={blog.image} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" alt={blog.title}/>
+                                {blog.thumbnailUrl ? <img src={getPublicImageUrl(blog.thumbnailUrl)} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" alt={blog.thumbnailAlt || blog.title}/> : <div className="flex h-full items-center justify-center text-xs font-black uppercase text-outline">SOBU Blog</div>}
                             </div>
                             <div className="flex flex-1 flex-col justify-between p-4 sm:p-5">
                                 <div>
@@ -600,15 +623,16 @@ export default function HomePage() {
                                         {blog.title}
                                     </h3>
                                     <p className="mb-4 line-clamp-3 text-xs text-outline">
-                                        {blog.excerpt || blog.content}
+                                        {blog.excerpt}
                                     </p>
                                 </div>
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-outline/70">
-                                    {blog.date}
+                                    {blog.publishedAt ? new Date(blog.publishedAt).toLocaleDateString('vi-VN') : 'SOBU'}
                                 </span>
                             </div>
                         </Link>
                     ))}
+                    {!latestArticles.length && <div className="col-span-full rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-lowest p-8 text-center text-sm font-bold text-outline">Tin tức đang được cập nhật.</div>}
                 </div>
                 <div className="mt-6 flex justify-end">
                     <Link

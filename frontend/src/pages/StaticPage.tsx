@@ -2,6 +2,8 @@ import {useEffect, useState} from 'react';
 import {AlertCircle, FileText, Loader2} from 'lucide-react';
 import {StaticPageDTO} from '../interface/static-page.model';
 import {StaticPageService} from '../service/static-page.service';
+import SeoHead from '../components/common/SeoHead';
+import {sanitizeRichHtml, stripHtml} from '../utils/sanitize-html';
 
 interface StaticPageProps {
     slug: string;
@@ -42,6 +44,7 @@ export default function StaticPage({slug}: StaticPageProps) {
     if (loading) {
         return (
             <main className={pageShellClass}>
+                <SeoHead title="Đang tải nội dung" noIndex/>
                 <div className="mx-auto flex w-full max-w-4xl min-w-0 items-center justify-center py-24">
                     <Loader2 className="h-9 w-9 animate-spin text-primary"/>
                 </div>
@@ -52,6 +55,7 @@ export default function StaticPage({slug}: StaticPageProps) {
     if (error || !page) {
         return (
             <main className={pageShellClass}>
+                <SeoHead title="Không tìm thấy trang" noIndex/>
                 <div className="mx-auto w-full max-w-4xl min-w-0 rounded-2xl border border-error/20 bg-error/10 p-8 text-center">
                     <AlertCircle className="mx-auto mb-3 h-10 w-10 text-error"/>
                     <h1 className="text-xl font-black text-on-surface">Không tìm thấy trang</h1>
@@ -62,9 +66,12 @@ export default function StaticPage({slug}: StaticPageProps) {
     }
 
     const hasContent = Boolean(page.htmlContent?.trim());
+    const safeContent = sanitizeRichHtml(page.htmlContent || '');
+    const description = stripHtml(safeContent).slice(0, 160);
 
     return (
         <main className={pageShellClass}>
+            <SeoHead title={page.title} description={description} canonicalPath={`/${page.slug}`}/>
             <article className="mx-auto w-full max-w-4xl min-w-0">
                 <header className="mb-8 border-b border-outline-variant/30 pb-6">
                     <p className="mb-3 text-xs font-black uppercase tracking-widest text-primary">SOBU</p>
@@ -76,7 +83,7 @@ export default function StaticPage({slug}: StaticPageProps) {
                 {hasContent ? (
                     <div
                         className="static-page-content min-w-0 max-w-full"
-                        dangerouslySetInnerHTML={{__html: page.htmlContent}}
+                        dangerouslySetInnerHTML={{__html: safeContent}}
                     />
                 ) : (
                     <div className="rounded-2xl border border-dashed border-outline-variant/50 bg-surface-container-lowest p-10 text-center">

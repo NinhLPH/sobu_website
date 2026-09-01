@@ -8,6 +8,7 @@ import {
     Images,
     ListTree,
     Menu,
+    Newspaper,
     Package,
     Settings,
     ShoppingCart,
@@ -63,6 +64,7 @@ const groups: AdminNavGroup[] = [
             {name: 'Banner', path: '/admin/banners', icon: Images, adminOnly: true},
             {name: 'Cấu hình website', path: '/admin/configs', icon: SlidersHorizontal, adminOnly: true},
             {name: 'Trang tĩnh', path: '/admin/static-pages', icon: FileText, adminOnly: true},
+            {name: 'Bài viết', path: '/admin/articles', icon: Newspaper, adminOnly: true},
         ]
     },
 ];
@@ -133,13 +135,15 @@ export default function AdminLayout() {
         <div
             className="sticky z-30 flex items-center justify-between border-b border-outline-variant/30 bg-surface/95 px-4 py-3 backdrop-blur lg:hidden"
             style={{top: 'var(--app-header-height)'}}>
-            <button ref={menuButtonRef} onClick={() => setOpen(true)} aria-expanded={open} aria-controls="admin-mobile-menu"
+            <button ref={menuButtonRef} onClick={() => setOpen(true)} aria-expanded={open}
+                    aria-controls="admin-mobile-menu"
                     className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-outline-variant/40 px-3 text-sm font-bold focus-visible:ring-2 focus-visible:ring-primary/40">
                 <Menu className="h-5 w-5"/>Menu quản trị
             </button>
             <span className="text-xs font-bold uppercase tracking-widest text-primary">{role}</span></div>
         <div className="admin-workspace flex">
-            <aside className="custom-scrollbar hidden w-64 shrink-0 overscroll-contain border-r border-outline-variant/30 bg-surface px-4 py-7 lg:block lg:overflow-y-auto">
+            <aside
+                className="custom-scrollbar hidden w-64 shrink-0 overscroll-contain border-r border-outline-variant/30 bg-surface px-4 py-7 lg:block lg:overflow-y-auto">
                 <div className="mb-7 px-3"><p className="text-lg font-black tracking-tight">SOBU Admin</p><p
                     className="mt-1 text-xs text-outline">Không gian vận hành</p></div>
                 {nav}</aside>
@@ -153,7 +157,9 @@ export default function AdminLayout() {
                     </div>
                     {nav}</aside>
             </div>}
-            <main ref={mainRef} className="custom-scrollbar min-w-0 flex-1 overscroll-contain p-4 sm:p-6 lg:overflow-y-auto lg:p-8"><Outlet/></main>
+            <main ref={mainRef}
+                  className="custom-scrollbar min-w-0 flex-1 overscroll-contain p-4 sm:p-6 lg:overflow-y-auto lg:p-8">
+                <Outlet/></main>
         </div>
     </div>;
 }

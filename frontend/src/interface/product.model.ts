@@ -1,5 +1,6 @@
 export interface ProductModel {
     id: string;
+    slug?: string;
     externalId?: string;
     nhanhProductId?: string;
     name: string;
@@ -7,9 +8,12 @@ export interface ProductModel {
     originalPrice?: number;
     category?: string;
     categoryId?: string;
+    categorySlug?: string;
     scale?: string;
     brand: string;
+    brandSlug?: string;
     imageUrl: string;
+    imageAlt?: string;
     description: string;
     stock: number;
     isNew?: boolean;
@@ -50,6 +54,7 @@ export interface ProductListItemDTO {
     externalId?: string | number;
     nhanhProductId?: string | number;
     name: string;
+    slug?: string | null;
     code?: string | null;
     price?: number | null;
     oldPrice?: number | null;
@@ -59,9 +64,12 @@ export interface ProductListItemDTO {
     badgeColor?: string | null;
     badgeTextColor?: string | null;
     avatarImage?: string;
+    avatarAltText?: string | null;
     brandName?: string;
+    brandSlug?: string | null;
     categoryId?: number | null;
     categoryName?: string;
+    categorySlug?: string | null;
     stockAvailable?: number;
     averageRating?: number;
     reviewsCount?: number;
@@ -73,6 +81,8 @@ export interface ProductDetailDTO {
     externalId?: string | number;
     nhanhProductId?: string | number;
     name: string;
+    slug?: string | null;
+    h1Title?: string | null;
     code: string;
     description: string;
     content: string;
@@ -86,14 +96,19 @@ export interface ProductDetailDTO {
     badgeColor?: string | null;
     badgeTextColor?: string | null;
     avatarImage: string;
+    avatarAltText?: string | null;
     brandName: string;
+    brandSlug?: string | null;
     categoryId?: number | null;
     categoryName: string;
+    categorySlug?: string | null;
     stockAvailable: number;
     stockRemain: number;
     units: ProductUnitDTO[];
     attributes: ProductAttributeDTO[];
     images: string[];
+    imageDetails?: Array<{url: string; altText?: string | null; caption?: string | null}>;
+    seo?: import('./seo.model').SeoMetadataDTO | null;
     averageRating?: number;
     reviewsCount?: number;
     updatedAt: string;
@@ -131,6 +146,7 @@ export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel
     const manualTag = toManualTag(dto);
     return {
         id: String(dto.id),
+        slug: dto.slug || undefined,
         externalId: dto.externalId === undefined ? undefined : String(dto.externalId),
         nhanhProductId: String(dto.nhanhProductId ?? dto.externalId ?? dto.id),
         name: dto.name,
@@ -138,8 +154,11 @@ export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel
         originalPrice,
         category: dto.categoryName || '',
         categoryId: dto.categoryId == null ? undefined : String(dto.categoryId),
+        categorySlug: dto.categorySlug || undefined,
         brand: dto.brandName || '',
+        brandSlug: dto.brandSlug || undefined,
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
+        imageAlt: dto.avatarAltText || dto.name,
         description: '',
         stock: dto.stockAvailable || 0,
         isNew: manualTag?.label.toUpperCase() === 'NEW',
@@ -158,6 +177,7 @@ export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => 
     const manualTag = toManualTag(dto);
     return {
         id: String(dto.id),
+        slug: dto.slug || undefined,
         externalId: dto.externalId === undefined ? undefined : String(dto.externalId),
         nhanhProductId: String(dto.nhanhProductId ?? dto.externalId ?? dto.id),
         name: dto.name,
@@ -165,8 +185,11 @@ export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => 
         originalPrice,
         category: dto.categoryName || '',
         categoryId: dto.categoryId == null ? undefined : String(dto.categoryId),
+        categorySlug: dto.categorySlug || undefined,
         brand: dto.brandName || '',
+        brandSlug: dto.brandSlug || undefined,
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
+        imageAlt: dto.avatarAltText || dto.name,
         description: dto.description || dto.content || '',
         stock: dto.stockAvailable || dto.stockRemain || 0,
         isNew: manualTag?.label.toUpperCase() === 'NEW',

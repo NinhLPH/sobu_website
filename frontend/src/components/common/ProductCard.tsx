@@ -26,11 +26,11 @@ export default function ProductCard({product}: ProductCardProps) {
 
     return (
         <div
-            onClick={() => navigate(`/product/${product.id}`)}
+            onClick={() => navigate(`/product/${product.slug || product.id}`)}
             onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    navigate(`/product/${product.id}`);
+                    navigate(`/product/${product.slug || product.id}`);
                 }
             }}
             role="link"
@@ -43,7 +43,7 @@ export default function ProductCard({product}: ProductCardProps) {
                 <img
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     src={product.imageUrl}
-                    alt={product.name}
+                    alt={product.imageAlt || product.name}
                 />
                 {(product.manualTag || isSale) && (
                     <div className="absolute left-1.5 top-1.5 flex max-w-[calc(100%-0.75rem)] flex-wrap gap-1 sm:left-2.5 sm:top-2.5 sm:max-w-[calc(100%-1.25rem)]">

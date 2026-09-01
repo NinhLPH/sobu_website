@@ -1,8 +1,8 @@
 import apiClient from '../api/api-client';
 import { PageResponse } from '../interface/api-response';
 import { ProductDetailDTO, ProductListItemDTO } from '../interface/product.model';
-import { CategoryListItemDTO } from '../interface/category.model';
-import { BrandListItemDTO } from '../interface/brand.model';
+import { CategoryDetailDTO, CategoryListItemDTO } from '../interface/category.model';
+import { BrandDetailDTO, BrandListItemDTO } from '../interface/brand.model';
 
 type CatalogParams = Record<string, string | number | boolean | undefined>;
 type ProductSearchBody = Record<string, unknown>;
@@ -79,10 +79,22 @@ export const PublicCatalogService = {
         );
     },
 
+    getCategoryDetail: (slugOrId: string | number): Promise<CategoryDetailDTO> =>
+        dedupeRequest(
+            `categories:detail:${slugOrId}`,
+            () => apiClient.get(`/api/public/categories/${encodeURIComponent(String(slugOrId))}`)
+        ),
+
     getBrands: (): Promise<BrandListItemDTO[]> => {
         return dedupeRequest(
             'brands',
             () => apiClient.get('/api/public/brands')
         );
-    }
+    },
+
+    getBrandDetail: (slugOrId: string | number): Promise<BrandDetailDTO> =>
+        dedupeRequest(
+            `brands:detail:${slugOrId}`,
+            () => apiClient.get(`/api/public/brands/${encodeURIComponent(String(slugOrId))}`)
+        )
 };

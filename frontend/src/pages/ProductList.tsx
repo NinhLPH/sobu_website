@@ -1,11 +1,12 @@
-import {useState, useMemo, useEffect} from 'react';
+import {useState, useMemo, useEffect, type FormEvent} from 'react';
 import {useSearchParams, useNavigate} from 'react-router-dom';
-import {ChevronRight, ChevronDown, SlidersHorizontal, X} from 'lucide-react';
+import {ChevronRight, ChevronDown, Search, SlidersHorizontal, X} from 'lucide-react';
 import Breadcrumbs from '../components/common/Breadcrumbs';
 
 import ProductCard from "../components/common/ProductCard";
 import {useProductStore} from '../store/useProductStore';
 import {getDiscountPercent, isSaleProduct, mapListItemToProductModel} from '../interface/product.model';
+import SeoHead from '../components/common/SeoHead';
 
 type SortOption = 'NEWEST' | 'PRICE_ASC' | 'PRICE_DESC' | 'DISCOUNT_DESC';
 
@@ -16,8 +17,9 @@ const normalizeSearchText = (value: string) => value
 
 export default function ProductList() {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const searchQuery = searchParams.get('search') || '';
+    const [searchDraft, setSearchDraft] = useState(searchQuery);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
     const [selectedScales, setSelectedScales] = useState<string[]>([]);
@@ -27,6 +29,16 @@ export default function ProductList() {
     const [priceRange, setPriceRange] = useState<number>(10000000);
     const [expandedParents, setExpandedParents] = useState<number[]>([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    useEffect(() => setSearchDraft(searchQuery), [searchQuery]);
+
+    const submitCatalogSearch = (event: FormEvent) => {
+        event.preventDefault();
+        const nextParams = new URLSearchParams(searchParams);
+        const value = searchDraft.trim();
+        if (value) nextParams.set('search', value); else nextParams.delete('search');
+        setSearchParams(nextParams);
+    };
 
     const { products, categories: apiCategories, brands: apiBrands, fetchProducts, fetchCategories, fetchBrands } = useProductStore();
 
@@ -183,12 +195,25 @@ export default function ProductList() {
 
     return (
         <main className="flex min-h-screen w-full min-w-0 flex-col bg-surface px-4 pb-20 pt-28 sm:px-6 sm:pb-24 sm:pt-32">
+            <SeoHead
+                title={searchQuery ? `Tìm kiếm: ${searchQuery}` : 'Tất cả sản phẩm'}
+                description={searchQuery ? `Kết quả tìm kiếm sản phẩm cho “${searchQuery}” tại SOBU.` : 'Khám phá danh mục mô hình sưu tầm, phụ kiện và sản phẩm chính hãng tại SOBU.'}
+                canonicalPath="/products"
+            />
             <Breadcrumbs items={[
                 {label: 'Trang chủ', to: '/'},
                 {label: 'Cửa hàng'},
             ]}/>
             <header className="mb-7 sm:mb-12">
                 <h1 className="mb-4 text-2xl font-black uppercase tracking-tight text-on-surface sm:text-4xl lg:text-5xl">Tất cả sản phẩm</h1>
+                <form onSubmit={submitCatalogSearch} className="flex w-full max-w-2xl gap-2">
+                    <label className="relative min-w-0 flex-1">
+                        <span className="sr-only">Tìm kiếm sản phẩm cửa hàng</span>
+                        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/>
+                        <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} aria-label="Tìm kiếm sản phẩm cửa hàng" placeholder="Tên sản phẩm, thương hiệu..." className="h-12 w-full rounded-xl border border-outline-variant/30 bg-surface-container-lowest pl-11 pr-4 text-sm font-semibold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"/>
+                    </label>
+                    <button type="submit" aria-label="Tìm kiếm" className="cursor-pointer rounded-xl bg-primary px-5 text-xs font-black uppercase text-on-primary">Tìm kiếm</button>
+                </form>
             </header>
 
             <button

@@ -20,6 +20,9 @@ import AdminRequestDetail from "./pages/admin/RequestDetails";
 import AdminOrderDetail from "./pages/admin/OrderDetails";
 import BlogList from "./pages/BlogList";
 import BlogDetail from "./pages/BlogDetail";
+import CategoryLanding from './pages/CategoryLanding';
+import BrandLanding from './pages/BrandLanding';
+import NotFound from './pages/NotFound';
 import ServicesLandingPage from "./pages/ServicesLandingPage";
 import Membership from "./pages/Membership";
 import CreateRequest from "./pages/CreateRequest";
@@ -47,11 +50,14 @@ import AdminShipping from './pages/admin/Shipping';
 import AdminSupport from './pages/admin/Support';
 import {ConfirmDialogProvider} from './components/common/ConfirmDialog';
 import {listenToSystemTheme} from './store/useThemeStore';
+import SeoHead from './components/common/SeoHead';
+import AdminArticles from './pages/admin/Articles';
 
 function AppContent() {
     const fetchConfigs = usePublicUiStore((state) => state.fetchConfigs);
     const location = useLocation();
     const isAdminRoute = location.pathname.startsWith('/admin');
+    const isPrivateRoute = isAdminRoute || ['/cart', '/profile', '/orders', '/requests', '/payment-result', '/payment/'].some((path) => location.pathname.startsWith(path));
 
     useEffect(() => {
         void fetchConfigs();
@@ -61,6 +67,7 @@ function AppContent() {
 
     return (
         <ConfirmDialogProvider>
+            <SeoHead canonicalPath={location.pathname} noIndex={isPrivateRoute}/>
             <ScrollToTop/>
             <div className={`flex min-h-screen flex-col ${isAdminRoute ? 'admin-app-shell' : ''}`}>
                 <Header/>
@@ -73,9 +80,10 @@ function AppContent() {
                         <Route path="/" element={<HomePage/>}/>
                         <Route path="/products" element={<ProductList/>}/>
                         <Route path="/product/:id" element={<ProductDetail/>}/>
-                        <Route path="/category/:category" element={<ProductList/>}/>
+                        <Route path="/category/:slugOrId" element={<CategoryLanding/>}/>
+                        <Route path="/brand/:slugOrId" element={<BrandLanding/>}/>
                         <Route path="/blog" element={<BlogList/>}/>
-                        <Route path="/blog/:id" element={<BlogDetail/>}/>
+                        <Route path="/blog/:slugOrId" element={<BlogDetail/>}/>
                         <Route path="/services" element={<ServicesLandingPage/>}/>
                         <Route path="/membership" element={<Membership/>}/>
                         <Route path="/about" element={<StaticPage slug="about"/>}/>
@@ -86,6 +94,7 @@ function AppContent() {
                         <Route path="/payment-result" element={<PaymentResult/>}/>
                         <Route path="/payment/return" element={<PaymentResult/>}/>
                         <Route path="/payment/cancel" element={<PaymentResult/>}/>
+                        <Route path="*" element={<NotFound/>}/>
 
                         {/* USER LOGGED IN PRIVATE ROUTES */}
                         <Route element={<ProtectedRoute allowedRoles={['USER', 'ADMIN']} />}>
@@ -122,6 +131,7 @@ function AppContent() {
                                 <Route path="banners" element={<AdminBanners/>}/>
                                 <Route path="configs" element={<AdminConfigs/>}/>
                                 <Route path="static-pages" element={<AdminStaticPages/>}/>
+                                <Route path="articles" element={<AdminArticles/>}/>
                             </Route>
                             <Route path="sync" element={<AdminSync/>}/>
                             <Route path="nhanh/callback" element={<AdminNhanhCallback/>}/>

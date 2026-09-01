@@ -15,18 +15,22 @@ import {
     isSaleProduct,
     mapListItemToProductModel,
     mapDetailToProductModel,
+    ProductDetailDTO,
     ProductModel
 } from '../interface/product.model';
 import ProductReviewSection from '../components/reviews/ProductReviewSection';
 import {parseJsonConfig} from '../utils/website-config';
 import {VoucherService} from '../service/voucher.service';
 import {ProductVoucherSummary} from '../interface/voucher.model';
+import SeoHead from '../components/common/SeoHead';
 
 type SocialLinks = Record<string, string>;
 
 export default function ProductDetail() {
     const {id} = useParams();
     const [product, setProduct] = useState<ProductModel | null>(null);
+    const [productDetail, setProductDetail] = useState<ProductDetailDTO | null>(null);
+    const [detailError, setDetailError] = useState('');
     const [quantity, setQuantity] = useState(1);
     const addToCart = useCartStore(state => state.addToCart);
     const [mainImage, setMainImage] = useState('');
@@ -52,14 +56,26 @@ export default function ProductDetail() {
     useEffect(() => {
         if (!id) return;
         setLoadingDetail(true);
+        setDetailError('');
+        setProduct(null);
+        setProductDetail(null);
         PublicCatalogService.getProductDetail(id)
             .then(dto => {
                 const mapped = mapDetailToProductModel(dto);
+                setProductDetail(dto);
                 setProduct(mapped);
                 setMainImage(mapped.imageUrl);
+                if (dto.slug && dto.slug !== id) {
+                    const target = `/product/${dto.slug}`;
+                    if (window.location.pathname !== target) {
+                        window.history.replaceState(window.history.state, '', target);
+                        window.dispatchEvent(new PopStateEvent('popstate'));
+                    }
+                }
             })
             .catch(err => {
                 console.error("Error loading product detail from API:", err);
+                setDetailError(err?.response?.data?.message || 'Không tìm thấy sản phẩm.');
             })
             .finally(() => {
                 setLoadingDetail(false);
@@ -132,22 +148,57 @@ export default function ProductDetail() {
 
     const isSale = product ? isSaleProduct(product) : false;
     const discountPercent = product ? getDiscountPercent(product) : 0;
+    const productStructuredData = useMemo(() => product && productDetail ? [{
+        '@context': 'https://schema.org', '@type': 'Product', name: productDetail.h1Title || product.name,
+        description: product.description, sku: productDetail.code,
+        image: Array.from(new Set([product.imageUrl, ...(product.thumbnailUrls || [])])),
+        brand: product.brand && product.brand !== 'N/A' ? {'@type': 'Brand', name: product.brand} : undefined,
+        offers: {'@type': 'Offer', priceCurrency: 'VND', price: product.price,
+            availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            url: typeof window === 'undefined' ? `/product/${productDetail.slug || productDetail.id}` : new URL(`/product/${productDetail.slug || productDetail.id}`, window.location.origin).toString()},
+    }, {
+        '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+            {'@type': 'ListItem', position: 1, name: 'Sản phẩm', item: typeof window === 'undefined' ? '/products' : new URL('/products', window.location.origin).toString()},
+            {'@type': 'ListItem', position: 2, name: productDetail.categoryName, item: typeof window === 'undefined' ? `/category/${productDetail.categorySlug || productDetail.categoryId || ''}` : new URL(`/category/${productDetail.categorySlug || productDetail.categoryId || ''}`, window.location.origin).toString()},
+            {'@type': 'ListItem', position: 3, name: productDetail.h1Title || product.name},
+        ],
+    }] : null, [product, productDetail]);
 
-    if (loadingDetail || !product) {
+    if (loadingDetail) {
         return (
             <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
+                <SeoHead title="Đang tải sản phẩm" noIndex/>
                 <div className="animate-spin text-primary w-10 h-10 border-4 border-current border-t-transparent rounded-full" />
                 <p className="text-outline text-xs font-bold mt-4">Đang tải chi tiết sản phẩm...</p>
             </main>
         );
     }
 
+    if (detailError || !product || !productDetail) {
+        return <main className="flex min-h-[50vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 pb-24 pt-28 text-center sm:px-6 sm:pt-32">
+            <SeoHead title="Không tìm thấy sản phẩm" noIndex/>
+            <h1 className="text-2xl font-black text-on-surface">Không tìm thấy sản phẩm</h1>
+            <p className="mt-3 text-sm font-semibold text-outline">{detailError || 'Sản phẩm này không còn khả dụng.'}</p>
+            <Link to="/products" className="mt-6 rounded-xl bg-primary px-5 py-3 text-xs font-black uppercase text-on-primary">Xem sản phẩm khác</Link>
+        </main>;
+    }
+
     return (
         <main className="w-full min-w-0 bg-surface px-4 pb-14 pt-28 sm:px-6 sm:pb-16 sm:pt-32">
+            <SeoHead
+                metadata={productDetail.seo}
+                title={productDetail.h1Title || product.name}
+                description={product.description}
+                canonicalPath={`/product/${productDetail.slug || productDetail.id}`}
+                image={product.imageUrl}
+                type="product"
+                structuredData={productStructuredData}
+            />
             <Breadcrumbs items={[
                 {label: 'Trang chủ', to: '/'},
                 {label: 'Sản phẩm', to: '/products'},
-                {label: product.category || 'Danh mục sản phẩm'},
+                {label: product.category || 'Danh mục sản phẩm', to: productDetail.categoryId ? `/category/${productDetail.categorySlug || productDetail.categoryId}` : undefined},
+                {label: productDetail.h1Title || product.name},
             ]}/>
 
             <div className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
@@ -155,7 +206,7 @@ export default function ProductDetail() {
                     {/* KHUNG ẢNH CHÍNH */}
                     <div
                         className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-surface-container-lowest p-4 shadow-[0_20px_50px_-15px_rgba(14,48,78,0.12)] sm:aspect-[4/3] sm:p-8">
-                        <img className="w-full h-full object-contain" src={mainImage} alt={product.name}/>
+                        <img className="w-full h-full object-contain" src={mainImage} alt={product.imageAlt || product.name}/>
                         <div className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] flex-wrap gap-2 sm:left-6 sm:top-6">
                             {product.manualTag && (
                                 <span
@@ -183,7 +234,7 @@ export default function ProductDetail() {
                                 className={`aspect-square rounded-xl bg-surface-container-lowest shadow-sm overflow-hidden cursor-pointer transition-all duration-300 p-2.5 flex items-center justify-center
                                 ${mainImage === url ? 'ring-2 ring-primary scale-95' : 'hover:scale-105 hover:shadow-md'}`}
                             >
-                                <img className="w-full h-full object-contain" src={url} alt={`Thumb ${index}`}/>
+                                <img className="w-full h-full object-contain" src={url} alt={productDetail.imageDetails?.find(image => image.url === url)?.altText || `${product.name} - ảnh ${index + 1}`}/>
                             </div>
                         ))}
                     </div>
@@ -192,7 +243,7 @@ export default function ProductDetail() {
                     <div>
                         <p className="text-[10px] font-black text-outline mb-2 tracking-widest uppercase">{product.brand}</p>
                         <h1 className="mb-4 text-xl font-black leading-tight tracking-tight text-on-surface sm:text-2xl md:text-3xl">
-                            {product.name}
+                            {productDetail.h1Title || product.name}
                         </h1>
                         <div className="flex items-center gap-4 text-xs font-bold">
                             <span className="bg-surface-container px-3 py-1.5 rounded-full text-on-surface">
