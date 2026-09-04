@@ -1,11 +1,13 @@
 package com.vn.sodu.inventory.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.inventory.InventoryAdjustmentType;
 import com.vn.sodu.inventory.InventoryService;
 import com.vn.sodu.inventory.dto.InventoryAdjustmentDto;
 import com.vn.sodu.inventory.dto.InventoryAdjustmentRequest;
 import com.vn.sodu.inventory.dto.InventoryBalanceDto;
+import com.vn.sodu.inventory.dto.InventoryProductDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,22 @@ import java.util.Locale;
 public class AdminInventoryController {
 
     private final InventoryService inventoryService;
+
+    @GetMapping({"", "/products", "/list"})
+    public ResponseEntity<ApiResponseDTO<PageResponse<InventoryProductDto>>> getInventoryProducts(
+            Authentication authentication,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String stockStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDirection
+    ) {
+        requireStaff(authentication);
+        PageResponse<InventoryProductDto> result = inventoryService.getInventoryProducts(
+                search, stockStatus, page, pageSize, sortBy, sortDirection);
+        return ResponseEntity.ok(ApiResponseDTO.success(result, "Inventory products retrieved"));
+    }
 
     @PostMapping("/{productId}/opening")
     public ResponseEntity<ApiResponseDTO<InventoryAdjustmentDto>> setOpeningStock(

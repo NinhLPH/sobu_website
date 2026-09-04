@@ -4,13 +4,21 @@ import com.vn.sodu.audit.AuditAction;
 import com.vn.sodu.audit.AuditService;
 import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.global.exception.NotFoundException;
+import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.inventory.dto.InventoryAdjustmentDto;
 import com.vn.sodu.inventory.dto.InventoryBalanceDto;
+import com.vn.sodu.inventory.dto.InventoryProductDto;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.OrderItem;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.repo.ProductRepo;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -19,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -184,6 +193,97 @@ public class InventoryService {
                 .stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<InventoryProductDto> getInventoryProducts(
+            String search,
+            String stockStatus,
+            int page,
+            int pageSize,
+            String sortBy,
+            String sortDirection
+    ) {
+        int safePage = Math.max(0, page);
+        int safeSize = pageSize <= 0 ? 20 : Math.min(pageSize, 100);
+
+        Sort.Direction direction = "ASC".equalsIgnoreCase(sortDirection) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String safeSortBy = (sortBy == null || sortBy.isBlank()) ? "id" : sortBy.trim();
+        if (!List.of("id", "name", "code", "stockRemain", "stockAvailable", "updatedAt", "createdAt").contains(safeSortBy)) {
+            safeSortBy = "id";
+        }
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(direction, safeSortBy));
+
+        Specification<Product> spec = (root, query, cb) -> {
+            Predicate predicate = cb.conjunction();
+
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.trim().toLowerCase() + "%";
+                Predicate searchPredicate = cb.or(
+                        cb.like(cb.lower(root.get("name")), pattern),
+                        cb.like(cb.lower(root.get("code")), pattern),
+                        cb.like(cb.lower(root.get("barcode")), pattern),
+                        cb.like(cb.lower(root.get("categoryName")), pattern),
+                        cb.like(cb.lower(root.get("brandName")), pattern)
+                );
+                predicate = cb.and(predicate, searchPredicate);
+            }
+
+            if (stockStatus != null && !stockStatus.isBlank()) {
+                switch (stockStatus.toUpperCase(Locale.ROOT)) {
+                    case "OUT_OF_STOCK" -> predicate = cb.and(predicate,
+                            cb.or(cb.isNull(root.<Double>get("stockAvailable")), cb.lessThanOrEqualTo(root.<Double>get("stockAvailable"), 0d)));
+                    case "IN_STOCK" -> predicate = cb.and(predicate,
+                            cb.and(cb.isNotNull(root.<Double>get("stockAvailable")), cb.greaterThan(root.<Double>get("stockAvailable"), 0d)));
+                    case "LOW_STOCK" -> predicate = cb.and(predicate,
+                            cb.and(
+                                    cb.isNotNull(root.<Double>get("stockAvailable")),
+                                    cb.greaterThan(root.<Double>get("stockAvailable"), 0d),
+                                    cb.lessThanOrEqualTo(root.<Double>get("stockAvailable"), 5d)
+                            ));
+                    default -> { }
+                }
+            }
+
+            return predicate;
+        };
+
+        Page<InventoryProductDto> dtoPage = productRepo.findAll(spec, pageable)
+                .map(this::toInventoryProductDto);
+
+        return PageResponse.from(dtoPage);
+    }
+
+    public InventoryProductDto toInventoryProductDto(Product product) {
+        if (product == null) {
+            return null;
+        }
+        double remain = safe(product.getStockRemain());
+        double available = safe(product.getStockAvailable());
+        double reserved = round(Math.max(0d, remain - available));
+
+        return InventoryProductDto.builder()
+                .id(product.getId())
+                .productId(product.getId())
+                .externalId(product.getExternalId())
+                .name(product.getName())
+                .code(product.getCode())
+                .sku(product.getCode())
+                .barcode(product.getBarcode())
+                .avatarImage(product.getAvatarImage())
+                .categoryId(product.getCategoryId())
+                .categoryName(product.getCategoryName())
+                .brandId(product.getBrandId())
+                .brandName(product.getBrandName())
+                .price(product.getRetailPrice())
+                .retailPrice(product.getRetailPrice())
+                .stockRemain(remain)
+                .stockAvailable(available)
+                .reserved(reserved)
+                .status(product.getStatus())
+                .active(product.getActive())
+                .updatedAt(product.getUpdatedAt())
+                .build();
     }
 
     private Map<Long, Integer> aggregateQuantities(Order order) {

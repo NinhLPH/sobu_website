@@ -1,11 +1,13 @@
 package com.vn.sodu.inventory.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.inventory.InventoryAdjustmentType;
 import com.vn.sodu.inventory.InventoryService;
 import com.vn.sodu.inventory.dto.InventoryAdjustmentDto;
 import com.vn.sodu.inventory.dto.InventoryAdjustmentRequest;
 import com.vn.sodu.inventory.dto.InventoryBalanceDto;
+import com.vn.sodu.inventory.dto.InventoryProductDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
@@ -125,6 +127,45 @@ class AdminInventoryControllerTest {
         assertThatThrownBy(() -> controller.getBalance(userAuth(), 5L))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.getLedger(userAuth(), 5L))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("Should allow staff to query inventory products")
+    void getInventoryProductsAllowsStaff() {
+        InventoryService service = mock(InventoryService.class);
+        AdminInventoryController controller = new AdminInventoryController(service);
+
+        InventoryProductDto item = InventoryProductDto.builder()
+                .id(1L).productId(1L).name("Sữa rửa mặt").code("SRM-01")
+                .stockRemain(20.0).stockAvailable(15.0).reserved(5.0)
+                .build();
+        PageResponse<InventoryProductDto> pageResponse = PageResponse.<InventoryProductDto>builder()
+                .content(List.of(item))
+                .pageNumber(0)
+                .pageSize(20)
+                .totalElements(1)
+                .totalPages(1)
+                .build();
+        when(service.getInventoryProducts("SRM", "IN_STOCK", 0, 20, "id", "DESC"))
+                .thenReturn(pageResponse);
+
+        var response = controller.getInventoryProducts(
+                staffAuth(), "SRM", "IN_STOCK", 0, 20, "id", "DESC");
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody().getData().getContent()).hasSize(1);
+        assertThat(response.getBody().getData().getContent().get(0).getReserved()).isEqualTo(5.0);
+    }
+
+    @Test
+    @DisplayName("Should reject non-staff for inventory products query")
+    void getInventoryProductsRejectsNonStaff() {
+        InventoryService service = mock(InventoryService.class);
+        AdminInventoryController controller = new AdminInventoryController(service);
+
+        assertThatThrownBy(() -> controller.getInventoryProducts(
+                userAuth(), null, null, 0, 20, "id", "DESC"))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
