@@ -403,6 +403,19 @@ export const useCartStore = create<CartState>((set, get) => {
             throw new Error(message);
         }
 
+        const customerStreet = details.customerStreet?.trim() || undefined;
+        const customerHamlet = details.customerHamlet?.trim() || undefined;
+        if (!customerStreet && !customerHamlet) {
+            const message = 'Vui lòng nhập tên đường/ngõ hoặc thôn/xóm.';
+            set({ checkoutError: message });
+            throw new Error(message);
+        }
+        if ((customerStreet?.length ?? 0) > 255 || (customerHamlet?.length ?? 0) > 255) {
+            const message = 'Tên đường/ngõ hoặc thôn/xóm không được vượt quá 255 ký tự.';
+            set({ checkoutError: message });
+            throw new Error(message);
+        }
+
         const hasValidShippingFee = typeof details.shippingFee === 'number'
             && Number.isFinite(details.shippingFee)
             && details.shippingFee >= 0;
@@ -425,6 +438,8 @@ export const useCartStore = create<CartState>((set, get) => {
 
         const payload: CreateNormalOrderDto = {
             ...details,
+            customerStreet,
+            customerHamlet,
             items: items.map(({ product, quantity }) => ({
                 ...(!nhanhEnabled
                     ? { productId: Number(product.id) }

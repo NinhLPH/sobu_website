@@ -34,6 +34,8 @@ interface CheckoutForm {
     customerMobile: string;
     customerEmail: string;
     customerAddress: string;
+    customerStreet: string;
+    customerHamlet: string;
     customerCityName: string;
     customerWardName: string;
     customerCityId: number | null;
@@ -53,6 +55,8 @@ const initialCheckoutForm: CheckoutForm = {
     customerMobile: '',
     customerEmail: '',
     customerAddress: '',
+    customerStreet: '',
+    customerHamlet: '',
     customerCityName: '',
     customerWardName: '',
     customerCityId: null,
@@ -61,6 +65,7 @@ const initialCheckoutForm: CheckoutForm = {
 };
 
 const MAX_CUSTOMER_ADDRESS_LENGTH = 500;
+const MAX_CUSTOMER_STREET_HAMLET_LENGTH = 255;
 
 type CompleteShippingQuote = ShippingQuoteDto & {
     carrierId?: number | null;
@@ -491,6 +496,7 @@ export default function Cart() {
     const navigate = useNavigate();
     const confirm = useConfirmDialog();
     const [form, setForm] = useState<CheckoutForm>(initialCheckoutForm);
+    const [addressType, setAddressType] = useState<'street' | 'hamlet'>('street');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ONLINE');
     const [validationError, setValidationError] = useState<string | null>(null);
     const [shippingQuotes, setShippingQuotes] = useState<CompleteShippingQuote[]>([]);
@@ -889,6 +895,18 @@ export default function Cart() {
             return;
         }
 
+        const streetOrHamlet = (addressType === 'street' ? form.customerStreet : form.customerHamlet).trim();
+        if (!streetOrHamlet) {
+            setValidationError(addressType === 'street'
+                ? 'Vui lòng nhập tên đường/ngõ.'
+                : 'Vui lòng nhập tên thôn/xóm.');
+            return;
+        }
+        if (streetOrHamlet.length > MAX_CUSTOMER_STREET_HAMLET_LENGTH) {
+            setValidationError('Tên đường/ngõ hoặc thôn/xóm không được vượt quá 255 ký tự.');
+            return;
+        }
+
         if (
             form.customerCityId === null ||
             form.customerWardId === null ||
@@ -921,6 +939,9 @@ export default function Cart() {
                 customerMobile: form.customerMobile.trim(),
                 customerEmail: form.customerEmail.trim() || undefined,
                 customerAddress: detailedAddress,
+                ...(addressType === 'street'
+                    ? { customerStreet: streetOrHamlet }
+                    : { customerHamlet: streetOrHamlet }),
                 customerCityName: form.customerCityName,
                 customerWardName: form.customerWardName,
                 customerCityId: form.customerCityId,
@@ -1125,11 +1146,45 @@ export default function Cart() {
                             Thông tin vận chuyển
                         </h2>
                         <div className="space-y-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <label className="block text-[10px] font-black uppercase tracking-wider text-outline">
+                                    Loại địa chỉ
+                                    <select
+                                        aria-label="Loại địa chỉ"
+                                        value={addressType}
+                                        onChange={(event) => {
+                                            setAddressType(event.target.value === 'hamlet' ? 'hamlet' : 'street');
+                                            setValidationError(null);
+                                            clearCheckoutError();
+                                        }}
+                                        disabled={isSubmitting || isCreatingPayment}
+                                        className="mt-1.5 w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="street">Đường</option>
+                                        <option value="hamlet">Thôn, xóm</option>
+                                    </select>
+                                </label>
+                                <label className="block text-[10px] font-black uppercase tracking-wider text-outline">
+                                    {addressType === 'street' ? 'Tên đường/ngõ' : 'Tên thôn/xóm'} *
+                                    <input
+                                        type="text"
+                                        aria-label={addressType === 'street' ? 'Tên đường/ngõ' : 'Tên thôn/xóm'}
+                                        aria-required="true"
+                                        value={addressType === 'street' ? form.customerStreet : form.customerHamlet}
+                                        onChange={(event) => updateField(addressType === 'street' ? 'customerStreet' : 'customerHamlet', event.target.value)}
+                                        disabled={isSubmitting || isCreatingPayment}
+                                        maxLength={MAX_CUSTOMER_STREET_HAMLET_LENGTH}
+                                        placeholder={addressType === 'street' ? 'Ví dụ: Nguyễn Trãi' : 'Ví dụ: Thôn Đông'}
+                                        className="mt-1.5 w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </label>
+                            </div>
                             <label className="block text-[10px] font-black uppercase tracking-wider text-outline">
                                 Địa chỉ giao nhận
                                 <input
                                     type="text"
                                     aria-label="Địa chỉ chi tiết"
+                                    aria-describedby="checkout-address-help"
                                     value={form.customerAddress}
                                     onChange={(event) => updateField('customerAddress', event.target.value)}
                                     disabled={isSubmitting || isCreatingPayment}
@@ -1138,6 +1193,9 @@ export default function Cart() {
                                     className="mt-1.5 w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                                 />
                             </label>
+                            <p id="checkout-address-help" className="text-xs text-outline">
+                                Nhập số nhà và địa chỉ cụ thể để giao hàng, tối đa 500 ký tự.
+                            </p>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <LocationCombobox
                                     label="Tỉnh/Thành phố"

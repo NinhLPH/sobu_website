@@ -245,6 +245,7 @@ describe('Cart payment selection', () => {
     };
 
     const selectShippingLocation = () => {
+        fireEvent.change(screen.getByLabelText('Tên đường/ngõ'), {target: {value: 'Nguyen Trai'}});
         selectLocationOption('Tỉnh/Thành phố', provinces[0].name);
         selectLocationOption('Phường/Xã', wards[0].name);
         fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {
@@ -318,16 +319,109 @@ describe('Cart payment selection', () => {
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(990, { type: 'FULL', paymentMethod: 'COD' }));
         expect(mockNavigate).toHaveBeenCalledWith('/orders/990?paymentSetup=cod', { replace: true });
         expect(actualStore.getState().checkoutError).toBeNull();
+        expect(jest.mocked(CustomerService).createOrder).toHaveBeenCalledWith(expect.objectContaining({
+            customerStreet: 'Nguyen Trai', customerAddress: '1 Nguyen Trai',
+        }), expect.any(String));
+        expect(JSON.parse(JSON.stringify(jest.mocked(CustomerService).createOrder.mock.calls[0][0])))
+            .not.toHaveProperty('customerHamlet');
         window.sessionStorage.clear();
     });
 
-    it('collects one detailed delivery address through customerAddress', () => {
+    it('sends only the selected hamlet through the real store and continues ONLINE checkout', async () => {
+        const actualStore = (jest.requireActual('../store/useCartStore') as typeof import('../store/useCartStore')).useCartStore;
+        actualStore.setState({items: [{product, quantity: 1}], isUsingFallback: false,
+            isSubmitting: false, checkoutError: null, pendingOrderKey: null, pendingOrderFingerprint: null});
+        mockedUseCartStore.mockReturnValue({...currentMockCart(), submitOrder: actualStore.getState().submitOrder});
+        jest.mocked(useIntegrationStore.getState).mockReturnValue({nhanhEnabled: false} as any);
+        jest.mocked(CustomerService).createOrder.mockResolvedValue({success: true, data: {id: 992}} as any);
+        const payment = {id: 22, orderId: 992, checkoutUrl: 'https://pay.payos.vn/web/checkout'};
+        mockCreatePayment.mockResolvedValue(payment);
+        render(<Cart />);
+        selectShippingLocation();
+        fireEvent.change(screen.getByLabelText('Loại địa chỉ'), {target: {value: 'hamlet'}});
+        fireEvent.change(screen.getByLabelText('Tên thôn/xóm'), {target: {value: '  Thôn Đông  '}});
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {target: {value: '  Số 12, Thôn Đông  '}});
+        await selectShippingQuote();
+        fireEvent.click(getCheckoutButton());
+        await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(992, {type: 'FULL', paymentMethod: 'ONLINE'}));
+        const payload = JSON.parse(JSON.stringify(jest.mocked(CustomerService).createOrder.mock.calls[0][0]));
+        expect(payload).toEqual(expect.objectContaining({customerHamlet: 'Thôn Đông', customerAddress: 'Số 12, Thôn Đông'}));
+        expect(payload).not.toHaveProperty('customerStreet');
+        expect(jest.mocked(CustomerService).clearCart).not.toHaveBeenCalled();
+        expect(mockedOnlineCartRecovery.save).toHaveBeenCalledWith(payment, [{product, quantity: 1}]);
+    });
+
+    it('preserves separate street and hamlet drafts when switching address type', () => {
+        render(<Cart />);
+        fireEvent.change(screen.getByLabelText('Tên đường/ngõ'), {target: {value: 'Nguyen Trai'}});
+        fireEvent.change(screen.getByLabelText('Loại địa chỉ'), {target: {value: 'hamlet'}});
+        expect((screen.getByLabelText('Tên thôn/xóm') as HTMLInputElement).value).toBe('');
+        fireEvent.change(screen.getByLabelText('Tên thôn/xóm'), {target: {value: 'Thôn Đông'}});
+        fireEvent.change(screen.getByLabelText('Loại địa chỉ'), {target: {value: 'street'}});
+        expect((screen.getByLabelText('Tên đường/ngõ') as HTMLInputElement).value).toBe('Nguyen Trai');
+        fireEvent.change(screen.getByLabelText('Loại địa chỉ'), {target: {value: 'hamlet'}});
+        expect((screen.getByLabelText('Tên thôn/xóm') as HTMLInputElement).value).toBe('Thôn Đông');
+    });
+
+    it.each([
+        ['street', '', /Vui lòng nhập tên đường/],
+        ['street', '   ', /Vui lòng nhập tên đường/],
+        ['hamlet', '', /Vui lòng nhập tên thôn/],
+        ['hamlet', '   ', /Vui lòng nhập tên thôn/],
+        ['street', 'a'.repeat(256), /255 ký tự/],
+        ['hamlet', 'a'.repeat(256), /255 ký tự/],
+    ])('blocks invalid %s input at the form (%s)', async (type, value, message) => {
+        render(<Cart />);
+        selectShippingLocation();
+        fireEvent.change(screen.getByLabelText('Loại địa chỉ'), {target: {value: type}});
+        fireEvent.change(screen.getByLabelText(type === 'street' ? 'Tên đường/ngõ' : 'Tên thôn/xóm'), {target: {value}});
+        await selectShippingQuote();
+        fireEvent.click(getCheckoutButton());
+        expect(await screen.findByText(message)).toBeTruthy();
+        expect(mockSubmitOrder).not.toHaveBeenCalled();
+        expect(mockCreatePayment).not.toHaveBeenCalled();
+    });
+
+    it.each(['street', 'hamlet'])('accepts 255 characters for %s and 500 for the detailed address', async type => {
+        render(<Cart />);
+        selectShippingLocation();
+        fireEvent.change(screen.getByLabelText('Loại địa chỉ'), {target: {value: type}});
+        fireEvent.change(screen.getByLabelText(type === 'street' ? 'Tên đường/ngõ' : 'Tên thôn/xóm'), {target: {value: 'a'.repeat(255)}});
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {target: {value: 'b'.repeat(500)}});
+        await selectShippingQuote();
+        fireEvent.click(getCheckoutButton());
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
+            [type === 'street' ? 'customerStreet' : 'customerHamlet']: 'a'.repeat(255), customerAddress: 'b'.repeat(500),
+        }), {clearCartOnSuccess: false}));
+        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty(type === 'street' ? 'customerHamlet' : 'customerStreet');
+    });
+
+    it('blocks a detailed address exceeding 500 characters', async () => {
+        render(<Cart />);
+        selectShippingLocation();
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {target: {value: 'a'.repeat(501)}});
+        await selectShippingQuote();
+        fireEvent.click(getCheckoutButton());
+        expect(await screen.findByText(/500 ky tu/)).toBeTruthy();
+        expect(mockSubmitOrder).not.toHaveBeenCalled();
+    });
+
+    it.each(['isSubmitting', 'isCreatingPayment'])('locks address fields during %s', state => {
+        if (state === 'isSubmitting') mockedUseCartStore.mockReturnValue({...currentMockCart(), isSubmitting: true});
+        else mockedUsePaymentStore.mockReturnValue({createPayment: mockCreatePayment, isCreatingPayment: true} as any);
+        render(<Cart />);
+        expect((screen.getByLabelText('Loại địa chỉ') as HTMLSelectElement).disabled).toBe(true);
+        expect((screen.getByLabelText('Tên đường/ngõ') as HTMLInputElement).disabled).toBe(true);
+    });
+
+    it('collects a street or hamlet alongside the detailed delivery address', () => {
         render(<Cart />);
 
         expect(screen.getByLabelText('Địa chỉ chi tiết')).toBeTruthy();
-        expect(screen.queryByLabelText('Tên đường')).toBeNull();
-        expect(screen.queryByText('Có tên đường')).toBeNull();
-        expect(screen.queryByPlaceholderText(/Xóm\/Ấp/i)).toBeNull();
+        expect((screen.getByLabelText('Loại địa chỉ') as HTMLSelectElement).value).toBe('street');
+        expect((screen.getByLabelText('Tên đường/ngõ') as HTMLInputElement).maxLength).toBe(255);
+        expect((screen.getByLabelText('Địa chỉ chi tiết') as HTMLInputElement).maxLength).toBe(500);
+        expect(screen.queryByLabelText('Tên thôn/xóm')).toBeNull();
     });
 
     it('requests shipping quotes after the customer selects a full location', async () => {
@@ -810,11 +904,12 @@ describe('Cart payment selection', () => {
             carrierId: 29,
             carrierServiceId: 186,
             shippingFee: 14000,
-            customerAddress: '123 Nguyen Trai'
+            customerAddress: '123 Nguyen Trai',
+            customerStreet: 'Nguyen Trai'
         }), {
             clearCartOnSuccess: true
         }));
-        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('customerStreet');
+        expect(mockSubmitOrder.mock.calls[0][0]).toHaveProperty('customerStreet', 'Nguyen Trai');
         expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('customerHamlet');
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
             type: 'FULL',
