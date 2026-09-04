@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.controller;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.service.NhanhService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -23,6 +24,7 @@ public class NhanhController {
 
     private final NhanhService nhanhService;
     private final com.vn.sodu.nhanh.NhanhProperties nhanhProperties;
+    private final NhanhEnabled nhanhEnabled;
 
     @GetMapping("/login")
     @Operation(
@@ -33,6 +35,7 @@ public class NhanhController {
             @ApiResponse(responseCode = "200", description = "OAuth URL generated successfully")
     })
     public ResponseEntity<String> login() {
+        nhanhEnabled.requireEnabled();
         String url = "https://nhanh.vn/oauth?" +
                 "version=3.0" +
                 "&appId=" + nhanhProperties.getClientId() +
@@ -51,6 +54,7 @@ public class NhanhController {
             @ApiResponse(responseCode = "400", description = "Invalid or missing access code")
     })
     public ResponseEntity<String> callback(@RequestParam("accessCode") String accessCode) {
+        nhanhEnabled.requireEnabled();
         nhanhService.handleCallback(accessCode);
         return ResponseEntity.ok("Connected");
     }

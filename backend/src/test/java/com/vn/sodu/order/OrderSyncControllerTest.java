@@ -5,13 +5,17 @@ import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.order.controller.OrderSyncController;
 import com.vn.sodu.order.dtos.OrderResponseDto;
 import com.vn.sodu.order.dtos.OrderSyncResultDto;
+import com.vn.sodu.order.dtos.UpdateOrderStatusRequest;
 import com.vn.sodu.order.services.OrderQueryService;
+import com.vn.sodu.order.services.OrderService;
 import com.vn.sodu.order.services.OrderSyncService;
 import com.vn.sodu.request.OrderType;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -26,6 +30,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,7 +43,19 @@ class OrderSyncControllerTest {
     private OrderSyncService orderSyncService;
 
     @Mock
+    private ObjectProvider<OrderSyncService> orderSyncServiceProvider;
+
+    @Mock
     private OrderQueryService orderQueryService;
+
+    @Mock
+    private com.vn.sodu.order.services.OrderExportService orderExportService;
+
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
+    @Mock
+    private OrderService orderService;
 
     @Test
     void listOrdersRequiresStaffAndReturnsPage() {
@@ -47,7 +66,7 @@ class OrderSyncControllerTest {
                 .build();
         when(orderQueryService.listOrders(0, 20, "createdAt", "DESC"))
                 .thenReturn(new PageImpl<>(List.of(dto), PageRequest.of(0, 20), 1));
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = controller();
 
         ResponseEntity<ApiResponseDTO<PageResponse<OrderResponseDto>>> response =
                 controller.listOrders(staffAuth(), 0, 20, "createdAt", "DESC");
@@ -67,7 +86,7 @@ class OrderSyncControllerTest {
                 .items(Collections.emptyList())
                 .build();
         when(orderQueryService.getOrderDetail(1L)).thenReturn(dto);
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = controller();
 
         ResponseEntity<ApiResponseDTO<OrderResponseDto>> response =
                 controller.getOrderDetail(1L, staffAuth());
@@ -89,7 +108,7 @@ class OrderSyncControllerTest {
                 .nhanhOrderCode("SOBU-REQ-1")
                 .build();
         when(orderSyncService.retryOrderSync(1L)).thenReturn(order);
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = controller();
 
         ResponseEntity<ApiResponseDTO<OrderSyncResultDto>> response =
                 controller.retryOrderSync(1L, staffAuth());
@@ -104,10 +123,58 @@ class OrderSyncControllerTest {
 
     @Test
     void retryOrderSyncRejectsNonStaff() {
-        OrderSyncController controller = new OrderSyncController(orderSyncService, orderQueryService);
+        OrderSyncController controller = controller();
 
         assertThrows(AccessDeniedException.class,
                 () -> controller.retryOrderSync(1L, new UsernamePasswordAuthenticationToken("user", "n/a")));
+    }
+
+    @Test
+    void retryOrderSyncRejectsLocalModeBeforeResolvingSyncService() {
+        doThrow(new com.vn.sodu.integration.NhanhIntegrationDisabledException())
+                .when(nhanhEnabled).requireEnabled();
+        OrderSyncController controller = controller();
+
+        assertThrows(
+                com.vn.sodu.integration.NhanhIntegrationDisabledException.class,
+                () -> controller.retryOrderSync(1L, staffAuth())
+        );
+        verify(orderSyncServiceProvider, never()).getIfAvailable();
+        verify(orderSyncService, never()).retryOrderSync(1L);
+    }
+
+    private ObjectProvider<OrderSyncService> syncServiceProvider() {
+        lenient().when(orderSyncServiceProvider.getIfAvailable()).thenReturn(orderSyncService);
+        return orderSyncServiceProvider;
+    }
+
+    @Test
+    void updateOrderStatusAdvancesLocalFulfilmentStatusForStaff() {
+        OrderResponseDto dto = OrderResponseDto.builder()
+                .id(1L)
+                .status(OrderStatus.PROCESSING)
+                .build();
+        when(orderQueryService.getOrderDetail(1L)).thenReturn(dto);
+        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
+        request.setStatus(OrderStatus.PROCESSING);
+
+        ResponseEntity<ApiResponseDTO<OrderResponseDto>> response = controller()
+                .updateOrderStatus(1L, request, staffAuth());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData().getStatus()).isEqualTo(OrderStatus.PROCESSING);
+        verify(orderService).updateFulfilmentStatusByStaff(1L, OrderStatus.PROCESSING);
+    }
+
+    private OrderSyncController controller() {
+        return new OrderSyncController(
+                syncServiceProvider(),
+                orderQueryService,
+                orderExportService,
+                nhanhEnabled,
+                orderService
+        );
     }
 
     private Authentication staffAuth() {

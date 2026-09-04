@@ -2,6 +2,7 @@ package com.vn.sodu.nhanh.service;
 
 import com.vn.sodu.global.exception.ExternalServiceException;
 import com.vn.sodu.global.exception.BadRequestException;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhOAuthConnectedEvent;
@@ -24,9 +25,11 @@ public class NhanhService {
     private final NhanhIntegrationRepo nhanhIntegrationRepo;
     private final NhanhProperties nhanhProperties;
     private final ApplicationEventPublisher eventPublisher;
+    private final NhanhEnabled nhanhEnabled;
 
     // 1. Generate login URL
     public String buildAuthUrl() {
+        nhanhEnabled.requireEnabled();
         return "https://open.nhanh.vn/oauth/authorize?" +
                 "client_id=" + nhanhProperties.getClientId() +
                 "&redirect_uri=" + nhanhProperties.getRedirectUri() +
@@ -35,6 +38,7 @@ public class NhanhService {
 
     @Transactional
     public void handleCallback(String accessCode) {
+        nhanhEnabled.requireEnabled();
 
         NhanhTokenResponse response;
         try {
@@ -87,6 +91,7 @@ public class NhanhService {
 
     // Get valid access token from first active integration
     public String getValidAccessToken() {
+        nhanhEnabled.requireEnabled();
         NhanhIntegration integration = getIntegration()
                 .orElseThrow(() -> new ExternalServiceException("No Nhanh integration found. Please authenticate first."));
 
@@ -103,6 +108,9 @@ public class NhanhService {
     }
 
     public java.util.Optional<NhanhIntegration> getIntegration() {
+        if (nhanhProperties.getBusinessId() == null || nhanhProperties.getBusinessId().isBlank()) {
+            return java.util.Optional.empty();
+        }
         Long businessId = Long.valueOf(nhanhProperties.getBusinessId());
         return nhanhIntegrationRepo.findByBusinessId(businessId).stream().findFirst();
     }

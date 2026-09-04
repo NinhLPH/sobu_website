@@ -17,10 +17,19 @@ export interface CategoryListItemDTO {
     parentId?: number;
     code: string;
     name: string;
+    slug?: string;
     order?: number;
     image?: string;
+    imageAlt?: string;
     status: number;
     children?: CategoryListItemDTO[];
+}
+
+export interface CategoryDetailDTO extends Omit<CategoryListItemDTO, 'children'> {
+    introContent?: string | null;
+    footerContent?: string | null;
+    content?: string | null;
+    seo?: import('./seo.model').SeoMetadataDTO | null;
 }
 
 export const mapCategoryDtoToModel = (dto: CategoryListItemDTO): CategoryModel => {

@@ -11,6 +11,7 @@ import {
     OrderResponseDto,
     OrderSyncResultDto
 } from '../interface/order.model';
+import {OrderStatus} from '../enum/union-types';
 
 export const AdminWorkflowService = {
     getAdminRequests: (
@@ -40,9 +41,10 @@ export const AdminWorkflowService = {
     },
 
     getAdminOrders: (
-        params?: AdminOrderQueryParams
+        params?: AdminOrderQueryParams,
+        signal?: AbortSignal
     ): Promise<ApiResponseDTO<PageResponse<OrderResponseDto>>> => {
-        return apiClient.get('/api/admin/orders', {params});
+        return apiClient.get('/api/admin/orders', {params, signal});
     },
 
     getAdminOrderDetail: (
@@ -63,6 +65,13 @@ export const AdminWorkflowService = {
         return apiClient.post(`/api/admin/orders/${orderId}/sync/retry`);
     },
 
+    updateAdminOrderStatus: (
+        orderId: string | number,
+        status: OrderStatus
+    ): Promise<ApiResponseDTO<OrderResponseDto>> => {
+        return apiClient.patch(`/api/admin/orders/${orderId}/status`, {status});
+    },
+
     createPreorderFinalPayment: (
         orderId: string | number
     ): Promise<ApiResponseDTO<OrderPaymentResponseDto>> => {
@@ -75,5 +84,13 @@ export const AdminWorkflowService = {
         return apiClient.post(
             `/v1/api/admin/payments/${encodeURIComponent(paymentCode)}/mock/confirm`
         );
+    },
+
+    exportSpxOrders: (
+        data?: { ids?: number[]; status?: string; query?: string }
+    ): Promise<Blob> => {
+        return apiClient.post('/api/admin/orders/export/spx', data, {
+            responseType: 'blob'
+        });
     }
 };

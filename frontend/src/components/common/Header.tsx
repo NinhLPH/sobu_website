@@ -11,34 +11,7 @@ import {formatCurrency} from "../../utils/format";
 import {usePublicUiStore} from '../../store/usePublicUiStore';
 import {getPublicImageUrl} from '../../utils/file-url';
 import SearchSuggestInput, {SearchSuggestion} from './SearchSuggestInput';
-
-type ThemeMode = 'light' | 'dark';
-
-const THEME_STORAGE_KEY = 'sobu-theme';
-
-const getInitialTheme = (): ThemeMode => {
-    if (typeof window === 'undefined') {
-        return 'light';
-    }
-
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (storedTheme === 'light' || storedTheme === 'dark') {
-        return storedTheme;
-    }
-
-    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-};
-
-const applyTheme = (theme: ThemeMode) => {
-    if (typeof document === 'undefined') {
-        return;
-    }
-
-    const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark');
-    root.classList.toggle('light', theme === 'light');
-    root.dataset.theme = theme;
-};
+import {initializeTheme, useThemeStore} from '../../store/useThemeStore';
 
 
 const getCategoryIcon = (catCode: string) => {
@@ -90,8 +63,12 @@ export default function Header() {
     const [activeParentId, setActiveParentId] = useState<number | null>(null);
     const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+    const theme = useThemeStore(state => state.theme);
+    const toggleTheme = useThemeStore(state => state.toggleTheme);
+
+    useEffect(() => initializeTheme(), []);
     const cartRef = useRef<HTMLDivElement>(null);
+    const headerRef = useRef<HTMLElement>(null);
 
     // Auth States & Refs
     const {isAuthenticated, user, logoutAction} = useAuthStore();
@@ -127,7 +104,7 @@ export default function Header() {
     const mainCategories = useMemo(() => {
         return categories?.filter(cat => {
             const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
-            return pId === null || pId === undefined;
+            return cat.status !== 0 && (pId === null || pId === undefined);
         }) || [];
     }, [categories]);
 
@@ -137,7 +114,7 @@ export default function Header() {
         // Find matching subcategories by parent ID (check both parentId and parentID)
         const subCats = categories.filter(cat => {
             const pId = cat.parentId !== undefined ? cat.parentId : (cat as any).parentID;
-            return pId !== null && pId !== undefined && String(pId) === String(activeParentId);
+            return cat.status !== 0 && pId !== null && pId !== undefined && String(pId) === String(activeParentId);
         });
 
         if (subCats.length > 0) {
@@ -147,7 +124,7 @@ export default function Header() {
         // Fallback to .children array if it exists inside the parent object
         const parent = categories.find(cat => String(cat.id) === String(activeParentId));
         if (parent && parent.children && parent.children.length > 0) {
-            return parent.children;
+            return parent.children.filter(child => child.status !== 0);
         }
 
         return [];
@@ -169,9 +146,18 @@ export default function Header() {
     }, [mainCategories, activeParentId]);
 
     useEffect(() => {
-        applyTheme(theme);
-        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    }, [theme]);
+        const header = headerRef.current;
+        if (!header) return;
+        const updateHeight = () => document.documentElement.style.setProperty('--app-header-height', `${header.offsetHeight}px`);
+        updateHeight();
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updateHeight);
+            return () => window.removeEventListener('resize', updateHeight);
+        }
+        const observer = new ResizeObserver(updateHeight);
+        observer.observe(header);
+        return () => observer.disconnect();
+    }, []);
 
     const submitSearch = (query: string) => {
         if (query.trim()) {
@@ -184,10 +170,6 @@ export default function Header() {
     const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         submitSearch(searchQuery);
-    };
-
-    const toggleTheme = () => {
-        setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark');
     };
 
     const mobileNavItems = [
@@ -211,7 +193,7 @@ export default function Header() {
 
     return (
         <>
-        <header className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+        <header ref={headerRef} className="fixed top-0 z-50 w-full bg-surface/90 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
             {/* HÀNG 1: CHUNG CHO CẢ MOBILE & DESKTOP */}
             <div className="mx-auto flex max-w-[1504px] items-center justify-between px-4 pb-3 pt-3 sm:px-6 lg:py-4">
 
@@ -242,48 +224,50 @@ export default function Header() {
                                 Danh mục <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180"/>
                             </Link>
                             <div
-                                className="fixed left-4 right-4 top-[76px] z-50 flex cursor-default flex-col gap-6 rounded-[2rem] bg-surface-container-lowest p-8 opacity-0 invisible shadow-[0_30px_60px_-15px_rgba(14,48,78,0.15)] transition-all duration-300 group-hover:visible group-hover:opacity-100 xl:absolute xl:-left-20 xl:right-auto xl:top-full xl:w-[950px]">
-                                <div className="grid grid-cols-12 gap-6 min-h-[300px]">
+                                className="fixed left-4 right-4 top-[76px] z-50 flex max-h-[calc(100vh-96px)] cursor-default flex-col gap-6 overflow-y-auto rounded-[2rem] bg-surface-container-lowest p-8 opacity-0 invisible shadow-[0_30px_60px_-15px_rgba(14,48,78,0.15)] transition-all duration-300 group-hover:visible group-hover:opacity-100 xl:absolute xl:-left-20 xl:right-auto xl:top-full xl:w-[950px]">
+                                <div className="grid h-[min(26rem,calc(100vh-12rem))] min-h-0 grid-cols-12 gap-6">
                                     <div
-                                        className="col-span-4 border-r border-surface-container pr-4 flex flex-col gap-1.5">
+                                        className="col-span-4 flex min-h-0 flex-col border-r border-surface-container pr-4">
                                         <span
                                             className="text-[11px] font-black uppercase tracking-wider text-outline mb-2 block px-2">Danh mục chính</span>
-                                        {mainCategories?.map((parent) => {
-                                            const IconComponent = getCategoryIcon(parent.code);
-                                            const isActive = activeParentId === parent.id;
-                                            const hasChildren = (parent.children && parent.children.length > 0) ||
-                                                categories.some(c => {
-                                                    const pId = c.parentId !== undefined ? c.parentId : (c as any).parentID;
-                                                    return pId !== null && pId !== undefined && String(pId) === String(parent.id);
-                                                });
-                                            return (
-                                                <div
-                                                    key={parent.id}
-                                                    onMouseEnter={() => setActiveParentId(parent.id)}
-                                                    className={`flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 cursor-pointer ${
-                                                        isActive ? 'bg-primary text-on-primary shadow-md shadow-primary/20 scale-[1.02]' : 'hover:bg-surface-container text-on-surface'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <IconComponent className="w-5 h-5"/>
-                                                        <span className="font-bold text-sm">{parent.name}</span>
+                                        <div role="region" aria-label="Danh mục chính" className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain pr-2">
+                                            {mainCategories?.map((parent) => {
+                                                const IconComponent = getCategoryIcon(parent.code);
+                                                const isActive = activeParentId === parent.id;
+                                                const hasChildren = (parent.children && parent.children.length > 0) ||
+                                                    categories.some(c => {
+                                                        const pId = c.parentId !== undefined ? c.parentId : (c as any).parentID;
+                                                        return pId !== null && pId !== undefined && String(pId) === String(parent.id);
+                                                    });
+                                                return (
+                                                    <div
+                                                        key={parent.id}
+                                                        onMouseEnter={() => setActiveParentId(parent.id)}
+                                                        className={`flex cursor-pointer items-center justify-between rounded-2xl px-4 py-3 transition-all duration-200 ${
+                                                            isActive ? 'scale-[1.02] bg-primary text-on-primary shadow-md shadow-primary/20' : 'text-on-surface hover:bg-surface-container'
+                                                        }`}
+                                                    >
+                                                        <Link to={`/category/${parent.slug || parent.id}`} className="flex min-w-0 items-center gap-3">
+                                                            <IconComponent className="w-5 h-5"/>
+                                                            <span className="truncate text-sm font-bold">{parent.name}</span>
+                                                        </Link>
+                                                        {hasChildren && (
+                                                            <ChevronRight
+                                                                className={`w-4 h-4 ${isActive ? 'text-on-primary' : 'text-outline/60'}`}/>
+                                                        )}
                                                     </div>
-                                                    {hasChildren && (
-                                                        <ChevronRight
-                                                            className={`w-4 h-4 ${isActive ? 'text-on-primary' : 'text-outline/60'}`}/>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
 
-                                    <div className="col-span-8 pl-4 flex flex-col">
+                                    <div className="col-span-8 flex min-h-0 flex-col pl-4">
                                         <span
                                             className="text-[11px] font-black uppercase tracking-wider text-outline mb-4 block">Dòng sản phẩm chi tiết</span>
                                         {activeChildren && activeChildren.length > 0 ? (
-                                            <div className="grid grid-cols-2 gap-3">
+                                            <div role="region" aria-label="Dòng sản phẩm chi tiết" className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto overscroll-contain pr-2">
                                                 {activeChildren.map((child) => (
-                                                    <Link key={child.id} to={`/products?category=${child.id}`}
+                                                    <Link key={child.id} to={`/category/${child.slug || child.id}`}
                                                           className="flex items-center justify-between px-4 py-3.5 rounded-xl bg-surface-container-low hover:bg-primary-container/20 border border-transparent hover:border-primary/20 transition-all group/child">
                                                         <span
                                                             className="text-sm font-bold text-on-surface group-hover/child:text-primary transition-colors">{child.name}</span>
@@ -307,8 +291,8 @@ export default function Header() {
                                     <span
                                         className="text-[11px] font-black uppercase tracking-wider text-outline mb-3 block">Thương hiệu phân phối</span>
                                     <div className="grid grid-cols-6 gap-x-4 gap-y-2 font-semibold">
-                                        {brands?.map((brand) => (
-                                            <Link key={brand.id} to={`/products?brand=${brand.id}`}
+                                        {brands?.filter(brand => brand.status !== 0).map((brand) => (
+                                            <Link key={brand.id} to={`/brand/${brand.slug || brand.id}`}
                                                   className="text-xs text-on-surface-variant hover:text-primary transition-colors truncate">• {brand.name}</Link>
                                         ))}
                                     </div>
@@ -476,7 +460,7 @@ export default function Header() {
                                                 {user?.role && (
                                                     <span
                                                         className="inline-block mt-2 text-[9px] bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
-                                                        {user.role.name === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
+                                                        {user.role.name === 'ADMIN' ? 'Quản trị viên' : user.role.name === 'STAFF' ? 'Nhân viên' : 'Thành viên'}
                                                     </span>
                                                 )}
                                             </div>
@@ -512,7 +496,7 @@ export default function Header() {
                                         {/* Đã tháo renderThemeMenuButton() ở đây */}
                                         {isAuthenticated ? (
                                             <>
-                                                {user?.role?.name === 'ADMIN' && (
+                                                {(user?.role?.name === 'ADMIN' || user?.role?.name === 'STAFF') && (
                                                     <Link
                                                         to="/admin"
                                                         onClick={() => setIsUserMenuOpen(false)}

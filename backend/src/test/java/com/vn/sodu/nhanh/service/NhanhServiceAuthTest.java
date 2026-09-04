@@ -6,6 +6,7 @@ import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.NhanhIntegrationRepo;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.NhanhTokenResponse;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -39,15 +41,20 @@ public class NhanhServiceAuthTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
     private NhanhService nhanhService;
 
     @BeforeEach
     public void setUp() {
+        lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
         nhanhService = new NhanhService(
                 nhanhClient,
                 nhanhIntegrationRepo,
                 nhanhProperties,
-                eventPublisher);
+                eventPublisher,
+                nhanhEnabled);
     }
 
     @Test
@@ -198,6 +205,7 @@ public class NhanhServiceAuthTest {
 
         when(nhanhClient.getAccessToken("valid-code")).thenReturn(response);
         when(nhanhProperties.getClientId()).thenReturn("app1");
+        when(nhanhProperties.getBusinessId()).thenReturn("123");
         when(nhanhIntegrationRepo.findByBusinessId(123L)).thenReturn(Optional.empty());
 
         nhanhService.handleCallback("valid-code");

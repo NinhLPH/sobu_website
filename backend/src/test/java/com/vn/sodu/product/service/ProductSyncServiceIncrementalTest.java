@@ -9,6 +9,7 @@ import com.vn.sodu.product.repo.ProductImageRepo;
 import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.product.repo.ProductUnitRepo;
 import com.vn.sodu.product.mapper.ProductMapper;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,9 +46,16 @@ class ProductSyncServiceIncrementalTest {
     private NhanhService nhanhService;
     @Mock
     private NhanhClient nhanhClient;
+    @Mock
+    private NhanhEnabled nhanhEnabled;
 
     @InjectMocks
     private ProductSyncService productSyncService;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
+    }
 
 
 

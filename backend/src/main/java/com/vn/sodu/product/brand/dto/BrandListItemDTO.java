@@ -16,5 +16,10 @@ public class BrandListItemDTO {
     private Long parentId;
     private String code;
     private String name;
+    private String slug;
+    private String logoUrl;
+    private String logoAlt;
+    private String description;
     private Integer status;
+    private Long externalId;
 }

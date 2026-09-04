@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import LoginPage from './LoginPage';

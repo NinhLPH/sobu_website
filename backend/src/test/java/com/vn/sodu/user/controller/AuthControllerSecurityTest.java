@@ -45,6 +45,12 @@ class AuthControllerSecurityTest {
     private AuthService authService;
 
     @MockBean
+    private com.vn.sodu.user.service.OAuthService oAuthService;
+
+    @MockBean
+    private com.vn.sodu.user.service.PasswordResetService passwordResetService;
+
+    @MockBean
     private JwtService jwtService;
 
     @MockBean

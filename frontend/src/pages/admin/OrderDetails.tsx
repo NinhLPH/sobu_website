@@ -13,7 +13,10 @@ import {
     User
 } from 'lucide-react';
 import { useAdminStore } from '../../store/useAdminStore';
+import { useIntegrationStore } from '../../store/useIntegrationStore';
+import {hasNhanhHistory} from '../../utils/order-sync';
 import { formatCurrency } from '../../utils/format';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
 
 const getStatusColor = (status?: string) => {
     switch (status) {
@@ -35,7 +38,7 @@ const getStatusColor = (status?: string) => {
         case 'CANCELLED':
             return 'border-red-200 bg-red-100 text-red-800';
         default:
-            return 'border-gray-200 bg-gray-100 text-gray-800';
+            return 'border-outline-variant/40 bg-surface-container text-on-surface-variant';
     }
 };
 
@@ -72,11 +75,11 @@ const getSyncStatusColor = (status?: string) => {
         case 'NEED_RECONCILE':
             return 'border-orange-200 bg-orange-50 text-orange-700';
         case 'DEAD':
-            return 'border-slate-300 bg-slate-100 text-slate-700';
+            return 'border-outline-variant/40 bg-surface-container text-on-surface-variant';
         case 'PENDING':
             return 'border-amber-200 bg-amber-50 text-amber-700';
         default:
-            return 'border-gray-200 bg-gray-50 text-gray-700';
+            return 'border-outline-variant/40 bg-surface-container-low text-on-surface-variant';
     }
 };
 
@@ -101,6 +104,7 @@ const canRetrySync = (status?: string) =>
     status === 'FAILED' || status === 'NEED_RECONCILE' || status === 'DEAD';
 
 export default function AdminOrderDetail() {
+    const confirm = useConfirmDialog();
     const { id } = useParams();
     const [manualPaymentCode, setManualPaymentCode] = useState('');
     const {
@@ -124,6 +128,18 @@ export default function AdminOrderDetail() {
         orderActionMessage
     } = useAdminStore();
     const isRetryingOrderSync = id ? retryingOrderIds.includes(Number(id)) : false;
+    const nhanhEnabled = useIntegrationStore((state) => state.nhanhEnabled);
+    const integrationLoaded = useIntegrationStore((state) => state.loaded);
+    const ensureIntegrationLoaded = useIntegrationStore((state) => state.ensureLoaded);
+    const canUseNhanh = integrationLoaded && nhanhEnabled;
+    const showNhanhHistory = hasNhanhHistory(order);
+    const showNhanhProductIds = canUseNhanh || Boolean(
+        showNhanhHistory && order?.items?.some(item => item.nhanhProductId)
+    );
+
+    useEffect(() => {
+        void ensureIntegrationLoaded();
+    }, [ensureIntegrationLoaded]);
 
     useEffect(() => {
         if (id) {
@@ -177,9 +193,12 @@ export default function AdminOrderDetail() {
         if (!normalizedCode) {
             return;
         }
-        const confirmed = window.confirm(
-            `Xác nhận payment ${normalizedCode} đã thanh toán? Thao tác này chỉ dành cho giao dịch giả lập.`
-        );
+        const confirmed = await confirm({
+            title: 'Xác nhận thanh toán giả lập?',
+            message: `Giao dịch ${normalizedCode} sẽ được đánh dấu đã thanh toán. Chỉ thực hiện với môi trường giả lập.`,
+            confirmLabel: 'Xác nhận thanh toán',
+            tone: 'warning'
+        });
         if (!confirmed) {
             return;
         }
@@ -221,6 +240,9 @@ export default function AdminOrderDetail() {
 
     const totalAmount = order.totalAmount ?? 0;
     const shippingFee = order.shippingFee ?? 0;
+    const discountAmount = order.discountAmount ?? 0;
+    const shippingDiscountAmount = order.shippingDiscountAmount ?? 0;
+    const originalSubtotal = Math.max(0, totalAmount + discountAmount + shippingDiscountAmount - shippingFee);
     const paidAmount = order.paidAmount ?? order.depositAmount ?? 0;
     const remainingAmount = order.remainingAmount ?? Math.max(0, totalAmount - paidAmount);
 
@@ -229,7 +251,7 @@ export default function AdminOrderDetail() {
             <div className="flex items-center gap-4">
                 <Link
                     to="/admin/orders"
-                    className="rounded-full border border-outline-variant/30 bg-white p-2 transition-colors hover:bg-surface-variant"
+                    className="rounded-full border border-outline-variant/30 bg-surface p-2 transition-colors hover:bg-surface-variant"
                     aria-label="Quay lại danh sách đơn hàng"
                 >
                     <ArrowLeft className="h-5 w-5 text-on-surface" />
@@ -268,10 +290,10 @@ export default function AdminOrderDetail() {
                 </div>
             )}
 
-            {canRetrySync(order.syncStatus) && (order.lastSyncMessage || order.syncError) && (
+            {showNhanhHistory && (order.lastSyncMessage || order.syncError) && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium leading-relaxed text-red-800">
                     <span className="mb-1 block font-black uppercase tracking-wide text-red-600">
-                        Chi tiết lỗi đồng bộ
+                        Chi tiết đồng bộ{canUseNhanh ? '' : ' đã lưu'}
                     </span>
                     {order.lastSyncMessage || order.syncError}
                 </div>
@@ -279,7 +301,7 @@ export default function AdminOrderDetail() {
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div className="space-y-6 lg:col-span-2">
-                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                         <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
                             <Package className="h-5 w-5 text-primary" />
                             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
@@ -292,7 +314,9 @@ export default function AdminOrderDetail() {
                                     <thead className="text-[10px] font-bold uppercase tracking-wider text-outline">
                                         <tr>
                                             <th className="pb-3">Sản phẩm</th>
-                                            <th className="pb-3 text-center">Nhanh ID</th>
+                                            {showNhanhProductIds && (
+                                                <th className="pb-3 text-center">Nhanh ID</th>
+                                            )}
                                             <th className="pb-3 text-center">SL</th>
                                             <th className="pb-3 text-right">Đơn giá</th>
                                             <th className="pb-3 text-right">Thành tiền</th>
@@ -302,9 +326,11 @@ export default function AdminOrderDetail() {
                                         {order.items.map((item) => (
                                             <tr key={item.id}>
                                                 <td className="py-3 text-on-surface">{item.name}</td>
-                                                <td className="py-3 text-center text-outline">
-                                                    {item.nhanhProductId || 'N/A'}
-                                                </td>
+                                                {showNhanhProductIds && (
+                                                    <td className="py-3 text-center text-outline">
+                                                        {item.nhanhProductId || 'N/A'}
+                                                    </td>
+                                                )}
                                                 <td className="py-3 text-center">{item.quantity}</td>
                                                 <td className="py-3 text-right">
                                                     {formatCurrency(item.price)}
@@ -324,13 +350,20 @@ export default function AdminOrderDetail() {
 
                             <div className="ml-auto mt-6 w-full space-y-2 border-t border-outline-variant/20 pt-4 text-xs font-bold sm:w-1/2">
                                 <div className="flex justify-between text-outline">
-                                    <span>Tổng đơn:</span>
-                                    <span className="text-on-surface">{formatCurrency(totalAmount)}</span>
+                                    <span>Tạm tính:</span>
+                                    <span className="text-on-surface">{formatCurrency(originalSubtotal)}</span>
                                 </div>
                                 <div className="flex justify-between text-outline">
-                                    <span>Phí vận chuyển:</span>
+                                    <span>Phí vận chuyển gốc:</span>
                                     <span className="text-on-surface">{formatCurrency(shippingFee)}</span>
                                 </div>
+                                {discountAmount > 0 && <div className="flex justify-between text-emerald-700"><span>Giảm sản phẩm/toàn đơn:</span><span>-{formatCurrency(discountAmount)}</span></div>}
+                                {shippingDiscountAmount > 0 && <div className="flex justify-between text-emerald-700"><span>Giảm phí vận chuyển:</span><span>-{formatCurrency(shippingDiscountAmount)}</span></div>}
+                                {(order.discountVoucherCode || order.shippingVoucherCode) && <div className="flex flex-wrap gap-2 py-1" aria-label="Voucher đã áp dụng">
+                                    {order.discountVoucherCode && <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] font-black text-primary">{order.discountVoucherCode}</span>}
+                                    {order.shippingVoucherCode && <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 font-mono text-[10px] font-black text-primary">{order.shippingVoucherCode}</span>}
+                                </div>}
+                                <div className="flex justify-between border-t border-outline-variant/20 pt-2 font-black text-on-surface"><span>Tổng thanh toán:</span><span>{formatCurrency(totalAmount)}</span></div>
                                 <div className="flex justify-between text-outline">
                                     <span>Đã thanh toán:</span>
                                     <span className="text-on-surface">{formatCurrency(paidAmount)}</span>
@@ -343,7 +376,7 @@ export default function AdminOrderDetail() {
                         </div>
                     </section>
 
-                    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
+                    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-surface p-6 shadow-sm">
                         <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
                             <div className="flex items-center gap-2">
                                 <CreditCard className="h-5 w-5 text-primary" />
@@ -387,7 +420,7 @@ export default function AdminOrderDetail() {
                                     onChange={(event) => setManualPaymentCode(event.target.value)}
                                     disabled={Boolean(confirmingPaymentCode)}
                                     placeholder="Nhập paymentCode"
-                                    className="min-w-0 flex-1 rounded-xl border border-outline-variant/20 bg-white px-3 py-2.5 text-xs font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                    className="min-w-0 flex-1 rounded-xl border border-outline-variant/20 bg-surface px-3 py-2.5 text-xs font-bold text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                                 />
                                 <button
                                     type="button"
@@ -479,66 +512,68 @@ export default function AdminOrderDetail() {
                         )}
                     </section>
 
-                    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-white p-6 shadow-sm">
-                        <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
-                            <div className="flex items-center gap-2">
-                                <RefreshCw className="h-5 w-5 text-primary" />
-                                <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
-                                    Đồng bộ Nhanh.vn
-                                </h2>
+                    {(canUseNhanh || showNhanhHistory) && (
+                        <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-surface p-6 shadow-sm">
+                            <div className="flex items-center justify-between gap-4 border-b border-surface-container pb-3">
+                                <div className="flex items-center gap-2">
+                                    <RefreshCw className="h-5 w-5 text-primary" />
+                                    <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
+                                        Đồng bộ Nhanh.vn
+                                    </h2>
+                                </div>
+                                <span className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
+                                    {canUseNhanh ? getSyncStatusText(order.syncStatus) : 'Chỉ đọc'}
+                                </span>
                             </div>
-                            <span className={`rounded-full border px-3 py-1 text-[9px] font-black uppercase tracking-wider ${getSyncStatusColor(order.syncStatus)}`}>
-                                {getSyncStatusText(order.syncStatus)}
-                            </span>
-                        </div>
 
-                        <div className="space-y-3 rounded-xl border border-outline-variant/10 bg-surface-container/30 p-4 text-xs font-bold">
-                            <div className="flex justify-between gap-4">
-                                <span className="text-outline">Milestone:</span>
-                                <span className="text-right text-on-surface">
-                                    {order.nhanhSyncStage || 'NONE'}
-                                </span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                                <span className="text-outline">Nhanh ID:</span>
-                                <span className="select-all text-on-surface">
-                                    {order.nhanhOrderId || 'Chưa kết nối'}
-                                </span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                                <span className="text-outline">Nhanh code:</span>
-                                <span className="select-all text-on-surface">
-                                    {order.nhanhOrderCode || 'Chưa kết nối'}
-                                </span>
-                            </div>
-                            {order.lastSyncAt && (
+                            <div className="space-y-3 rounded-xl border border-outline-variant/10 bg-surface-container/30 p-4 text-xs font-bold">
                                 <div className="flex justify-between gap-4">
-                                    <span className="text-outline">Lần sync cuối:</span>
-                                    <span className="text-on-surface">
-                                        {new Date(order.lastSyncAt).toLocaleString('vi-VN')}
+                                    <span className="text-outline">Milestone:</span>
+                                    <span className="text-right text-on-surface">
+                                        {order.nhanhSyncStage || 'NONE'}
                                     </span>
                                 </div>
-                            )}
-                        </div>
+                                <div className="flex justify-between gap-4">
+                                    <span className="text-outline">Nhanh ID:</span>
+                                    <span className="select-all text-on-surface">
+                                        {order.nhanhOrderId || 'Chưa kết nối'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                    <span className="text-outline">Nhanh code:</span>
+                                    <span className="select-all text-on-surface">
+                                        {order.nhanhOrderCode || 'Chưa kết nối'}
+                                    </span>
+                                </div>
+                                {order.lastSyncAt && (
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-outline">Lần sync cuối:</span>
+                                        <span className="text-on-surface">
+                                            {new Date(order.lastSyncAt).toLocaleString('vi-VN')}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
 
-                        {canRetrySync(order.syncStatus) && (
-                            <button
-                                type="button"
-                                onClick={handleRetrySync}
-                                disabled={isRetryingOrderSync}
-                                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {isRetryingOrderSync
-                                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                                    : <RefreshCw className="h-4 w-4" />}
-                                {isRetryingOrderSync ? 'Đang đồng bộ lại...' : 'Retry đồng bộ'}
-                            </button>
-                        )}
-                    </section>
+                            {canUseNhanh && canRetrySync(order.syncStatus) && (
+                                <button
+                                    type="button"
+                                    onClick={handleRetrySync}
+                                    disabled={isRetryingOrderSync}
+                                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-primary-container py-3 text-xs font-black uppercase tracking-widest text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isRetryingOrderSync
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <RefreshCw className="h-4 w-4" />}
+                                    {isRetryingOrderSync ? 'Đang đồng bộ lại...' : 'Retry đồng bộ'}
+                                </button>
+                            )}
+                        </section>
+                    )}
                 </div>
 
                 <aside className="space-y-6">
-                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                         <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
                             <User className="h-5 w-5 text-primary" />
                             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">
@@ -575,7 +610,7 @@ export default function AdminOrderDetail() {
                         </div>
                     </section>
 
-                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+                    <section className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                         <header className="flex items-center gap-2 border-b border-outline-variant/20 bg-surface-container-lowest p-4">
                             <MapPin className="h-5 w-5 text-primary" />
                             <h2 className="text-xs font-black uppercase tracking-wider text-on-surface">

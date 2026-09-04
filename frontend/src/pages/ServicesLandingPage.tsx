@@ -12,6 +12,7 @@ import {
     ShieldCheck,
     Sparkles
 } from 'lucide-react';
+import SeoHead from '../components/common/SeoHead';
 
 const services = [
     {
@@ -70,6 +71,7 @@ const processSteps = [
 export default function ServicesLandingPage() {
     return (
         <main className="min-h-screen overflow-hidden bg-surface pt-24 text-on-surface">
+            <SeoHead title="Dịch vụ mô hình" description="Dịch vụ custom, sơn, sửa chữa và chăm sóc mô hình chuyên nghiệp tại SOBU." canonicalPath="/services"/>
             <section className="relative px-6 pb-20 pt-14 md:pb-28 md:pt-20">
                 <div className="absolute -left-32 top-8 h-80 w-80 rounded-full bg-primary-container/20 blur-3xl"/>
                 <div className="absolute -right-32 bottom-0 h-96 w-96 rounded-full bg-tertiary-container/20 blur-3xl"/>

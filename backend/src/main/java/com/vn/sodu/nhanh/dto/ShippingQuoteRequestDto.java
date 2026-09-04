@@ -28,9 +28,7 @@ public class ShippingQuoteRequestDto {
     @Schema(description = "ID of the customer's city/province", example = "1")
     private Long customerCityId;
 
-    @NotNull(message = "Customer district id is required")
-    @Positive(message = "Customer district id must be positive")
-    @Schema(description = "ID of the customer's district", example = "1")
+    @Schema(description = "ID of the customer's district (optional in 2-level local dataset)", example = "1")
     private Long customerDistrictId;
 
     @NotNull(message = "Customer ward id is required")

@@ -1,5 +1,6 @@
 import {Shield, Star, Crown, Check, ShoppingBag, Award, Zap, ArrowRight} from 'lucide-react';
 import {Link} from 'react-router-dom';
+import SeoHead from '../components/common/SeoHead';
 
 export default function Membership() {
     //Quy trình tích lũy
@@ -62,6 +63,7 @@ export default function Membership() {
 
     return (
         <main className="min-h-screen w-full min-w-0 bg-surface px-4 pb-16 pt-24 sm:px-6">
+            <SeoHead title="Thẻ thành viên SOBU" description="Khám phá quyền lợi, ưu đãi và cách tích lũy hạng thành viên SOBU." canonicalPath="/membership"/>
             <div className="mx-auto flex w-full flex-col gap-12">
                 <div className="text-center">
                     <span

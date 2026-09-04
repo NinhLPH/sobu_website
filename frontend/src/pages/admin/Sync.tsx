@@ -9,12 +9,15 @@ import {
     ListTree,
     Award,
     ShoppingCart,
-    Clock3
+    Clock3,
+    PlugZap
 } from 'lucide-react';
 import {AdminSyncService} from '../../service/sync.service';
 import {ToastService} from '../../service/toast.service';
 import {useProductStore} from '../../store/useProductStore';
 import {useAdminStore} from '../../store/useAdminStore';
+import {useIntegrationStore} from '../../store/useIntegrationStore';
+import NhanhHistoryPanel from '../../components/admin/NhanhHistoryPanel';
 
 const getOrderSyncStatusStyle = (status?: string) => {
     switch (status) {
@@ -23,9 +26,9 @@ const getOrderSyncStatusStyle = (status?: string) => {
         case 'NEED_RECONCILE':
             return 'border-orange-200 bg-orange-50 text-orange-700';
         case 'DEAD':
-            return 'border-slate-300 bg-slate-100 text-slate-700';
+            return 'border-outline-variant/40 bg-surface-container text-on-surface-variant';
         default:
-            return 'border-gray-200 bg-gray-50 text-gray-700';
+            return 'border-outline-variant/40 bg-surface-container-low text-on-surface-variant';
     }
 };
 
@@ -71,6 +74,11 @@ export default function AdminSync() {
         orderSyncBatchProgress,
         orderSyncBatchResult,
         fetchOrderSyncQueue,
+        nhanhHistoryOrders,
+        isNhanhHistoryLoading,
+        nhanhHistoryError,
+        fetchNhanhHistory,
+        clearNhanhHistory,
         retryOrderSync,
         retryOrderSyncBatch
     } = useAdminStore();
@@ -86,6 +94,29 @@ export default function AdminSync() {
         categories: null,
         brands: null
     });
+
+    const nhanhEnabled = useIntegrationStore((state) => state.nhanhEnabled);
+    const integrationLoaded = useIntegrationStore((state) => state.loaded);
+    const ensureIntegrationLoaded = useIntegrationStore((state) => state.ensureLoaded);
+
+    useEffect(() => {
+        void ensureIntegrationLoaded();
+    }, [ensureIntegrationLoaded]);
+
+    useEffect(() => {
+        if (!integrationLoaded) {
+            return;
+        }
+        if (nhanhEnabled) {
+            void fetchOrderSyncQueue();
+        } else {
+            void fetchNhanhHistory();
+        }
+    }, [fetchNhanhHistory, fetchOrderSyncQueue, integrationLoaded, nhanhEnabled]);
+
+    useEffect(() => () => {
+        clearNhanhHistory();
+    }, [clearNhanhHistory]);
 
     useEffect(() => {
         const oauth = searchParams.get('oauth');
@@ -111,10 +142,6 @@ export default function AdminSync() {
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
     }, []);
-
-    useEffect(() => {
-        void fetchOrderSyncQueue();
-    }, [fetchOrderSyncQueue]);
 
     useEffect(() => {
         const queueIds = new Set(orderSyncQueue.map(order => order.id));
@@ -196,6 +223,43 @@ export default function AdminSync() {
         }
     };
 
+    if (!integrationLoaded) {
+        return (
+            <div className="pt-6 space-y-6">
+                <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">Trung tâm đồng bộ ERP Nhanh.vn</h1>
+                <div className="flex flex-col items-center justify-center gap-4 rounded-3xl bg-surface py-20 border border-outline-variant/30 shadow-sm">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary"/>
+                    <p className="text-xs font-bold text-outline">Đang kiểm tra trạng thái tích hợp...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!nhanhEnabled) {
+        return (
+            <div className="pt-6 space-y-6">
+                <h1 className="text-2xl font-black text-on-surface uppercase tracking-tight">Trung tâm đồng bộ ERP Nhanh.vn</h1>
+                <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-outline-variant/30 bg-surface px-5 py-12 text-center shadow-sm sm:py-16">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-container text-outline">
+                        <PlugZap className="h-8 w-8" aria-hidden="true"/>
+                    </div>
+                    <h2 className="text-sm font-black text-on-surface uppercase tracking-wide">Tích hợp Nhanh.vn đang tắt</h2>
+                    <p className="max-w-xl text-xs leading-relaxed font-semibold text-outline">
+                        SOBU đang chạy ở chế độ local: sản phẩm, đơn hàng và phí vận chuyển được xử lý trong hệ thống,
+                        không đồng bộ sang ERP Nhanh.vn. Lịch sử các đơn hàng đã đồng bộ trước đó vẫn được giữ nguyên
+                        và hiển thị ở chế độ chỉ đọc.
+                    </p>
+                </div>
+                <NhanhHistoryPanel
+                    orders={nhanhHistoryOrders}
+                    loading={isNhanhHistoryLoading}
+                    error={nhanhHistoryError}
+                    onRetry={() => void fetchNhanhHistory(true)}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="pt-6 space-y-6">
             <div>
@@ -207,7 +271,7 @@ export default function AdminSync() {
 
             {/* OAuth Nhanh.vn Integration Section */}
             <div
-                className="bg-white rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+                className="bg-surface rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="space-y-2 max-w-2xl font-bold">
                     <h2 className="text-sm font-black text-on-surface uppercase tracking-wide">Tích hợp kết nối ERP
                         Nhanh.vn</h2>
@@ -259,7 +323,7 @@ export default function AdminSync() {
 
                 {/* 1. PRODUCTS SYNC */}
                 <div
-                    className="bg-white rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col justify-between min-h-[300px]">
+                    className="bg-surface rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col justify-between min-h-[300px]">
                     <div className="space-y-4">
                         <div
                             className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
@@ -312,7 +376,7 @@ export default function AdminSync() {
 
                 {/* 2. CATEGORIES SYNC */}
                 <div
-                    className="bg-white rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col justify-between min-h-[300px]">
+                    className="bg-surface rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col justify-between min-h-[300px]">
                     <div className="space-y-4">
                         <div
                             className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
@@ -365,7 +429,7 @@ export default function AdminSync() {
 
                 {/* 3. BRANDS SYNC */}
                 <div
-                    className="bg-white rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col justify-between min-h-[300px]">
+                    className="bg-surface rounded-3xl p-6 border border-outline-variant/30 shadow-sm flex flex-col justify-between min-h-[300px]">
                     <div className="space-y-4">
                         <div
                             className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
@@ -418,7 +482,7 @@ export default function AdminSync() {
 
             </div>
 
-            <section className="overflow-hidden rounded-3xl border border-outline-variant/30 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-3xl border border-outline-variant/30 bg-surface shadow-sm">
                 <div className="flex flex-col gap-5 border-b border-surface-container p-6 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex items-start gap-4">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">

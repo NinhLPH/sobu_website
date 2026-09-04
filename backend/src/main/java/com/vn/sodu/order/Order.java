@@ -82,6 +82,8 @@ public class Order {
     private String customerMobile;
     private String customerEmail;
     private String customerAddress;
+    private String customerStreet;
+    private String customerHamlet;
     private String customerCityName;
     private String customerDistrictName;
     private String customerWardName;
@@ -100,9 +102,21 @@ public class Order {
     @Builder.Default
     private BigDecimal shippingFee = BigDecimal.ZERO;
 
+    // Voucher fields
+    private String discountVoucherCode;
+    private String shippingVoucherCode;
+
+    @Column(precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(precision = 19, scale = 2)
+    @Builder.Default
+    private BigDecimal shippingDiscountAmount = BigDecimal.ZERO;
+
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private String locationVersion = "v1";
+    private String locationVersion = "v2";
 
     private LocalDateTime lastSyncAt;
 

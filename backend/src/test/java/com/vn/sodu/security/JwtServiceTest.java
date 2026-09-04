@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("JWT Service Tests")
 class JwtServiceTest {
 
-    @InjectMocks
+    private JwtProperties jwtProperties;
     private JwtService jwtService;
 
     private UserDetails testUserDetails;
@@ -30,9 +30,11 @@ class JwtServiceTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(jwtService, "secretKey", "ThisIsAVeryLongSecretKeyThatIsAtLeast256BitsForHS256Algorithm");
-        ReflectionTestUtils.setField(jwtService, "accessTokenExpiration", 3600000L);
-        ReflectionTestUtils.setField(jwtService, "refreshTokenExpiration", 86400000L);
+        jwtProperties = new JwtProperties();
+        jwtProperties.setSecret("ThisIsAVeryLongSecretKeyThatIsAtLeast256BitsForHS256Algorithm");
+        jwtProperties.setAccessTokenExpiration(3600000L);
+        jwtProperties.setRefreshTokenExpiration(86400000L);
+        jwtService = new JwtService(jwtProperties);
 
         testUserDetails = new User("testuser@example.com", "password", new HashSet<>());
         anotherUserDetails = new User("anotheruser@example.com", "password", new HashSet<>());

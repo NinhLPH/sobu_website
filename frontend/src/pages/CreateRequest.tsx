@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Plus, Trash2, Loader2, ArrowLeft, CheckCircle, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Loader2, ArrowLeft, CheckCircle, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
+import Breadcrumbs from '../components/common/Breadcrumbs';
 import ImageUploader from '../components/common/ImageUploader';
 import { useRequestStore } from '../store/useRequestStore';
 import { ToastService } from '../service/toast.service';
@@ -190,14 +191,11 @@ export default function CreateRequest() {
 
     return (
         <main className="w-full min-w-0 bg-surface px-4 pb-24 pt-28 sm:px-6 sm:pt-32">
-            {/* Navigation & Back */}
-            <nav className="flex items-center gap-2 text-xs font-bold text-on-surface-variant mb-6">
-                <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
-                <ChevronRight className="w-3.5 h-3.5" />
-                <Link to="/requests" className="hover:text-primary transition-colors">Yêu cầu</Link>
-                <ChevronRight className="w-3.5 h-3.5" />
-                <span className="text-primary">Tạo yêu cầu mới</span>
-            </nav>
+            <Breadcrumbs items={[
+                {label: 'Trang chủ', to: '/'},
+                {label: 'Yêu cầu', to: '/requests'},
+                {label: 'Tạo yêu cầu mới'},
+            ]}/>
 
             <div className="flex items-center gap-4 mb-8">
                 <Link 

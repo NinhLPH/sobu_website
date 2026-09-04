@@ -2,6 +2,7 @@ package com.vn.sodu.nhanh.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.webhook.NhanhWebhookEvent;
 import com.vn.sodu.nhanh.webhook.NhanhWebhookEventLog;
 import com.vn.sodu.nhanh.webhook.NhanhWebhookEventLogRepository;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,6 +27,7 @@ import static com.vn.sodu.nhanh.webhook.NhanhWebhookEventLogStatus.PROCESSING;
 import static com.vn.sodu.nhanh.webhook.NhanhWebhookEventLogStatus.RECEIVED;
 
 @Slf4j
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Service
 @RequiredArgsConstructor
 public class NhanhWebhookProcessor {
@@ -35,10 +38,14 @@ public class NhanhWebhookProcessor {
     private final NhanhWebhookEventLogRepository repository;
     private final ObjectMapper objectMapper;
     private final List<NhanhWebhookHandler> handlers;
+    private final NhanhEnabled nhanhEnabled;
 
     @Scheduled(fixedDelay = 5_000)
     @Transactional
     public void processPendingEvents() {
+        if (!nhanhEnabled.isEnabled()) {
+            return;
+        }
         log.debug("NhanhWebhookProcessor scanning for pending events");
 
         List<NhanhWebhookEventLog> pending = repository

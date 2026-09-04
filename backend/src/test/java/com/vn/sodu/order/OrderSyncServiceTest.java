@@ -8,6 +8,7 @@ import com.vn.sodu.nhanh.dto.NhanhOrderEditResult;
 import com.vn.sodu.nhanh.dto.NhanhOrderListItem;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.service.NhanhService;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.order.nhanh.NhanhOrderGateway;
 import com.vn.sodu.order.nhanh.NhanhSyncAttemptRepository;
 import com.vn.sodu.order.repo.OrderRepository;
@@ -72,6 +73,9 @@ class OrderSyncServiceTest {
     @Mock
     private TransactionTemplate transactionTemplate;
 
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
     private OrderSyncService orderSyncService;
 
     @BeforeEach
@@ -89,6 +93,7 @@ class OrderSyncServiceTest {
         lenient().when(nhanhSyncAttemptRepository.findTopByBaseKeyOrderByCreatedAtDesc(any())).thenReturn(Optional.empty());
         lenient().when(nhanhSyncAttemptRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         NhanhProperties nhanhProperties = new NhanhProperties();
+        lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
         orderSyncService = new OrderSyncService(
                 orderRepository,
                 orderPaymentRepository,
@@ -98,7 +103,8 @@ class OrderSyncServiceTest {
                 nhanhOrderGateway,
                 nhanhSyncAttemptRepository,
                 transactionTemplate,
-                new ObjectMapper()
+                new ObjectMapper(),
+                nhanhEnabled
         );
     }
 
@@ -381,8 +387,8 @@ class OrderSyncServiceTest {
                 .customerMobile("0900000001")
                 .customerAddress("12 Le Loi")
                 .customerCityId(79L)
-                .customerDistrictId(760L)
-                .customerWardId(26734L)
+                .customerDistrictId(null)
+                .customerWardId(27154L)
                 .carrierId(8L)
                 .carrierServiceId(1L)
                 .shippingFee(new BigDecimal("35000"))

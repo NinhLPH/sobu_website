@@ -2,6 +2,8 @@ import {describe, expect, it, jest} from '@jest/globals';
 import {fireEvent, render, screen} from '@testing-library/react';
 import AdminOrders from './Orders';
 import {useAdminStore} from '../../store/useAdminStore';
+import {useIntegrationStore} from '../../store/useIntegrationStore';
+import {ConfirmDialogProvider} from '../../components/common/ConfirmDialog';
 
 jest.mock('react-router-dom', () => ({
     Link: ({children, to, ...props}: {children: React.ReactNode; to: string}) => <a href={to} {...props}>{children}</a>,
@@ -13,6 +15,7 @@ const mockedUseAdminStore = jest.mocked(useAdminStore);
 
 describe('AdminOrders search suggest', () => {
     it('selects an order suggestion and filters immediately', () => {
+        useIntegrationStore.setState({nhanhEnabled: false, loaded: true, loading: false});
         mockedUseAdminStore.mockReturnValue({
             workflowOrders: [
                 {
@@ -39,6 +42,8 @@ describe('AdminOrders search suggest', () => {
             fetchOrders: jest.fn(),
             retryOrderSync: jest.fn(),
             retryingOrderIds: [],
+            updateAdminOrderStatus: jest.fn(),
+            updatingOrderStatusIds: [],
             isOrdersLoading: false,
             ordersError: null,
             ordersPage: {
@@ -53,7 +58,7 @@ describe('AdminOrders search suggest', () => {
             },
         } as any);
 
-        render(<AdminOrders/>);
+        render(<ConfirmDialogProvider><AdminOrders/></ConfirmDialogProvider>);
 
         fireEvent.change(screen.getByLabelText('Tìm kiếm đơn hàng quản trị'), {
             target: {value: 'minh'},
@@ -63,5 +68,35 @@ describe('AdminOrders search suggest', () => {
         expect((screen.getByLabelText('Tìm kiếm đơn hàng quản trị') as HTMLInputElement).value).toBe('SO-002');
         expect(screen.getByText('#SO-002')).toBeTruthy();
         expect(screen.queryByText('#SO-001')).toBeNull();
+    });
+
+    it('hides sync controls in local mode but retains historical Nhanh code', () => {
+        useIntegrationStore.setState({nhanhEnabled: false, loaded: true, loading: false});
+        mockedUseAdminStore.mockReturnValue({
+            workflowOrders: [{
+                id: 1,
+                orderCode: 'SO-001',
+                status: 'NEW',
+                syncStatus: 'FAILED',
+                nhanhOrderCode: 'NH-001',
+                syncError: 'Old error'
+            }],
+            fetchOrders: jest.fn(),
+            retryOrderSync: jest.fn(),
+            retryingOrderIds: [],
+            updateAdminOrderStatus: jest.fn(),
+            updatingOrderStatusIds: [],
+            isOrdersLoading: false,
+            ordersError: null,
+            ordersPage: {pageNumber: 0, pageSize: 10, totalElements: 1, totalPages: 1, first: true, last: true, hasNext: false, hasPrevious: false}
+        } as any);
+
+        render(<ConfirmDialogProvider><AdminOrders/></ConfirmDialogProvider>);
+
+        expect(screen.getByText('Quản lý đơn hàng')).toBeTruthy();
+        expect(screen.getByText(/Nhanh \(lịch sử\): NH-001/i)).toBeTruthy();
+        expect(screen.getByRole('button', {name: 'Chuyển đơn SO-001 sang Đang xử lý'})).toBeTruthy();
+        expect(screen.queryByLabelText('Lọc theo trạng thái đồng bộ Nhanh.vn')).toBeNull();
+        expect(screen.queryByLabelText(/Retry đồng bộ/i)).toBeNull();
     });
 });

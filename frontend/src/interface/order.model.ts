@@ -10,7 +10,8 @@ import {
 export type OrderPaymentType = 'FULL' | 'DEPOSIT' | 'FINAL' | 'REFUND';
 
 export interface CreateNormalOrderItemDto {
-    nhanhProductId: string;
+    productId?: number;
+    nhanhProductId?: string;
     name: string;
     note?: string;
     price: number;
@@ -20,11 +21,13 @@ export interface CreateNormalOrderItemDto {
 
 export interface OrderShippingLocationDto {
     customerCityName: string;
-    customerDistrictName: string;
+    customerDistrictName?: string;
     customerWardName: string;
     customerCityId: number;
-    customerDistrictId: number;
+    customerDistrictId?: number;
     customerWardId: number;
+    customerStreet?: string;
+    customerHamlet?: string;
 }
 
 export interface CreateNormalOrderDto extends Partial<OrderShippingLocationDto> {
@@ -35,6 +38,8 @@ export interface CreateNormalOrderDto extends Partial<OrderShippingLocationDto> 
     carrierId?: number;
     carrierServiceId?: number;
     shippingFee?: number;
+    discountVoucherCode?: string;
+    shippingVoucherCode?: string;
     description?: string;
     items: CreateNormalOrderItemDto[];
 }
@@ -62,6 +67,10 @@ export interface OrderResponseDto extends Partial<OrderShippingLocationDto> {
     totalAmount?: number;
     depositAmount?: number;
     shippingFee?: number;
+    discountVoucherCode?: string | null;
+    shippingVoucherCode?: string | null;
+    discountAmount?: number;
+    shippingDiscountAmount?: number;
     paidAmount?: number;
     remainingAmount?: number;
     paymentStatus?: PaymentStatus;

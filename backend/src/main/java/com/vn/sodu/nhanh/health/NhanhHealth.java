@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.health;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.NhanhIntegration;
 import com.vn.sodu.nhanh.service.NhanhService;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
@@ -15,15 +16,23 @@ import java.util.Map;
 public class NhanhHealth {
 
     private final NhanhService nhanhService;
+    private final NhanhEnabled nhanhEnabled;
 
-    public NhanhHealth(NhanhService nhanhService) {
+    public NhanhHealth(NhanhService nhanhService, NhanhEnabled nhanhEnabled) {
         this.nhanhService = nhanhService;
+        this.nhanhEnabled = nhanhEnabled;
     }
 
     @ReadOperation
     public Map<String, Object> health() {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("checkedAt", Instant.now().toString());
+
+        if (!nhanhEnabled.isEnabled()) {
+            response.put("status", "DISABLED");
+            response.put("message", "Nhanh integration is disabled (local mode)");
+            return response;
+        }
 
         var integrationOpt = nhanhService.getIntegration();
         if (integrationOpt.isEmpty()) {

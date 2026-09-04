@@ -1,14 +1,17 @@
 package com.vn.sodu.global.controller;
 
 import com.vn.sodu.global.dto.PageResponse;
-import com.vn.sodu.product.dto.ProductDetailDTO;
-import com.vn.sodu.product.dto.ProductFilterRequest;
+import com.vn.sodu.product.brand.dto.BrandDTO;
 import com.vn.sodu.product.brand.dto.BrandListItemDTO;
 import com.vn.sodu.product.brand.service.BrandService;
+import com.vn.sodu.product.category.dto.CategoryDTO;
 import com.vn.sodu.product.category.dto.CategoryListItemDTO;
 import com.vn.sodu.product.category.service.CategoryService;
+import com.vn.sodu.product.dto.ProductDetailDTO;
+import com.vn.sodu.product.dto.ProductFilterRequest;
 import com.vn.sodu.product.dto.ProductListItemDTO;
 import com.vn.sodu.product.service.ProductService;
+import com.vn.sodu.seo.SlugHistoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -20,16 +23,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springdoc.core.annotations.ParameterObject;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RequiredArgsConstructor
 @RestController
@@ -39,6 +38,7 @@ public class PublicController {
     private final ProductService productService;
     private final BrandService brandService;
     private final CategoryService categoryService;
+    private final SlugHistoryService slugHistoryService;
 
     @GetMapping("/products")
     @Operation(
@@ -73,10 +73,10 @@ public class PublicController {
         return ResponseEntity.ok(productService.getAllProducts());
     }
 
-    @GetMapping("/products/{id}")
+    @GetMapping("/products/{slugOrId}")
     @Operation(
-            summary = "Get public product detail",
-            description = "Returns the full product detail view for a single product."
+            summary = "Get public product detail by slug or ID",
+            description = "Returns the full product detail view with SEO metadata for a single product."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product retrieved successfully",
@@ -84,8 +84,8 @@ public class PublicController {
                             schema = @Schema(implementation = ProductDetailDTO.class))),
             @ApiResponse(responseCode = "404", description = "Product not found")
     })
-    public ResponseEntity<ProductDetailDTO> getProductDetail(@PathVariable long id) {
-        return ResponseEntity.ok(productService.getProductDetailById(id));
+    public ResponseEntity<ProductDetailDTO> getProductDetail(@PathVariable String slugOrId) {
+        return ResponseEntity.ok(productService.getProductDetailBySlug(slugOrId));
     }
 
     @GetMapping("/products/search")
@@ -138,6 +138,15 @@ public class PublicController {
         return ResponseEntity.ok(categoryService.getAll());
     }
 
+    @GetMapping("/categories/{slugOrId}")
+    @Operation(
+            summary = "Get public category detail by slug or ID",
+            description = "Returns the full category detail view with SEO metadata."
+    )
+    public ResponseEntity<CategoryDTO> getCategoryDetail(@PathVariable String slugOrId) {
+        return ResponseEntity.ok(categoryService.getBySlug(slugOrId));
+    }
+
     @GetMapping("/brands")
     @Operation(
             summary = "Get all public brands",
@@ -150,6 +159,37 @@ public class PublicController {
     })
     public ResponseEntity<List<BrandListItemDTO>> getAllBrands() {
         return ResponseEntity.ok(brandService.getAll());
+    }
+
+    @GetMapping("/brands/{slugOrId}")
+    @Operation(
+            summary = "Get public brand detail by slug or ID",
+            description = "Returns the full brand detail view with SEO metadata."
+    )
+    public ResponseEntity<BrandDTO> getBrandDetail(@PathVariable String slugOrId) {
+        return ResponseEntity.ok(brandService.getBySlug(slugOrId));
+    }
+
+    @GetMapping("/seo/resolve-url")
+    @Operation(
+            summary = "Resolve redirect for old slug",
+            description = "Checks if an old slug exists and returns the current canonical slug with 301 status."
+    )
+    public ResponseEntity<Map<String, Object>> resolveRedirect(
+            @RequestParam String type,
+            @RequestParam String slug
+    ) {
+        var currentSlugOpt = slugHistoryService.findCurrentSlug(type, slug);
+        Map<String, Object> response = new HashMap<>();
+        if (currentSlugOpt.isPresent()) {
+            response.put("redirect", true);
+            response.put("status", 301);
+            response.put("currentSlug", currentSlugOpt.get());
+        } else {
+            response.put("redirect", false);
+            response.put("currentSlug", slug);
+        }
+        return ResponseEntity.ok(response);
     }
 
     private ProductFilterRequest applySearchFallback(ProductFilterRequest request, String query) {

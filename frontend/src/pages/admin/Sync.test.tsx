@@ -3,10 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminSync from './Sync';
 import { AdminWorkflowService } from '../../service/admin.service';
 import { useAdminStore } from '../../store/useAdminStore';
+import {useIntegrationStore} from '../../store/useIntegrationStore';
 
 jest.mock('../../service/admin.service');
 jest.mock('../../service/toast.service');
 jest.mock('react-router-dom', () => ({
+    Link: ({children, to, ...props}: any) => <a href={to} {...props}>{children}</a>,
     useSearchParams: () => [new URLSearchParams(), () => undefined]
 }), { virtual: true });
 
@@ -27,6 +29,8 @@ const orderPage = (content: any[]) => ({
 describe('AdminSync order queue', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        useIntegrationStore.setState({nhanhEnabled: true, loaded: true, loading: false});
+        useAdminStore.getState().clearNhanhHistory();
         useAdminStore.setState({
             orderSyncQueue: [],
             pendingOrderSyncCount: 0,
@@ -39,6 +43,29 @@ describe('AdminSync order queue', () => {
             ordersError: null,
             orderActionMessage: null
         });
+    });
+
+    it('shows historical Nhanh orders read-only in local mode', async () => {
+        useIntegrationStore.setState({nhanhEnabled: false, loaded: true, loading: false});
+        mockedAdminWorkflowService.getAdminOrders.mockResolvedValueOnce(orderPage([
+            {
+                id: 8,
+                orderCode: 'SO-HISTORY',
+                syncStatus: 'SYNCED',
+                nhanhOrderCode: 'NH-800',
+                nhanhSyncStage: 'NORMAL_ORDER_CREATED',
+                lastSyncAt: '2026-08-20T10:00:00Z'
+            },
+            {id: 9, orderCode: 'SO-LOCAL', syncStatus: 'PENDING', nhanhSyncStage: 'NONE'}
+        ]));
+
+        render(<AdminSync/>);
+
+        expect((await screen.findAllByText('#SO-HISTORY')).length).toBeGreaterThan(0);
+        expect(screen.queryByText('#SO-LOCAL')).toBeNull();
+        expect(screen.getAllByText('Chỉ đọc').length).toBeGreaterThan(0);
+        expect(screen.queryByRole('button', {name: /Đồng bộ Sản phẩm/i})).toBeNull();
+        expect(screen.queryByRole('button', {name: /Retry đã chọn/i})).toBeNull();
     });
 
     it('selects actionable orders and retries them sequentially', async () => {

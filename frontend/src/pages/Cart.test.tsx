@@ -9,8 +9,14 @@ import { usePublicUiStore } from '../store/usePublicUiStore';
 import { redirectToPaymentCheckout } from '../utils/payment-session';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
+import { useIntegrationStore } from '../store/useIntegrationStore';
+import { VoucherService } from '../service/voucher.service';
+import { ToastService } from '../service/toast.service';
+import { CustomerService } from '../service/custom.service';
 
 const mockNavigate = jest.fn();
+const mockConfirm = jest.fn(async () => true);
+jest.mock('../components/common/ConfirmDialog', () => ({ useConfirmDialog: () => mockConfirm }));
 
 jest.mock('react-router-dom', () => ({
     Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
@@ -22,7 +28,11 @@ jest.mock('../store/useCartStore');
 jest.mock('../store/useAuthStore');
 jest.mock('../store/useLocationStore');
 jest.mock('../store/usePaymentStore');
+jest.mock('../store/useIntegrationStore');
 jest.mock('../service/shipping.service');
+jest.mock('../service/voucher.service');
+jest.mock('../service/toast.service');
+jest.mock('../service/custom.service');
 jest.mock('../utils/payment-session', () => ({
     redirectToPaymentCheckout: require('@jest/globals').jest.fn()
 }));
@@ -35,12 +45,17 @@ jest.mock('../utils/online-cart-recovery', () => ({
 }));
 
 const mockedUseCartStore = jest.mocked(useCartStore);
+type CartStoreState = ReturnType<typeof useCartStore.getState>;
+const currentMockCart = () => mockedUseCartStore((state: CartStoreState) => state) as CartStoreState;
 const mockedUseAuthStore = jest.mocked(useAuthStore);
 const mockedUseLocationStore = jest.mocked(useLocationStore);
 const mockedUsePaymentStore = jest.mocked(usePaymentStore);
+const mockedUseIntegrationStore = jest.mocked(useIntegrationStore);
 const mockedRedirectToPaymentCheckout = jest.mocked(redirectToPaymentCheckout);
 const mockedOnlineCartRecovery = jest.mocked(onlineCartRecovery);
 const mockedShippingService = jest.mocked(ShippingService);
+const mockedVoucherService = jest.mocked(VoucherService);
+const mockedToastService = jest.mocked(ToastService);
 const mockSubmitOrder = jest.fn<Promise<any>, any[]>();
 const mockCreatePayment = jest.fn<Promise<any>, any[]>();
 
@@ -55,18 +70,12 @@ const product = {
     stock: 5
 };
 
-const locationTree = {
-    stale: false,
-    cities: [{
-        cityId: 1,
-        cityName: 'Hà Nội',
-        districts: [{
-            districtId: 2,
-            districtName: 'Ba Đình',
-            wards: [{ wardId: 3, wardName: 'Phúc Xá' }]
-        }]
-    }]
-};
+const provinces = [{
+    id: 1,
+    name: 'Hà Nội'
+}];
+
+const wards = [{ id: 3, name: 'Phúc Xá' }];
 
 const shippingQuote = {
     carrierId: 29,
@@ -140,6 +149,7 @@ const invalidShippingQuote = {
 describe('Cart payment selection', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockConfirm.mockResolvedValue(true);
         mockSubmitOrder.mockResolvedValue({ id: 12 });
         mockedShippingService.getQuotes.mockResolvedValue({
             success: true,
@@ -147,6 +157,31 @@ describe('Cart payment selection', () => {
             message: 'Shipping quotes retrieved',
             data: shippingQuotes
         });
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: []
+        });
+        mockedVoucherService.apply.mockImplementation(async (payload) => ({
+            success: true,
+            message: 'Voucher preview ready',
+            data: {
+                valid: true,
+                discountVoucherCode: payload.discountVoucherCode ?? null,
+                shippingVoucherCode: payload.shippingVoucherCode ?? null,
+                itemDiscount: 0,
+                orderDiscount: 0,
+                subtotalDiscount: 0,
+                shippingDiscount: 0,
+                totalDiscount: 0,
+                originalSubtotal: payload.subtotal,
+                originalShippingFee: payload.shippingFee,
+                finalSubtotal: payload.subtotal,
+                finalShippingFee: payload.shippingFee,
+                finalTotal: payload.subtotal + payload.shippingFee,
+                appliedVouchers: []
+            }
+        }));
         mockedUseCartStore.mockReturnValue({
             items: [{ product, quantity: 1 }],
             removeFromCart: jest.fn(),
@@ -154,7 +189,12 @@ describe('Cart payment selection', () => {
             getTotals: () => ({ subtotal: 350000, totalDiscount: 0, total: 350000, itemCount: 1 }),
             submitOrder: mockSubmitOrder,
             isSubmitting: false,
+            isHydratingProducts: false,
+            hydrationError: null,
+            hydrateProducts: jest.fn(),
             checkoutError: null,
+            cartLoadError: null,
+            hasLegacyEmptyCart: false,
             clearCheckoutError: jest.fn(),
             fetchCart: jest.fn()
         } as unknown as ReturnType<typeof useCartStore>);
@@ -167,13 +207,24 @@ describe('Cart payment selection', () => {
             }
         } as ReturnType<typeof useAuthStore>);
         mockedUseLocationStore.mockReturnValue({
-            locationTree,
+            provinces,
+            wards,
             locationsLoaded: true,
             isLoading: false,
+            isLoadingWards: false,
             error: null,
-            fetchLocations: jest.fn(),
+            notice: null,
+            initialize: jest.fn(),
+            selectProvince: jest.fn(),
+            retry: jest.fn(),
             cancelScheduledRetry: jest.fn()
         } as unknown as ReturnType<typeof useLocationStore>);
+        mockedUseIntegrationStore.mockImplementation((selector: any) => selector({
+            nhanhEnabled: false,
+            loaded: true,
+            loading: false,
+            ensureLoaded: jest.fn()
+        }));
         mockedUsePaymentStore.mockReturnValue({
             createPayment: mockCreatePayment,
             isCreatingPayment: false
@@ -194,9 +245,11 @@ describe('Cart payment selection', () => {
     };
 
     const selectShippingLocation = () => {
-        selectLocationOption('Tỉnh/Thành phố', locationTree.cities[0].cityName);
-        selectLocationOption('Quận/Huyện', locationTree.cities[0].districts[0].districtName);
-        selectLocationOption('Phường/Xã', locationTree.cities[0].districts[0].wards[0].wardName);
+        selectLocationOption('Tỉnh/Thành phố', provinces[0].name);
+        selectLocationOption('Phường/Xã', wards[0].name);
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {
+            target: { value: '1 Nguyen Trai' }
+        });
     };
 
     const getCheckoutButton = () =>
@@ -212,13 +265,77 @@ describe('Cart payment selection', () => {
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
     };
 
+    it('shows load failure instead of a misleading empty cart and allows retry', async () => {
+        const cart = currentMockCart();
+        mockedUseCartStore.mockReturnValue({ ...cart, items: [], cartLoadError: 'Network unavailable' });
+        render(<Cart />);
+        expect(screen.queryByText('Bạn chưa chọn sản phẩm nào.')).toBeNull();
+        expect(screen.getByText('Chưa tải được giỏ hàng')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+        await waitFor(() => expect(cart.fetchCart).toHaveBeenCalledWith({ recoverLegacyEmpty: false }));
+        expect(cart.hydrateProducts).toHaveBeenCalled();
+    });
+
+    it('shows a retry notice while preserving visible cart items', () => {
+        mockedUseCartStore.mockReturnValue({ ...currentMockCart(), cartLoadError: 'Network unavailable' });
+        render(<Cart />);
+        expect(screen.getByText('Network unavailable')).toBeTruthy();
+        expect(screen.getByText('Áo hoodie')).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+    });
+
+    it('requires confirmation before recovering legacy empty cart data', async () => {
+        const cart = currentMockCart();
+        mockedUseCartStore.mockReturnValue({ ...cart, items: [], hasLegacyEmptyCart: true });
+        mockConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        render(<Cart />);
+        const callsBeforeClick = jest.mocked(cart.fetchCart).mock.calls.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Tải giỏ từ máy chủ' }));
+        await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
+        expect(cart.fetchCart).toHaveBeenCalledTimes(callsBeforeClick);
+        fireEvent.click(screen.getByRole('button', { name: 'Tải giỏ từ máy chủ' }));
+        await waitFor(() => expect(cart.fetchCart).toHaveBeenCalledWith({ recoverLegacyEmpty: true }));
+    });
+
+    it('continues COD payment and navigation when real store cart cleanup fails', async () => {
+        const actualStore = (jest.requireActual('../store/useCartStore') as typeof import('../store/useCartStore')).useCartStore;
+        window.sessionStorage.setItem('accessToken', 'audit-token');
+        window.sessionStorage.setItem('user', JSON.stringify({ id: 990 }));
+        actualStore.setState({ items: [{ product, quantity: 1 }], isUsingFallback: false,
+            fallbackSource: null, cartOwnerId: null, cartLoadError: null, hasLegacyEmptyCart: false });
+        // The real checkout function runs; the page's unrelated loading hooks stay mocked.
+        mockedUseCartStore.mockReturnValue({ ...currentMockCart(), submitOrder: actualStore.getState().submitOrder });
+        jest.mocked(useIntegrationStore.getState).mockReturnValue({ nhanhEnabled: false } as any);
+        jest.mocked(CustomerService).createOrder.mockResolvedValue({ success: true, data: { id: 990 } } as any);
+        jest.mocked(CustomerService).clearCart.mockRejectedValue(new Error('Redis unavailable'));
+        mockCreatePayment.mockResolvedValue({ id: 21 });
+        render(<Cart />);
+        selectShippingLocation();
+        fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), { target: { value: 'COD' } });
+        await clickShippingQuote(/Hỏa tốc/i);
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
+        fireEvent.click(getCheckoutButton());
+        await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(990, { type: 'FULL', paymentMethod: 'COD' }));
+        expect(mockNavigate).toHaveBeenCalledWith('/orders/990?paymentSetup=cod', { replace: true });
+        expect(actualStore.getState().checkoutError).toBeNull();
+        window.sessionStorage.clear();
+    });
+
+    it('collects one detailed delivery address through customerAddress', () => {
+        render(<Cart />);
+
+        expect(screen.getByLabelText('Địa chỉ chi tiết')).toBeTruthy();
+        expect(screen.queryByLabelText('Tên đường')).toBeNull();
+        expect(screen.queryByText('Có tên đường')).toBeNull();
+        expect(screen.queryByPlaceholderText(/Xóm\/Ấp/i)).toBeNull();
+    });
+
     it('requests shipping quotes after the customer selects a full location', async () => {
         render(<Cart />);
         selectShippingLocation();
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledWith({
             customerCityId: 1,
-            customerDistrictId: 2,
             customerWardId: 3,
             cartSubtotal: 350000,
             codAmount: 0
@@ -232,7 +349,7 @@ describe('Cart payment selection', () => {
         expect(screen.getAllByText(/30\.000/)).not.toHaveLength(0);
     });
 
-    it('only renders the temporarily supported carrier service', async () => {
+    it('renders every carrier service with a valid contract', async () => {
         mockedShippingService.getQuotes.mockResolvedValueOnce({
             success: true,
             statusCode: 200,
@@ -252,11 +369,11 @@ describe('Cart payment selection', () => {
         selectShippingLocation();
 
         expect(await screen.findByText(/GHN/)).toBeTruthy();
-        expect(screen.queryByText('Unsupported carrier')).toBeNull();
+        expect(screen.getByText(/Unsupported carrier/)).toBeTruthy();
     });
 
-    it('keeps checkout disabled when the response has no temporarily supported quote', async () => {
-        mockedShippingService.getQuotes.mockResolvedValueOnce({
+    it('accepts a non-legacy carrier after confirmation', async () => {
+        const nonLegacyResponse = {
             success: true,
             statusCode: 200,
             message: 'Shipping quotes retrieved',
@@ -266,17 +383,17 @@ describe('Cart payment selection', () => {
                 carrierServiceId: 40,
                 carrierName: 'Unsupported carrier'
             }]
-        });
+        };
+        mockedShippingService.getQuotes
+            .mockResolvedValueOnce(nonLegacyResponse)
+            .mockResolvedValueOnce(nonLegacyResponse);
 
         render(<Cart />);
         selectShippingLocation();
 
-        await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1));
-        await waitFor(() => expect(
-            screen.getByText('Khong co tuy chon giao hang hop le. Vui long thu lai hoac chon dia chi khac.')
-        ).toBeTruthy());
-        expect(screen.queryByText('Unsupported carrier')).toBeNull();
-        expect(getCheckoutButton().disabled).toBe(true);
+        const option = await screen.findByRole('button', { name: /Unsupported carrier/i });
+        fireEvent.click(option);
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
     });
 
     it('does not request new shipping quotes when the detailed address changes', async () => {
@@ -285,7 +402,7 @@ describe('Cart payment selection', () => {
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1));
 
-        fireEvent.change(screen.getByPlaceholderText(/Địa chỉ giao hàng chi tiết/), {
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {
             target: { value: '123 Nguyen Trai' }
         });
 
@@ -401,7 +518,6 @@ describe('Cart payment selection', () => {
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenLastCalledWith({
             customerCityId: 1,
-            customerDistrictId: 2,
             customerWardId: 3,
             cartSubtotal: 350000,
             codAmount: 0,
@@ -475,6 +591,196 @@ describe('Cart payment selection', () => {
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(true));
     });
 
+    it('shows voucher errors as a toast without rendering the voucher retry action', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [{
+                id: 1,
+                code: 'INVALID',
+                name: 'Mã không hợp lệ',
+                type: 'DISCOUNT_AMOUNT',
+                slot: 'ITEM',
+                scope: 'ALL',
+                value: 10000
+            }]
+        });
+        mockedVoucherService.apply.mockImplementation(async (payload) => {
+            if (payload.discountVoucherCode === 'INVALID') {
+                return {
+                    success: true,
+                    message: 'Voucher preview rejected',
+                    data: { valid: false, message: 'Mã voucher không hợp lệ.' }
+                } as any;
+            }
+            return {
+                success: true,
+                message: 'Voucher preview ready',
+                data: {
+                    valid: true,
+                    itemDiscount: 0,
+                    orderDiscount: 0,
+                    subtotalDiscount: 0,
+                    shippingDiscount: 0,
+                    totalDiscount: 0,
+                    originalSubtotal: payload.subtotal,
+                    originalShippingFee: payload.shippingFee,
+                    finalSubtotal: payload.subtotal,
+                    finalShippingFee: payload.shippingFee,
+                    finalTotal: payload.subtotal + payload.shippingFee,
+                    appliedVouchers: []
+                }
+            };
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+        fireEvent.click(await screen.findByRole('button', { name: /INVALID/i }));
+
+        await waitFor(() => expect(mockedToastService.error).toHaveBeenCalledWith('Mã voucher không hợp lệ.'));
+        expect(screen.queryByText('Mã voucher không hợp lệ.')).toBeNull();
+        expect(screen.queryByRole('button', { name: /Tính lại ưu đãi/i })).toBeNull();
+    });
+
+    it('applies suggested vouchers, renders the discount breakdown, and submits their codes', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [
+                {
+                    id: 1,
+                    code: 'SAVE10',
+                    name: 'Giảm sản phẩm',
+                    type: 'DISCOUNT_AMOUNT',
+                    slot: 'ITEM',
+                    scope: 'ALL',
+                    value: 10000
+                },
+                {
+                    id: 2,
+                    code: 'FREESHIP',
+                    name: 'Miễn phí giao hàng',
+                    type: 'FREE_SHIP',
+                    slot: 'SHIPPING',
+                    scope: 'ALL'
+                }
+            ]
+        });
+        mockedVoucherService.apply.mockImplementation(async (payload) => {
+            const itemDiscount = payload.discountVoucherCode ? 10000 : 0;
+            const shippingDiscount = payload.shippingVoucherCode ? payload.shippingFee : 0;
+            return {
+                success: true,
+                message: 'Voucher preview ready',
+                data: {
+                    valid: true,
+                    discountVoucherCode: payload.discountVoucherCode ?? null,
+                    shippingVoucherCode: payload.shippingVoucherCode ?? null,
+                    itemDiscount,
+                    orderDiscount: 0,
+                    subtotalDiscount: itemDiscount,
+                    shippingDiscount,
+                    totalDiscount: itemDiscount + shippingDiscount,
+                    originalSubtotal: payload.subtotal,
+                    originalShippingFee: payload.shippingFee,
+                    finalSubtotal: payload.subtotal - itemDiscount,
+                    finalShippingFee: payload.shippingFee - shippingDiscount,
+                    finalTotal: payload.subtotal + payload.shippingFee - itemDiscount - shippingDiscount,
+                    appliedVouchers: []
+                }
+            };
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+
+        fireEvent.click(await screen.findByRole('button', { name: /SAVE10/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /FREESHIP/i }));
+
+        await waitFor(() => expect(screen.getByText('Giảm sản phẩm')).toBeTruthy());
+        expect(screen.getByText('Giảm phí giao hàng')).toBeTruthy();
+        expect(screen.getAllByText(/340\.000/)).not.toHaveLength(0);
+
+        fireEvent.click(getCheckoutButton());
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(expect.objectContaining({
+            discountVoucherCode: 'SAVE10',
+            shippingVoucherCode: 'FREESHIP'
+        }), {
+            clearCartOnSuccess: false
+        }));
+    });
+
+    it('preserves a manual ITEM code when preview also selects an automatic ORDER voucher', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [{
+                id: 8,
+                code: 'SAVEITEM',
+                name: 'Giảm sản phẩm thủ công',
+                type: 'DISCOUNT_AMOUNT',
+                slot: 'ITEM',
+                scope: 'ALL',
+                value: 20000
+            }]
+        });
+        mockedVoucherService.apply.mockImplementation(async payload => ({
+            success: true,
+            message: 'Voucher preview ready',
+            data: {
+                valid: true,
+                // The backend compatibility field prefers ORDER over ITEM.
+                discountVoucherCode: payload.discountVoucherCode ? 'AUTOORDER' : null,
+                itemVoucherCode: payload.discountVoucherCode ?? null,
+                orderVoucherCode: 'AUTOORDER',
+                shippingVoucherCode: null,
+                itemDiscount: payload.discountVoucherCode ? 20000 : 0,
+                orderDiscount: 10000,
+                subtotalDiscount: payload.discountVoucherCode ? 30000 : 10000,
+                shippingDiscount: 0,
+                totalDiscount: payload.discountVoucherCode ? 30000 : 10000,
+                originalSubtotal: payload.subtotal,
+                originalShippingFee: payload.shippingFee,
+                finalSubtotal: payload.subtotal - (payload.discountVoucherCode ? 30000 : 10000),
+                finalShippingFee: payload.shippingFee,
+                finalTotal: payload.subtotal + payload.shippingFee - (payload.discountVoucherCode ? 30000 : 10000),
+                appliedVouchers: payload.discountVoucherCode ? [{
+                    voucherId: 8,
+                    code: 'SAVEITEM',
+                    name: 'Giảm sản phẩm thủ công',
+                    slot: 'ITEM',
+                    type: 'DISCOUNT_AMOUNT',
+                    discountAmount: 20000,
+                    autoApplied: false
+                }, {
+                    voucherId: 9,
+                    code: 'AUTOORDER',
+                    name: 'Tự động giảm toàn đơn',
+                    slot: 'ORDER',
+                    type: 'DISCOUNT_AMOUNT',
+                    discountAmount: 10000,
+                    autoApplied: true
+                }] : []
+            }
+        }));
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+        fireEvent.click(await screen.findByRole('button', { name: /SAVEITEM/i }));
+
+        expect(await screen.findByText(/AUTOORDER ·/i)).toBeTruthy();
+        expect(screen.getByText('Tự động')).toBeTruthy();
+        fireEvent.click(getCheckoutButton());
+
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(
+            expect.objectContaining({ discountVoucherCode: 'SAVEITEM' }),
+            { clearCartOnSuccess: false }
+        ));
+    });
+
     it('creates COD payment immediately and navigates to tracking', async () => {
         mockCreatePayment.mockResolvedValue({
             id: 21,
@@ -489,7 +795,7 @@ describe('Cart payment selection', () => {
         });
         render(<Cart />);
         selectShippingLocation();
-        fireEvent.change(screen.getByPlaceholderText(/Địa chỉ giao hàng chi tiết/), {
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {
             target: { value: '123 Nguyen Trai' }
         });
         fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), {
@@ -508,6 +814,8 @@ describe('Cart payment selection', () => {
         }), {
             clearCartOnSuccess: true
         }));
+        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('customerStreet');
+        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('customerHamlet');
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
             type: 'FULL',
             paymentMethod: 'COD'
@@ -570,5 +878,26 @@ describe('Cart payment selection', () => {
         expect(mockCreatePayment).toHaveBeenCalledTimes(1);
         expect(mockedOnlineCartRecovery.save).not.toHaveBeenCalled();
         expect(mockedRedirectToPaymentCheckout).not.toHaveBeenCalled();
+    });
+
+    it('shows an insufficient-stock checkout failure as a Vietnamese toast', async () => {
+        mockSubmitOrder.mockRejectedValue({
+            response: {
+                status: 409,
+                data: {
+                    code: 'INSUFFICIENT_STOCK',
+                    message: 'Insufficient stock for product 24: requested 6, available 5.0'
+                }
+            }
+        });
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng và thanh toán' }));
+
+        await waitFor(() => expect(mockedToastService.error).toHaveBeenCalledWith(
+            'Sản phẩm vượt quá số lượng hiện có trong kho'
+        ));
     });
 });

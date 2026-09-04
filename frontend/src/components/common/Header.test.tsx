@@ -109,6 +109,37 @@ describe('Header mobile navigation', () => {
         expect(membership.compareDocumentPosition(news) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
+    it('keeps category and product-line lists in separate scroll regions', () => {
+        mockedProductStore.mockReturnValue({
+            categories: [
+                {id: 1, name: 'Mô hình', code: 'MECHA', parentId: null},
+                ...Array.from({length: 24}, (_, index) => ({
+                    id: index + 2,
+                    name: `Dòng sản phẩm ${index + 1}`,
+                    code: 'MECHA',
+                    parentId: 1,
+                })),
+            ],
+            brands: [],
+            allProducts: [],
+            allProductsLoaded: true,
+            categoriesLoaded: true,
+            brandsLoaded: true,
+            fetchAllProducts: jest.fn(),
+            fetchCategories: jest.fn(),
+            fetchBrands: jest.fn(),
+        } as any);
+
+        render(<Header/>);
+
+        const categoryList = screen.getByRole('region', {name: 'Danh mục chính'});
+        const productLineList = screen.getByRole('region', {name: 'Dòng sản phẩm chi tiết'});
+
+        expect(categoryList.className).toContain('overflow-y-auto');
+        expect(productLineList.className).toContain('overflow-y-auto');
+        expect(productLineList.contains(screen.getByText('Dòng sản phẩm 24'))).toBe(true);
+    });
+
     it('submits mobile search to the products search route', () => {
         render(<Header/>);
 

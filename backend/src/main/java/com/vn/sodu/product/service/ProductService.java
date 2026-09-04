@@ -1,6 +1,6 @@
 package com.vn.sodu.product.service;
 
-
+import com.vn.sodu.global.exception.NotFoundException;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.ProductAttribute;
 import com.vn.sodu.product.ProductImage;
@@ -15,6 +15,7 @@ import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.product.repo.ProductUnitRepo;
 import com.vn.sodu.review.ReviewRepository;
 import com.vn.sodu.review.ReviewStatus;
+import com.vn.sodu.seo.SlugHistoryService;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,10 +26,12 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -53,12 +56,14 @@ public class ProductService {
     private final ProductUnitRepo productUnitRepo;
     private final ProductMapper productMapper;
     private final ReviewRepository reviewRepository;
+    private final SlugHistoryService slugHistoryService;
+    private final com.vn.sodu.voucher.service.VoucherService voucherService;
 
     @Transactional(readOnly = true)
     public List<ProductListItemDTO> getAllProducts() {
         return productRepo.findAll()
                 .stream()
-                .map(productMapper::toListItem)
+                .map(product -> applyPublicPricing(productMapper.toListItem(product), product))
                 .map(this::withReviewSummary)
                 .toList();
     }
@@ -70,7 +75,7 @@ public class ProductService {
         Specification<Product> specification = buildSpecification(safeRequest);
 
         return productRepo.findAll(specification, pageable)
-                .map(productMapper::toListItem)
+                .map(product -> applyPublicPricing(productMapper.toListItem(product), product))
                 .map(this::withReviewSummary);
     }
 
@@ -83,12 +88,66 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ProductDetailDTO getProductDetailById(long id) {
-        Product product = productRepo.findById(id).orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepo.findById(id)
+                .orElseThrow(() -> new NotFoundException("Không tìm thấy sản phẩm với ID: " + id));
+        return buildProductDetail(product);
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDetailDTO getProductDetailBySlug(String slugOrId) {
+        if (slugOrId == null || slugOrId.isBlank()) {
+            throw new NotFoundException("Slug hoặc ID sản phẩm không hợp lệ");
+        }
+
+        String input = slugOrId.trim();
+
+        // 1. Try finding directly by slug
+        Optional<Product> productOpt = productRepo.findBySlug(input);
+
+        // 2. If not found, check if it's an old slug from SlugHistory
+        if (productOpt.isEmpty()) {
+            Optional<String> currentSlugOpt = slugHistoryService.findCurrentSlug("PRODUCT", input);
+            if (currentSlugOpt.isPresent()) {
+                productOpt = productRepo.findBySlug(currentSlugOpt.get());
+            }
+        }
+
+        // 3. If still not found and input is numeric, fallback to ID lookup
+        if (productOpt.isEmpty() && input.matches("^\\d+$")) {
+            try {
+                long id = Long.parseLong(input);
+                productOpt = productRepo.findById(id);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        Product product = productOpt.orElseThrow(() ->
+                new NotFoundException("Không tìm thấy sản phẩm với slug/ID: " + slugOrId));
+
+        return buildProductDetail(product);
+    }
+
+    private ProductDetailDTO buildProductDetail(Product product) {
+        long id = product.getId();
         List<ProductImage> imageList = productImageRepo.findByProductId(id);
         List<ProductUnit> productUnitList = productUnitRepo.findByProductId(id);
         List<ProductAttribute> productAttributeList = productAttributeRepo.findByProductId(id);
 
-        return withReviewSummary(productMapper.toDetail(product, productUnitList, productAttributeList, imageList));
+        ProductDetailDTO detailDTO = withReviewSummary(applyPublicPricing(
+                productMapper.toDetail(product, productUnitList, productAttributeList, imageList), product));
+        if (detailDTO != null) {
+            ProductPricing.PriceView pricing = ProductPricing.resolve(product);
+            List<com.vn.sodu.voucher.dto.VoucherSummaryDTO> applicableVouchers =
+                    voucherService.getApplicableVouchersForProduct(
+                            product.getId(),
+                            product.getCategoryId(),
+                            pricing.oldPrice(),
+                            pricing.price()
+                    );
+            detailDTO.setApplicableVouchers(applicableVouchers);
+            detailDTO.setBestVoucher(voucherService.findBestVoucherForProduct(applicableVouchers));
+        }
+        return detailDTO;
     }
 
     private ProductListItemDTO withReviewSummary(ProductListItemDTO dto) {
@@ -109,8 +168,25 @@ public class ProductService {
         return dto;
     }
 
+    private ProductListItemDTO applyPublicPricing(ProductListItemDTO dto, Product product) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(product);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
+    }
+
+    private ProductDetailDTO applyPublicPricing(ProductDetailDTO dto, Product product) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(product);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
+    }
+
     private Pageable toPageable(ProductFilterRequest request) {
-        String sortBy = resolveSortBy(request.getSortBy());
         Sort.Direction direction;
         try {
             direction = Sort.Direction.fromString(
@@ -122,6 +198,10 @@ public class ProductService {
 
         int page = Math.max(request.getPage(), 0);
         int pageSize = request.getPageSize() > 0 ? Math.min(request.getPageSize(), 100) : 20;
+        if (ProductSaleCriteria.isComputedSort(request.getSortBy())) {
+            return PageRequest.of(page, pageSize);
+        }
+        String sortBy = resolveSortBy(request.getSortBy());
         return PageRequest.of(page, pageSize, Sort.by(direction, sortBy));
     }
 
@@ -137,6 +217,11 @@ public class ProductService {
         return (root, query, cb) -> {
             query.distinct(true);
             Predicate predicate = cb.conjunction();
+            LocalDateTime now = LocalDateTime.now();
+
+            // Storefront filtering: only active, non-archived products
+            predicate = cb.and(predicate, cb.isTrue(root.<Boolean>get("active")));
+            predicate = cb.and(predicate, cb.notEqual(root.<String>get("status"), "ARCHIVED"));
 
             if (request.getCategoryId() != null) {
                 predicate = cb.and(predicate, cb.equal(root.<Long>get("categoryId"), request.getCategoryId()));
@@ -145,10 +230,12 @@ public class ProductService {
                 predicate = cb.and(predicate, cb.equal(root.<Long>get("brandId"), request.getBrandId()));
             }
             if (request.getMinPrice() != null) {
-                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.<BigDecimal>get("retailPrice"), request.getMinPrice()));
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(
+                        ProductSaleCriteria.effectivePrice(root, cb, now), request.getMinPrice()));
             }
             if (request.getMaxPrice() != null) {
-                predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.<BigDecimal>get("retailPrice"), request.getMaxPrice()));
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(
+                        ProductSaleCriteria.effectivePrice(root, cb, now), request.getMaxPrice()));
             }
             if (request.getInStock() != null) {
                 if (request.getInStock()) {
@@ -156,6 +243,10 @@ public class ProductService {
                 } else {
                     predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.<Double>get("stockAvailable"), 0d));
                 }
+            }
+            if (request.getOnSale() != null) {
+                Predicate activeSale = ProductSaleCriteria.activeSale(root, cb, now);
+                predicate = cb.and(predicate, request.getOnSale() ? activeSale : cb.not(activeSale));
             }
 
             String search = request.getSearch();
@@ -173,6 +264,14 @@ public class ProductService {
                 predicate = cb.and(predicate, searchPredicate);
             }
 
+            Sort.Direction direction;
+            try {
+                direction = Sort.Direction.fromString(
+                        request.getSortDirection() == null ? "DESC" : request.getSortDirection());
+            } catch (IllegalArgumentException ex) {
+                direction = Sort.Direction.DESC;
+            }
+            ProductSaleCriteria.applyComputedSort(root, query, cb, request.getSortBy(), direction, now);
             return predicate;
         };
     }

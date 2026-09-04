@@ -1,10 +1,10 @@
 package com.vn.sodu.nhanh.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
+import com.vn.sodu.location.LocationFacade;
 import com.vn.sodu.nhanh.dto.LocationTreeResponse;
 import com.vn.sodu.nhanh.NhanhProperties;
 import com.vn.sodu.nhanh.location.LocationDataUnavailableException;
-import com.vn.sodu.nhanh.service.NhanhLocationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Locations", description = "Public guest-facing endpoints for location data (city/district/ward hierarchy)")
 public class NhanhLocationController {
 
-    private final NhanhLocationService nhanhLocationService;
+    private final LocationFacade locationFacade;
     private final NhanhProperties nhanhProperties;
 
     @GetMapping
@@ -40,7 +40,7 @@ public class NhanhLocationController {
     })
     public ResponseEntity<ApiResponseDTO<LocationTreeResponse>> getLocations() {
         try {
-            LocationTreeResponse response = nhanhLocationService.getLocations();
+            LocationTreeResponse response = locationFacade.getLocations();
             String message = response.isStale()
                     ? "Locations retrieved from stale cache"
                     : "Locations retrieved successfully";

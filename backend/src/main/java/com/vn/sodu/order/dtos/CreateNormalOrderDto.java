@@ -33,6 +33,12 @@ public class CreateNormalOrderDto {
     @Size(max = 500, message = "Customer address must not exceed 500 characters")
     private String customerAddress;
 
+    @Size(max = 255, message = "Customer street must not exceed 255 characters")
+    private String customerStreet;
+
+    @Size(max = 255, message = "Customer hamlet must not exceed 255 characters")
+    private String customerHamlet;
+
     @Size(max = 100, message = "Customer city must not exceed 100 characters")
     private String customerCityName;
 
@@ -48,11 +54,18 @@ public class CreateNormalOrderDto {
 
     private Long customerWardId;
 
+    @Size(max = 20, message = "Location contract version must not exceed 20 characters")
+    private String locationVersion;
+
     private Long carrierId;
 
     private Long carrierServiceId;
 
     private java.math.BigDecimal shippingFee;
+
+    private String discountVoucherCode;
+
+    private String shippingVoucherCode;
 
     @Size(max = 5000, message = "Description must not exceed 5000 characters")
     private String description;

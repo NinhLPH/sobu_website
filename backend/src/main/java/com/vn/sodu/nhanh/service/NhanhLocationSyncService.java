@@ -14,6 +14,7 @@ import com.vn.sodu.nhanh.location.NhanhLocationSnapshotStore;
 import com.vn.sodu.product.dto.NhanhResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Slf4j
 public class NhanhLocationSyncService {
 

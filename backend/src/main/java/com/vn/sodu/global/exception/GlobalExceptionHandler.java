@@ -44,11 +44,35 @@ public class GlobalExceptionHandler {
                 .body(ApiResponseDTO.error(ex.getMessage(), "FORBIDDEN", HttpStatus.FORBIDDEN.value()));
     }
 
+    @ExceptionHandler(com.vn.sodu.location.AddressMigrationRequiredException.class)
+    public ResponseEntity<ApiResponseDTO<Void>> handleAddressMigrationRequiredException(
+            com.vn.sodu.location.AddressMigrationRequiredException ex) {
+        log.warn("Address migration required: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponseDTO.error(ex.getMessage(), "ADDRESS_MIGRATION_REQUIRED", HttpStatus.CONFLICT.value()));
+    }
+
+    @ExceptionHandler(com.vn.sodu.integration.NhanhIntegrationDisabledException.class)
+    public ResponseEntity<ApiResponseDTO<Void>> handleNhanhIntegrationDisabledException(
+            com.vn.sodu.integration.NhanhIntegrationDisabledException ex) {
+        log.warn("Nhanh integration disabled: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponseDTO.error(ex.getMessage(), "NHANH_INTEGRATION_DISABLED", HttpStatus.CONFLICT.value()));
+    }
+
     @ExceptionHandler(IdempotencyConflictException.class)
     public ResponseEntity<ApiResponseDTO<Void>> handleIdempotencyConflictException(IdempotencyConflictException ex) {
         log.warn("Idempotency Conflict: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponseDTO.error(ex.getMessage(), "IDEMPOTENCY_CONFLICT", HttpStatus.CONFLICT.value()));
+    }
+
+    @ExceptionHandler(com.vn.sodu.inventory.InsufficientStockException.class)
+    public ResponseEntity<ApiResponseDTO<Void>> handleInsufficientStockException(
+            com.vn.sodu.inventory.InsufficientStockException ex) {
+        log.warn("Insufficient stock: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponseDTO.error(ex.getMessage(), "INSUFFICIENT_STOCK", HttpStatus.CONFLICT.value()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

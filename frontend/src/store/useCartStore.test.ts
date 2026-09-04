@@ -3,10 +3,13 @@ import { CustomerService } from '../service/custom.service';
 import { ProductModel } from '../interface/product.model';
 import { useCartStore } from './useCartStore';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
+import { PublicCatalogService } from '../service/public-catalog.service';
 
 jest.mock('../service/custom.service');
+jest.mock('../service/public-catalog.service');
 
 const mockedCustomerService = jest.mocked(CustomerService);
+const mockedPublicCatalogService = jest.mocked(PublicCatalogService);
 
 const product: ProductModel = {
     id: '10',
@@ -93,8 +96,14 @@ describe('useCartStore order submission', () => {
         useCartStore.setState({
             items: [],
             isUsingFallback: false,
+            fallbackSource: null,
+            cartOwnerId: null,
+            cartLoadError: null,
+            hasLegacyEmptyCart: false,
             isLoading: false,
             isSubmitting: false,
+            isHydratingProducts: false,
+            hydrationError: null,
             checkoutError: null,
             lastCreatedOrder: null,
             pendingOrderKey: null,
@@ -138,6 +147,45 @@ describe('useCartStore order submission', () => {
         expect(useCartStore.getState().isLoading).toBe(false);
     });
 
+    it('hydrates cart products with current database price, category, and stock', async () => {
+        useCartStore.setState({ items: [{ product, quantity: 2 }] });
+        mockedPublicCatalogService.getProductDetail.mockResolvedValue({
+            id: 10,
+            name: 'Ao hoodie updated',
+            code: 'HD-10',
+            description: 'Updated',
+            content: '',
+            price: 320000,
+            avatarImage: '/updated.png',
+            brandName: 'SOBU',
+            categoryId: 7,
+            categoryName: 'Áo',
+            stockAvailable: 4,
+            stockRemain: 4,
+            units: [],
+            attributes: [],
+            images: ['/updated.png'],
+            updatedAt: '2026-08-25T10:00:00'
+        });
+
+        await useCartStore.getState().hydrateProducts();
+
+        expect(useCartStore.getState()).toEqual(expect.objectContaining({
+            isHydratingProducts: false,
+            hydrationError: null,
+            items: [expect.objectContaining({
+                quantity: 2,
+                product: expect.objectContaining({
+                    id: '10',
+                    name: 'Ao hoodie updated',
+                    price: 320000,
+                    categoryId: '7',
+                    stock: 4
+                })
+            })]
+        }));
+    });
+
     it('restores the account-scoped fallback cart without requesting the server', async () => {
         signInForFallback();
         window.sessionStorage.setItem(fallbackStorageKey(), JSON.stringify({
@@ -173,7 +221,8 @@ describe('useCartStore order submission', () => {
 
         expect(useCartStore.getState().items).toEqual([]);
         expect(useCartStore.getState().isUsingFallback).toBe(true);
-        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBe(JSON.stringify({ items: [] }));
+        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBe(JSON.stringify({ items: [], source: 'read-cache' }));
+        expect(useCartStore.getState().cartLoadError).toBe('Network unavailable');
     });
 
     it('restores a pending online cart when the server cart is empty', async () => {
@@ -200,7 +249,7 @@ describe('useCartStore order submission', () => {
         expect(useCartStore.getState().items).toEqual([{ product, quantity: 2 }]);
         expect(useCartStore.getState().isUsingFallback).toBe(true);
         expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({
-            items: [{ product, quantity: 2 }]
+            items: [{ product, quantity: 2 }], source: 'local-edit'
         });
     });
 
@@ -223,7 +272,7 @@ describe('useCartStore order submission', () => {
         mockedCustomerService.clearCart.mockRejectedValue(new Error('Server unavailable'));
         await useCartStore.getState().clearCart();
         expect(useCartStore.getState().items).toEqual([]);
-        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({ items: [] });
+        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({ items: [], source: 'local-edit' });
     });
 
     it('keeps the current cart and does not enter fallback after an authentication failure', async () => {
@@ -295,7 +344,7 @@ describe('useCartStore order submission', () => {
                 ...shippingLocation,
                 ...shippingQuote,
                 items: [{
-                    nhanhProductId: '10001',
+                    productId: 10,
                     name: 'Ao hoodie',
                     price: 350000,
                     discount: 0,
@@ -387,8 +436,10 @@ describe('useCartStore order submission', () => {
 
         expect(mockedCustomerService.clearCart).not.toHaveBeenCalled();
         expect(useCartStore.getState().items).toEqual([]);
-        expect(useCartStore.getState().isUsingFallback).toBe(false);
-        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBeNull();
+        expect(useCartStore.getState().isUsingFallback).toBe(true);
+        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({ items: [], source: 'local-edit' });
+        await useCartStore.getState().fetchCart();
+        expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
     });
 
     it('keeps cart items and exposes the backend message when creation fails', async () => {
@@ -411,6 +462,32 @@ describe('useCartStore order submission', () => {
 
         expect(useCartStore.getState().items).toHaveLength(1);
         expect(useCartStore.getState().checkoutError).toBe('Idempotency conflict');
+        expect(useCartStore.getState().isSubmitting).toBe(false);
+    });
+
+    it('keeps the cart authoritative when backend rejects checkout for insufficient stock', async () => {
+        mockedCustomerService.addCartItem.mockResolvedValue(cartWithItem(product, 1));
+        mockedCustomerService.createOrder.mockRejectedValue({
+            response: {
+                status: 409,
+                data: {
+                    code: 'INSUFFICIENT_STOCK',
+                    message: 'Sản phẩm Ao hoodie không đủ tồn kho khả dụng'
+                }
+            }
+        });
+        await useCartStore.getState().addToCart(product);
+
+        await expect(useCartStore.getState().submitOrder({
+            customerName: 'Nguyen Van A',
+            customerMobile: '0901234567',
+            ...shippingLocation,
+            ...shippingQuote
+        })).rejects.toBeDefined();
+
+        expect(useCartStore.getState().checkoutError).toBe('Sản phẩm Ao hoodie không đủ tồn kho khả dụng');
+        expect(useCartStore.getState().items).toHaveLength(1);
+        expect(mockedCustomerService.clearCart).not.toHaveBeenCalled();
         expect(useCartStore.getState().isSubmitting).toBe(false);
     });
 

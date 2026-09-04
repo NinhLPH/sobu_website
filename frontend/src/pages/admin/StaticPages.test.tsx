@@ -2,6 +2,7 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals';
 import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import AdminStaticPages from './StaticPages';
 import {StaticPageService} from '../../service/static-page.service';
+import {ConfirmDialogProvider} from '../../components/common/ConfirmDialog';
 
 jest.mock('react-quill-new', () => ({
     __esModule: true,
@@ -18,6 +19,7 @@ jest.mock('../../service/static-page.service');
 jest.mock('../../service/toast.service');
 
 const mockedService = jest.mocked(StaticPageService);
+const renderPage = () => render(<ConfirmDialogProvider><AdminStaticPages/></ConfirmDialogProvider>);
 
 const pageWith = (content: any[]) => ({
     content,
@@ -57,11 +59,10 @@ describe('AdminStaticPages', () => {
         mockedService.createPage.mockResolvedValue(staticPages[0] as any);
         mockedService.updatePage.mockResolvedValue(staticPages[0] as any);
         mockedService.deletePage.mockResolvedValue(undefined);
-        jest.spyOn(window, 'confirm').mockReturnValue(true);
     });
 
     it('loads static pages and searches by term', async () => {
-        render(<AdminStaticPages/>);
+        renderPage();
 
         expect(await screen.findByText('About')).toBeTruthy();
         expect(screen.getByText('privacy-policy')).toBeTruthy();
@@ -78,7 +79,7 @@ describe('AdminStaticPages', () => {
     });
 
     it('selects a static page suggestion and searches immediately', async () => {
-        render(<AdminStaticPages/>);
+        renderPage();
 
         expect(await screen.findByText('Privacy Policy')).toBeTruthy();
 
@@ -94,7 +95,7 @@ describe('AdminStaticPages', () => {
     });
 
     it('creates a page with editor html', async () => {
-        render(<AdminStaticPages/>);
+        renderPage();
 
         fireEvent.click(await screen.findByRole('button', {name: /Thêm trang/i}));
         fireEvent.change(screen.getByLabelText(/Tiêu đề/i), {target: {value: 'Terms'}});
@@ -111,7 +112,7 @@ describe('AdminStaticPages', () => {
     });
 
     it('updates an existing page and toggles publish state', async () => {
-        render(<AdminStaticPages/>);
+        renderPage();
 
         fireEvent.click(await screen.findByLabelText(/Sửa trang About/i));
         fireEvent.click(screen.getByLabelText(/Publish/i));
@@ -127,9 +128,10 @@ describe('AdminStaticPages', () => {
     });
 
     it('deletes a page after confirmation', async () => {
-        render(<AdminStaticPages/>);
+        renderPage();
 
         fireEvent.click(await screen.findByLabelText(/Xóa trang About/i));
+        fireEvent.click(await screen.findByRole('button', {name: 'Xóa trang'}));
 
         await waitFor(() => expect(mockedService.deletePage).toHaveBeenCalledWith(1));
     });

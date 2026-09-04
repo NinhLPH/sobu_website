@@ -14,6 +14,8 @@ import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.product.repo.ProductUnitRepo;
 import com.vn.sodu.review.ReviewRepository;
 import com.vn.sodu.review.ReviewStatus;
+import com.vn.sodu.seo.SlugHistoryService;
+import com.vn.sodu.voucher.service.VoucherService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,12 @@ class ProductServiceTest {
     @Mock
     private ReviewRepository reviewRepository;
 
+    @Mock
+    private SlugHistoryService slugHistoryService;
+
+    @Mock
+    private VoucherService voucherService;
+
     @InjectMocks
     private ProductService productService;
 
@@ -77,6 +85,8 @@ class ProductServiceTest {
         testProduct.setName("Test Product");
         testProduct.setRetailPrice(BigDecimal.valueOf(100));
         testProduct.setStockAvailable(10.0);
+        testProduct.setActive(true);
+        testProduct.setStatus("ACTIVE");
 
         testListItemDTO = new ProductListItemDTO();
         testListItemDTO.setId(1L);
@@ -467,7 +477,7 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("Should map price sort alias to retailPrice")
+    @DisplayName("Should delegate effective price sorting to the sale-aware specification")
     void testGetPublicProductsSortByPriceAlias() {
         ProductFilterRequest request = new ProductFilterRequest();
         request.setSortBy("price");
@@ -478,9 +488,7 @@ class ProductServiceTest {
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(productRepo).findAll(any(Specification.class), pageableCaptor.capture());
-        Sort.Order order = pageableCaptor.getValue().getSort().getOrderFor("retailPrice");
-        assertNotNull(order);
-        assertEquals(Sort.Direction.ASC, order.getDirection());
+        assertTrue(pageableCaptor.getValue().getSort().isUnsorted());
     }
 
     @Test
@@ -532,6 +540,8 @@ class ProductServiceTest {
         product.setName("Test Product " + id);
         product.setRetailPrice(BigDecimal.valueOf(100));
         product.setStockAvailable(10.0);
+        product.setActive(true);
+        product.setStatus("ACTIVE");
         return product;
     }
 

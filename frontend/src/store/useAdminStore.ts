@@ -10,7 +10,10 @@ import {
 } from '../interface/order.model';
 import { PageResponse } from '../interface/api-response';
 import { AdminWorkflowService } from '../service/admin.service';
+import { useIntegrationStore } from './useIntegrationStore';
 import { mockProducts, mockCategories, mockRequests } from '../data/mockData';
+import {compareNhanhHistoryNewestFirst, hasNhanhHistory} from '../utils/order-sync';
+import {OrderStatus} from '../enum/union-types';
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message || error?.message || fallback;
@@ -19,6 +22,15 @@ const ACTIONABLE_SYNC_STATUSES = new Set(['FAILED', 'NEED_RECONCILE', 'DEAD']);
 
 const isActionableSyncOrder = (order: OrderResponseDto) =>
     Boolean(order.syncStatus && ACTIONABLE_SYNC_STATUSES.has(order.syncStatus));
+
+let nhanhHistoryController: AbortController | null = null;
+let nhanhHistoryRequest: Promise<void> | null = null;
+let nhanhHistorySequence = 0;
+
+const isCanceledRequest = (error: any) =>
+    error?.name === 'CanceledError'
+    || error?.name === 'AbortError'
+    || error?.code === 'ERR_CANCELED';
 
 const mergeSyncResult = (
     order: OrderResponseDto,
@@ -81,14 +93,18 @@ interface AdminState {
     isAdminPaymentsLoading: boolean;
     adminPaymentsError: string | null;
     orderSyncQueue: OrderResponseDto[];
+    nhanhHistoryOrders: OrderResponseDto[];
     pendingOrderSyncCount: number;
     ordersPage: Omit<PageResponse<OrderResponseDto>, 'content'>;
     isOrdersLoading: boolean;
     isOrderDetailLoading: boolean;
     isRetryingOrderSync: boolean;
     retryingOrderIds: number[];
+    updatingOrderStatusIds: number[];
     isOrderSyncQueueLoading: boolean;
     orderSyncQueueError: string | null;
+    isNhanhHistoryLoading: boolean;
+    nhanhHistoryError: string | null;
     orderSyncBatchProgress: OrderSyncBatchProgress | null;
     orderSyncBatchResult: OrderSyncBatchResult | null;
     isCreatingFinalPayment: boolean;
@@ -107,7 +123,10 @@ interface AdminState {
     fetchOrderDetail: (id: string | number) => Promise<void>;
     fetchOrderPayments: (id: string | number) => Promise<OrderPaymentResponseDto[]>;
     fetchOrderSyncQueue: () => Promise<void>;
+    fetchNhanhHistory: (force?: boolean) => Promise<void>;
+    clearNhanhHistory: () => void;
     retryOrderSync: (id: string | number) => Promise<OrderSyncResultDto>;
+    updateAdminOrderStatus: (id: string | number, status: OrderStatus) => Promise<OrderResponseDto>;
     retryOrderSyncBatch: (ids: Array<string | number>) => Promise<OrderSyncBatchResult>;
     createPreorderFinalPayment: (id: string | number) => Promise<OrderPaymentResponseDto>;
     confirmMockPayment: (paymentCode: string) => Promise<OrderPaymentResponseDto>;
@@ -126,6 +145,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     isAdminPaymentsLoading: false,
     adminPaymentsError: null,
     orderSyncQueue: [],
+    nhanhHistoryOrders: [],
     pendingOrderSyncCount: 0,
     ordersPage: {
         pageNumber: 0,
@@ -141,8 +161,11 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     isOrderDetailLoading: false,
     isRetryingOrderSync: false,
     retryingOrderIds: [],
+    updatingOrderStatusIds: [],
     isOrderSyncQueueLoading: false,
     orderSyncQueueError: null,
+    isNhanhHistoryLoading: false,
+    nhanhHistoryError: null,
     orderSyncBatchProgress: null,
     orderSyncBatchResult: null,
     isCreatingFinalPayment: false,
@@ -301,6 +324,16 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     },
 
     fetchOrderSyncQueue: async () => {
+        if (!useIntegrationStore.getState().nhanhEnabled) {
+            set({
+                orderSyncQueue: [],
+                pendingOrderSyncCount: 0,
+                isOrderSyncQueueLoading: false,
+                orderSyncQueueError: null
+            });
+            return;
+        }
+
         set({ isOrderSyncQueueLoading: true, orderSyncQueueError: null });
         try {
             const orders: OrderResponseDto[] = [];
@@ -333,7 +366,90 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         }
     },
 
+    fetchNhanhHistory: (force = false) => {
+        if (nhanhHistoryRequest && !force) {
+            return nhanhHistoryRequest;
+        }
+
+        if (force) {
+            nhanhHistoryController?.abort();
+        }
+
+        const controller = new AbortController();
+        nhanhHistoryController = controller;
+        const sequence = ++nhanhHistorySequence;
+
+        set({isNhanhHistoryLoading: true, nhanhHistoryError: null});
+
+        const request = (async () => {
+            try {
+                const orders: OrderResponseDto[] = [];
+                let page = 0;
+                let totalPages = 1;
+
+                while (page < totalPages) {
+                    const response = await AdminWorkflowService.getAdminOrders({
+                        page,
+                        size: 100,
+                        sortBy: 'updatedAt',
+                        sortDirection: 'DESC'
+                    }, controller.signal);
+                    const data = response.data;
+                    orders.push(...(data.content ?? []));
+                    totalPages = Math.max(data.totalPages ?? 1, 1);
+                    page += 1;
+                }
+
+                if (sequence !== nhanhHistorySequence || controller.signal.aborted) {
+                    return;
+                }
+
+                set({
+                    nhanhHistoryOrders: orders
+                        .filter(hasNhanhHistory)
+                        .sort(compareNhanhHistoryNewestFirst),
+                    isNhanhHistoryLoading: false,
+                    nhanhHistoryError: null
+                });
+            } catch (error) {
+                if (sequence !== nhanhHistorySequence || isCanceledRequest(error)) {
+                    return;
+                }
+                set({
+                    isNhanhHistoryLoading: false,
+                    nhanhHistoryError: getErrorMessage(error, 'Không thể tải lịch sử đồng bộ Nhanh.vn.')
+                });
+            } finally {
+                if (sequence === nhanhHistorySequence) {
+                    nhanhHistoryRequest = null;
+                    if (nhanhHistoryController === controller) {
+                        nhanhHistoryController = null;
+                    }
+                }
+            }
+        })();
+
+        nhanhHistoryRequest = request;
+        return request;
+    },
+
+    clearNhanhHistory: () => {
+        nhanhHistoryController?.abort();
+        nhanhHistoryController = null;
+        nhanhHistoryRequest = null;
+        nhanhHistorySequence += 1;
+        set({
+            nhanhHistoryOrders: [],
+            isNhanhHistoryLoading: false,
+            nhanhHistoryError: null
+        });
+    },
+
     retryOrderSync: async (id) => {
+        if (!useIntegrationStore.getState().nhanhEnabled) {
+            throw new Error('Tích hợp Nhanh.vn đang tắt.');
+        }
+
         const orderId = Number(id);
         if (get().retryingOrderIds.includes(orderId)) {
             throw new Error('Đơn hàng này đang được đồng bộ.');
@@ -390,7 +506,48 @@ export const useAdminStore = create<AdminState>((set, get) => ({
         }
     },
 
+    updateAdminOrderStatus: async (id, status) => {
+        const orderId = Number(id);
+        if (get().updatingOrderStatusIds.includes(orderId)) {
+            throw new Error('Đơn hàng này đang được cập nhật trạng thái.');
+        }
+
+        set((state) => ({
+            updatingOrderStatusIds: [...state.updatingOrderStatusIds, orderId],
+            ordersError: null,
+            orderActionMessage: null
+        }));
+        try {
+            const response = await AdminWorkflowService.updateAdminOrderStatus(id, status);
+            const updatedOrder = response.data;
+            set((state) => {
+                const updatingOrderStatusIds = state.updatingOrderStatusIds.filter(item => item !== orderId);
+                return {
+                    workflowOrders: state.workflowOrders.map(order =>
+                        order.id === orderId ? {...order, ...updatedOrder} : order
+                    ),
+                    currentOrderDetail: state.currentOrderDetail?.id === orderId
+                        ? {...state.currentOrderDetail, ...updatedOrder}
+                        : state.currentOrderDetail,
+                    updatingOrderStatusIds,
+                    orderActionMessage: response.message || 'Đã cập nhật trạng thái đơn hàng.'
+                };
+            });
+            return updatedOrder;
+        } catch (error) {
+            set((state) => ({
+                updatingOrderStatusIds: state.updatingOrderStatusIds.filter(item => item !== orderId),
+                ordersError: getErrorMessage(error, 'Không thể cập nhật trạng thái đơn hàng.')
+            }));
+            throw error;
+        }
+    },
+
     retryOrderSyncBatch: async (ids) => {
+        if (!useIntegrationStore.getState().nhanhEnabled) {
+            throw new Error('Tích hợp Nhanh.vn đang tắt.');
+        }
+
         if (get().orderSyncBatchProgress?.running) {
             throw new Error('Một lượt đồng bộ đơn hàng đang chạy.');
         }

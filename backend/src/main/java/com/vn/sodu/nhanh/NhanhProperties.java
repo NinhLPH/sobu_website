@@ -1,11 +1,9 @@
 package com.vn.sodu.nhanh;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
-import org.springframework.validation.annotation.Validated;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,28 +12,26 @@ import java.util.List;
  * Typed configuration for all Nhanh integration properties.
  * Replaces scattered {@code @Value("${nhanh.*}")} across sync services,
  * NhanhClient, NhanhService, and NhanhController.
+ *
+ * Credential fields are optional so the application can boot in local mode
+ * ( {@code integration.nhanh.enabled=false}) without any Nhanh configuration.
+ * They only take effect when the optional {@code nhanh} Spring profile is active.
  */
 @Getter
 @Setter
-@Validated
 @Component
 @ConfigurationProperties(prefix = "nhanh")
 public class NhanhProperties {
 
-    @NotBlank
     private String clientId;
 
-    @NotBlank
     private String clientSecret;
 
-    @NotBlank
     private String redirectUri;
 
-    @NotBlank
     private String baseUrl = "https://pos.open.nhanh.vn/api";
 
     /** Business ID — required for product/brand/category sync. */
-    @NotBlank
     private String businessId;
 
     private Long depotId;

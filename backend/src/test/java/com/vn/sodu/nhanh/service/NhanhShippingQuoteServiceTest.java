@@ -8,6 +8,8 @@ import com.vn.sodu.nhanh.dto.NhanhShippingFeeOption;
 import com.vn.sodu.nhanh.dto.ShippingQuoteDto;
 import com.vn.sodu.nhanh.dto.ShippingQuoteRequestDto;
 import com.vn.sodu.product.dto.NhanhResponse;
+import com.vn.sodu.integration.IntegrationProperties;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class NhanhShippingQuoteServiceTest {
@@ -42,11 +45,18 @@ class NhanhShippingQuoteServiceTest {
     @Mock
     private NhanhIntegrationRepo nhanhIntegrationRepo;
 
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
+    @Mock
+    private IntegrationProperties integrationProperties;
+
     private NhanhProperties nhanhProperties;
     private NhanhShippingQuoteService service;
 
     @BeforeEach
     void setUp() {
+        lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
         nhanhProperties = new NhanhProperties();
         nhanhProperties.getShipping().setFeePath("/v3.0/shipping/fee");
         nhanhProperties.getShipping().setType(1);
@@ -61,7 +71,9 @@ class NhanhShippingQuoteServiceTest {
                 nhanhService,
                 nhanhProperties,
                 nhanhIntegrationRepo,
-                new ObjectMapper());
+                new ObjectMapper(),
+                nhanhEnabled,
+                integrationProperties);
     }
 
     @Test

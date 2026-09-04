@@ -1,5 +1,6 @@
 package com.vn.sodu.nhanh.service;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.nhanh.NhanhOAuthConnectedEvent;
 import com.vn.sodu.nhanh.location.NhanhLocationExtendedLockException;
 import com.vn.sodu.nhanh.location.NhanhLocationSnapshotStore;
@@ -12,6 +13,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -20,6 +26,7 @@ import java.time.Instant;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Component
 @Slf4j
 public class NhanhLocationSyncCoordinator {
@@ -29,6 +36,7 @@ public class NhanhLocationSyncCoordinator {
     private final NhanhService nhanhService;
     private final ThreadPoolTaskExecutor executor;
     private final TaskScheduler scheduler;
+    private final NhanhEnabled nhanhEnabled;
     private final Object lock = new Object();
 
     private boolean running;
@@ -43,17 +51,22 @@ public class NhanhLocationSyncCoordinator {
             NhanhLocationSyncService syncService,
             NhanhLocationSnapshotStore snapshotStore,
             NhanhService nhanhService,
+            NhanhEnabled nhanhEnabled,
             @Qualifier("locationSyncExecutor") ThreadPoolTaskExecutor executor,
             @Qualifier("locationSyncScheduler") TaskScheduler scheduler) {
         this.syncService = syncService;
         this.snapshotStore = snapshotStore;
         this.nhanhService = nhanhService;
+        this.nhanhEnabled = nhanhEnabled;
         this.executor = executor;
         this.scheduler = scheduler;
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
+        if (!nhanhEnabled.isEnabled()) {
+            return;
+        }
         try {
             snapshotStore.isExpiredOrMissing();
             nhanhService.getValidAccessToken();
@@ -67,16 +80,23 @@ public class NhanhLocationSyncCoordinator {
             phase = TransactionPhase.AFTER_COMMIT,
             fallbackExecution = true)
     public void onOAuthConnected(NhanhOAuthConnectedEvent event) {
+        if (!nhanhEnabled.isEnabled()) {
+            return;
+        }
         submit(Trigger.OAUTH);
     }
 
     public void triggerManualSync() {
+        nhanhEnabled.requireEnabled();
         nhanhService.getValidAccessToken();
         submit(Trigger.MANUAL);
     }
 
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     public void pollExpiredSnapshot() {
+        if (!nhanhEnabled.isEnabled()) {
+            return;
+        }
         try {
             if (!snapshotStore.isExpiredOrMissing()) {
                 return;
@@ -90,6 +110,9 @@ public class NhanhLocationSyncCoordinator {
 
     private void submit(Trigger trigger) {
         synchronized (lock) {
+            if (!nhanhEnabled.isEnabled()) {
+                return;
+            }
             if (shuttingDown) {
                 return;
             }

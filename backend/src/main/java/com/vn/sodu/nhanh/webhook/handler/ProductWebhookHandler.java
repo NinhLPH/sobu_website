@@ -12,8 +12,10 @@ import com.vn.sodu.product.service.ProductSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Slf4j
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Component
 @RequiredArgsConstructor
 public class ProductWebhookHandler implements NhanhWebhookHandler {

@@ -1,5 +1,6 @@
 export interface ProductModel {
     id: string;
+    slug?: string;
     externalId?: string;
     nhanhProductId?: string;
     name: string;
@@ -7,16 +8,26 @@ export interface ProductModel {
     originalPrice?: number;
     category?: string;
     categoryId?: string;
+    categorySlug?: string;
     scale?: string;
     brand: string;
+    brandSlug?: string;
     imageUrl: string;
+    imageAlt?: string;
     description: string;
     stock: number;
     isNew?: boolean;
     isHot?: boolean;
+    manualTag?: ProductTagModel;
     rating?: number;
     reviewsCount?: number;
     thumbnailUrls?: string[] | undefined;
+}
+
+export interface ProductTagModel {
+    label: string;
+    backgroundColor: string;
+    textColor: string;
 }
 
 export interface CartItem {
@@ -43,12 +54,22 @@ export interface ProductListItemDTO {
     externalId?: string | number;
     nhanhProductId?: string | number;
     name: string;
+    slug?: string | null;
     code?: string | null;
     price?: number | null;
     oldPrice?: number | null;
+    salePrice?: number | null;
+    badgeId?: number | null;
+    badgeName?: string | null;
+    badgeColor?: string | null;
+    badgeTextColor?: string | null;
     avatarImage?: string;
+    avatarAltText?: string | null;
     brandName?: string;
+    brandSlug?: string | null;
+    categoryId?: number | null;
     categoryName?: string;
+    categorySlug?: string | null;
     stockAvailable?: number;
     averageRating?: number;
     reviewsCount?: number;
@@ -60,39 +81,89 @@ export interface ProductDetailDTO {
     externalId?: string | number;
     nhanhProductId?: string | number;
     name: string;
+    slug?: string | null;
+    h1Title?: string | null;
     code: string;
     description: string;
     content: string;
     price: number;
-    oldPrice: number;
+    oldPrice?: number | null;
+    salePrice?: number | null;
+    saleValidFrom?: string | null;
+    saleValidThrough?: string | null;
+    badgeId?: number | null;
+    badgeName?: string | null;
+    badgeColor?: string | null;
+    badgeTextColor?: string | null;
     avatarImage: string;
+    avatarAltText?: string | null;
     brandName: string;
+    brandSlug?: string | null;
+    categoryId?: number | null;
     categoryName: string;
-    stockAvailable: number;
-    stockRemain: number;
+    categorySlug?: string | null;
+    stockAvailable?: number | null;
+    stockRemain?: number | null;
     units: ProductUnitDTO[];
     attributes: ProductAttributeDTO[];
     images: string[];
+    imageDetails?: Array<{url: string; altText?: string | null; caption?: string | null}>;
+    seo?: import('./seo.model').SeoMetadataDTO | null;
     averageRating?: number;
     reviewsCount?: number;
     updatedAt: string;
 }
 
+const toManualTag = (dto: {
+    badgeName?: string | null;
+    badgeColor?: string | null;
+    badgeTextColor?: string | null;
+}): ProductTagModel | undefined => {
+    const label = dto.badgeName?.trim();
+    if (!label || label.toUpperCase() === 'SALE') return undefined;
+    return {
+        label,
+        backgroundColor: dto.badgeColor || '#00618e',
+        textColor: dto.badgeTextColor || '#ffffff'
+    };
+};
+
+export const isSaleProduct = (product: Pick<ProductModel, 'price' | 'originalPrice'>): boolean =>
+    product.price >= 0
+    && product.originalPrice != null
+    && product.originalPrice > product.price;
+
+export const getDiscountPercent = (product: Pick<ProductModel, 'price' | 'originalPrice'>): number => {
+    if (!isSaleProduct(product) || !product.originalPrice) return 0;
+    return Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
+};
+
 export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel => {
+    const price = dto.price ?? 0;
+    const originalPrice = dto.oldPrice != null && dto.oldPrice > price && price >= 0
+        ? dto.oldPrice
+        : undefined;
+    const manualTag = toManualTag(dto);
     return {
         id: String(dto.id),
+        slug: dto.slug || undefined,
         externalId: dto.externalId === undefined ? undefined : String(dto.externalId),
         nhanhProductId: String(dto.nhanhProductId ?? dto.externalId ?? dto.id),
         name: dto.name,
-        price: dto.price ?? 0,
-        originalPrice: dto.oldPrice ?? undefined,
+        price,
+        originalPrice,
         category: dto.categoryName || '',
+        categoryId: dto.categoryId == null ? undefined : String(dto.categoryId),
+        categorySlug: dto.categorySlug || undefined,
         brand: dto.brandName || '',
+        brandSlug: dto.brandSlug || undefined,
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
+        imageAlt: dto.avatarAltText || dto.name,
         description: '',
         stock: dto.stockAvailable || 0,
-        isNew: dto.status === 'NEW',
-        isHot: dto.status === 'HOT',
+        isNew: manualTag?.label.toUpperCase() === 'NEW',
+        isHot: manualTag?.label.toUpperCase() === 'HOT',
+        manualTag,
         rating: dto.averageRating ?? 0,
         reviewsCount: dto.reviewsCount ?? 0,
         thumbnailUrls: dto.avatarImage ? [dto.avatarImage] : []
@@ -100,20 +171,30 @@ export const mapListItemToProductModel = (dto: ProductListItemDTO): ProductModel
 };
 
 export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => {
+    const originalPrice = dto.oldPrice != null && dto.oldPrice > dto.price && dto.price >= 0
+        ? dto.oldPrice
+        : undefined;
+    const manualTag = toManualTag(dto);
     return {
         id: String(dto.id),
+        slug: dto.slug || undefined,
         externalId: dto.externalId === undefined ? undefined : String(dto.externalId),
         nhanhProductId: String(dto.nhanhProductId ?? dto.externalId ?? dto.id),
         name: dto.name,
         price: dto.price,
-        originalPrice: dto.oldPrice,
+        originalPrice,
         category: dto.categoryName || '',
+        categoryId: dto.categoryId == null ? undefined : String(dto.categoryId),
+        categorySlug: dto.categorySlug || undefined,
         brand: dto.brandName || '',
+        brandSlug: dto.brandSlug || undefined,
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
+        imageAlt: dto.avatarAltText || dto.name,
         description: dto.description || dto.content || '',
-        stock: dto.stockAvailable || dto.stockRemain || 0,
-        isNew: false,
-        isHot: false,
+        stock: dto.stockAvailable ?? dto.stockRemain ?? 0,
+        isNew: manualTag?.label.toUpperCase() === 'NEW',
+        isHot: manualTag?.label.toUpperCase() === 'HOT',
+        manualTag,
         rating: dto.averageRating ?? 0,
         reviewsCount: dto.reviewsCount ?? 0,
         thumbnailUrls: dto.images && dto.images.length > 0 

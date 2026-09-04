@@ -2,14 +2,18 @@ package com.vn.sodu.order.controller;
 
 import com.vn.sodu.global.dto.ApiResponseDTO;
 import com.vn.sodu.global.dto.PageResponse;
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.services.OrderQueryService;
 import com.vn.sodu.order.dtos.OrderSyncResultDto;
+import com.vn.sodu.order.dtos.UpdateOrderStatusRequest;
+import com.vn.sodu.order.services.OrderService;
 import com.vn.sodu.order.services.OrderSyncService;
 import com.vn.sodu.order.dtos.OrderResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,8 +23,11 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import java.util.List;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -29,8 +36,55 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Admin Orders", description = "Admin endpoints for reading orders and retrying synchronization")
 public class OrderSyncController {
 
-    private final OrderSyncService orderSyncService;
+    private final ObjectProvider<OrderSyncService> orderSyncServiceProvider;
     private final OrderQueryService orderQueryService;
+    private final com.vn.sodu.order.services.OrderExportService orderExportService;
+    private final NhanhEnabled nhanhEnabled;
+    private final OrderService orderService;
+
+    @PostMapping("/export/spx")
+    @Operation(
+            summary = "Export orders to SPX Excel",
+            description = "Exports selected orders or filtered orders to SPX mass creation Excel format."
+    )
+    public ResponseEntity<byte[]> exportSpxExcelPost(
+            Authentication authentication,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) com.vn.sodu.order.dtos.ExportOrdersRequestDto requestDto
+    ) {
+        requireStaff(authentication);
+        List<Long> ids = requestDto != null ? requestDto.getIds() : null;
+        String status = requestDto != null ? requestDto.getStatus() : null;
+        String query = requestDto != null ? requestDto.getQuery() : null;
+
+        byte[] excelBytes = orderExportService.exportSpxExcel(ids, status, query);
+        String filename = "SPX_Orders_" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now()) + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
+
+    @GetMapping("/export/spx")
+    @Operation(
+            summary = "Export orders to SPX Excel (GET)",
+            description = "Exports selected orders or filtered orders to SPX mass creation Excel format via query params."
+    )
+    public ResponseEntity<byte[]> exportSpxExcelGet(
+            Authentication authentication,
+            @RequestParam(required = false) List<Long> ids,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String query
+    ) {
+        requireStaff(authentication);
+        byte[] excelBytes = orderExportService.exportSpxExcel(ids, status, query);
+        String filename = "SPX_Orders_" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now()) + ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
 
     @GetMapping
     @Operation(
@@ -71,6 +125,26 @@ public class OrderSyncController {
         ));
     }
 
+    @PatchMapping("/{orderId}/status")
+    @Operation(
+            summary = "Advance an order fulfilment status",
+            description = "Staff can advance local orders only through NEW → PROCESSING → SHIPPED → DELIVERED. Payment statuses and Nhanh-managed orders cannot be changed here."
+    )
+    public ResponseEntity<ApiResponseDTO<OrderResponseDto>> updateOrderStatus(
+            @PathVariable Long orderId,
+            @jakarta.validation.Valid @RequestBody UpdateOrderStatusRequest request,
+            Authentication authentication
+    ) {
+        requireStaff(authentication);
+        orderService.updateFulfilmentStatusByStaff(orderId, request.getStatus());
+        OrderResponseDto updatedOrder = orderQueryService.getOrderDetail(orderId);
+        return ResponseEntity.ok(ApiResponseDTO.success(
+                updatedOrder,
+                "Order status updated",
+                HttpStatus.OK.value()
+        ));
+    }
+
     @PostMapping("/{orderId}/sync/retry")
     @Operation(
             summary = "Retry order sync",
@@ -81,6 +155,11 @@ public class OrderSyncController {
             Authentication authentication
     ) {
         requireStaff(authentication);
+        nhanhEnabled.requireEnabled();
+        OrderSyncService orderSyncService = orderSyncServiceProvider.getIfAvailable();
+        if (orderSyncService == null) {
+            throw new IllegalStateException("Order sync service is unavailable");
+        }
         Order order = orderSyncService.retryOrderSync(orderId);
         return ResponseEntity.ok(ApiResponseDTO.success(
                 OrderSyncResultDto.from(order),

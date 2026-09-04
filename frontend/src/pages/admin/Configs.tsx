@@ -152,7 +152,7 @@ function JsonField({
                                         arr[index] = e.target.value;
                                         updateData(arr);
                                     }}
-                                    className="h-10 flex-1 rounded-xl border border-outline-variant/40 bg-white px-3 text-xs font-semibold text-on-surface outline-none focus:border-primary/50"
+                                    className="h-10 flex-1 rounded-xl border border-outline-variant/40 bg-surface px-3 text-xs font-semibold text-on-surface outline-none focus:border-primary/50"
                                 />
                                 <button
                                     type="button"
@@ -182,7 +182,7 @@ function JsonField({
                         {parsed.map((item: any, index: number) => {
                             const keys = Object.keys(item);
                             return (
-                                <div key={index} className="relative rounded-xl border border-outline-variant/40 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                                <div key={index} className="relative rounded-xl border border-outline-variant/40 bg-surface p-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
                                     <div className="absolute right-3 top-3">
                                         <button
                                             type="button"
@@ -237,7 +237,7 @@ function JsonField({
             return (
                 <div className="space-y-3 p-2">
                     {keys.map(k => (
-                        <div key={k} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg bg-white p-2 border border-outline-variant/20">
+                        <div key={k} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg bg-surface p-2 border border-outline-variant/20">
                             <label className="w-1/3 text-xs font-bold text-on-surface break-all pl-2">{k}</label>
                             <input
                                 type="text"
@@ -290,7 +290,7 @@ function JsonField({
                         onBlur={onBlur}
                         rows={7}
                         spellCheck={false}
-                        className="min-h-[160px] w-full resize-y rounded-xl border border-outline-variant/40 bg-white px-4 py-3 font-mono text-xs font-semibold leading-relaxed text-on-surface outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
+                        className="min-h-[160px] w-full resize-y rounded-xl border border-outline-variant/40 bg-surface px-4 py-3 font-mono text-xs font-semibold leading-relaxed text-on-surface outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
                     />
                 )}
             </div>
@@ -592,7 +592,7 @@ export default function AdminConfigs() {
                     type="button"
                     onClick={() => void load()}
                     disabled={loading}
-                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-outline-variant/40 bg-white px-4 py-2.5 text-xs font-black uppercase text-on-surface transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-outline-variant/40 bg-surface px-4 py-2.5 text-xs font-black uppercase text-on-surface transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {loading ? <Loader2 className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>}
                     Tải lại
@@ -606,7 +606,7 @@ export default function AdminConfigs() {
                 </div>
             )}
 
-            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                 <div className="border-b border-outline-variant/20 bg-surface-container-lowest px-4 pt-4">
                     <div className="flex gap-2 overflow-x-auto pb-3">
                         {groupNames.map((groupName) => {
@@ -625,7 +625,7 @@ export default function AdminConfigs() {
                                 >
                                     {getGroupTitle(groupName)}
                                     <span className={`rounded-full px-2 py-0.5 text-[10px] ${
-                                        isActive ? 'bg-white/20 text-on-primary' : 'bg-white text-outline'
+                                        isActive ? 'bg-white/20 text-on-primary' : 'bg-surface text-outline'
                                     }`}>
                                         {groupedConfigs[groupName]?.length || 0}
                                     </span>

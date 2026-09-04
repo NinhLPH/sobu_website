@@ -20,7 +20,9 @@ import java.math.BigDecimal;
 @Builder
 public class CreateNormalOrderItemDto {
 
-    @NotBlank(message = "Nhanh product id is required")
+    /** Local product id. Either this or nhanhProductId must be provided. */
+    private Long productId;
+
     @Size(max = 50, message = "Nhanh product id must not exceed 50 characters")
     private String nhanhProductId;
 

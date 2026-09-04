@@ -39,6 +39,8 @@ interface ProductState {
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message || error?.message || fallback;
 
+let latestProductsRequest = 0;
+
 export const useProductStore = create<ProductState>((set, get) => ({
     products: [],
     allProducts: [],
@@ -60,13 +62,15 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
     fetchProducts: async (params, force = false) => {
         const state = get();
-        if (state.isProductsLoading || (!force && state.productsLoaded)) {
+        if ((!force && state.isProductsLoading) || (!force && state.productsLoaded)) {
             return;
         }
 
+        const requestId = ++latestProductsRequest;
         set({ isProductsLoading: true, isLoading: true, error: null });
         try {
             const response = await PublicCatalogService.getProducts(params);
+            if (requestId !== latestProductsRequest) return;
             set({
                 products: response.content ?? [],
                 productsLoaded: true,
@@ -74,6 +78,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
                 isLoading: get().isCategoriesLoading || get().isBrandsLoading
             });
         } catch (error) {
+            if (requestId !== latestProductsRequest) return;
             set({
                 error: getErrorMessage(error, 'Không thể tải danh sách sản phẩm.'),
                 isProductsLoading: false,

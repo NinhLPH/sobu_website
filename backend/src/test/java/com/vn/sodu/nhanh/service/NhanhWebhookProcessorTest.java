@@ -7,6 +7,7 @@ import com.vn.sodu.nhanh.webhook.NhanhWebhookEventLog;
 import com.vn.sodu.nhanh.webhook.NhanhWebhookEventLogRepository;
 import com.vn.sodu.nhanh.webhook.NhanhWebhookEventLogStatus;
 import com.vn.sodu.nhanh.webhook.NhanhWebhookHandler;
+import com.vn.sodu.integration.NhanhEnabled;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -45,6 +47,9 @@ class NhanhWebhookProcessorTest {
     @Mock
     private NhanhWebhookHandler handler;
 
+    @Mock
+    private NhanhEnabled nhanhEnabled;
+
     @Captor
     private ArgumentCaptor<NhanhWebhookEventLog> captor;
 
@@ -54,12 +59,13 @@ class NhanhWebhookProcessorTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
+        lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
     }
 
     @Test
     void dispatchesToMatchingHandlerAndMarksProcessed() {
         when(handler.supports(NhanhWebhookEvent.ORDER_UPDATE)).thenReturn(true);
-        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler));
+        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler), nhanhEnabled);
 
         NhanhWebhookEventLog eventLog = createEventLog(RECEIVED, "orderUpdate", 0);
         when(repository.findByStatusInAndAttemptCountLessThanOrderByReceivedAtAsc(
@@ -79,7 +85,7 @@ class NhanhWebhookProcessorTest {
         when(handler.supports(NhanhWebhookEvent.ORDER_UPDATE)).thenReturn(true);
         doThrow(new RuntimeException("Something went wrong"))
                 .when(handler).handle(any(), any());
-        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler));
+        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler), nhanhEnabled);
 
         NhanhWebhookEventLog eventLog = createEventLog(RECEIVED, "orderUpdate", 0);
         when(repository.findByStatusInAndAttemptCountLessThanOrderByReceivedAtAsc(
@@ -99,7 +105,7 @@ class NhanhWebhookProcessorTest {
         when(handler.supports(NhanhWebhookEvent.ORDER_UPDATE)).thenReturn(true);
         doThrow(new RuntimeException("Handler error"))
                 .when(handler).handle(any(), any());
-        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler));
+        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler), nhanhEnabled);
 
         NhanhWebhookEventLog eventLog = createEventLog(RECEIVED, "orderUpdate", 2);
         when(repository.findByStatusInAndAttemptCountLessThanOrderByReceivedAtAsc(
@@ -116,7 +122,7 @@ class NhanhWebhookProcessorTest {
     @Test
     void marksEventAsIgnoredWhenNoHandlerFound() {
         when(handler.supports(NhanhWebhookEvent.ORDER_UPDATE)).thenReturn(false);
-        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler));
+        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler), nhanhEnabled);
 
         NhanhWebhookEventLog eventLog = createEventLog(RECEIVED, "orderUpdate", 0);
         when(repository.findByStatusInAndAttemptCountLessThanOrderByReceivedAtAsc(
@@ -131,7 +137,7 @@ class NhanhWebhookProcessorTest {
 
     @Test
     void onlyProcessesEventsReceivedOrFailed() {
-        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler));
+        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler), nhanhEnabled);
 
         when(repository.findByStatusInAndAttemptCountLessThanOrderByReceivedAtAsc(
                 eq(List.of(RECEIVED, FAILED)), anyInt(), any(PageRequest.class)))
@@ -152,7 +158,7 @@ class NhanhWebhookProcessorTest {
             statusDuringHandle.set(log.getStatus());
             return null;
         }).when(handler).handle(any(), any());
-        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler));
+        processor = new NhanhWebhookProcessor(repository, objectMapper, List.of(handler), nhanhEnabled);
 
         NhanhWebhookEventLog eventLog = createEventLog(RECEIVED, "orderUpdate", 0);
         when(repository.findByStatusInAndAttemptCountLessThanOrderByReceivedAtAsc(

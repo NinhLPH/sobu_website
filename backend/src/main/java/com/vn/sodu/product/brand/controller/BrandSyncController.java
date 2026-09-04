@@ -1,5 +1,6 @@
 package com.vn.sodu.product.brand.controller;
 
+import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.product.brand.service.BrandSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +23,8 @@ import java.util.Map;
 @Tag(name = "Admin Sync", description = "Admin endpoints for syncing data from the upstream source")
 public class BrandSyncController {
 
-    private final BrandSyncService brandSyncService;
+    private final ObjectProvider<BrandSyncService> brandSyncServiceProvider;
+    private final NhanhEnabled nhanhEnabled;
 
     @PostMapping("/sync")
     @Operation(
@@ -34,6 +37,11 @@ public class BrandSyncController {
                             schema = @Schema(implementation = java.util.Map.class)))
     })
     public ResponseEntity<Map<String, String>> syncBrands() {
+        nhanhEnabled.requireEnabled();
+        BrandSyncService brandSyncService = brandSyncServiceProvider.getIfAvailable();
+        if (brandSyncService == null) {
+            throw new IllegalStateException("Brand sync service is unavailable");
+        }
         brandSyncService.syncBrands();
         return ResponseEntity.ok(Map.of("message", "Sync success"));
     }

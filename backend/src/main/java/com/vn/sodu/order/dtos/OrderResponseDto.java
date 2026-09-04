@@ -49,6 +49,18 @@ public class OrderResponseDto {
     @Schema(description = "Shipping fee")
     private BigDecimal shippingFee;
 
+    @Schema(description = "Applied subtotal discount voucher code")
+    private String discountVoucherCode;
+
+    @Schema(description = "Applied shipping voucher code")
+    private String shippingVoucherCode;
+
+    @Schema(description = "Subtotal discount amount")
+    private BigDecimal discountAmount;
+
+    @Schema(description = "Shipping fee discount amount")
+    private BigDecimal shippingDiscountAmount;
+
     @Schema(description = "Collected amount")
     private BigDecimal paidAmount;
 
@@ -72,6 +84,12 @@ public class OrderResponseDto {
 
     @Schema(description = "Customer address")
     private String customerAddress;
+
+    @Schema(description = "Customer street (mutually exclusive with hamlet)")
+    private String customerStreet;
+
+    @Schema(description = "Customer hamlet (mutually exclusive with street)")
+    private String customerHamlet;
 
     @Schema(description = "Customer city/province")
     private String customerCityName;

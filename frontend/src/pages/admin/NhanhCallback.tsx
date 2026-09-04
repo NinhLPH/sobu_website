@@ -48,7 +48,7 @@ export default function AdminNhanhCallback() {
     return (
         <div className="min-h-[70vh] flex items-center justify-center p-4">
             <div
-                className="bg-white rounded-3xl p-8 border border-outline-variant/30 shadow-lg max-w-md w-full text-center space-y-6">
+                className="bg-surface rounded-3xl p-8 border border-outline-variant/30 shadow-lg max-w-md w-full text-center space-y-6">
 
                 {status === 'loading' && (
                     <div className="space-y-4 py-8 flex flex-col items-center">

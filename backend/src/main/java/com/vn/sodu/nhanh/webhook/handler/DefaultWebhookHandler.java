@@ -6,6 +6,7 @@ import com.vn.sodu.nhanh.webhook.NhanhWebhookEventLog;
 import com.vn.sodu.nhanh.webhook.NhanhWebhookHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.Set;
 
@@ -19,6 +20,7 @@ import static com.vn.sodu.nhanh.webhook.NhanhWebhookEvent.PRODUCT_DELETE;
 import static com.vn.sodu.nhanh.webhook.NhanhWebhookEvent.PRODUCT_UPDATE;
 
 @Slf4j
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Component
 public class DefaultWebhookHandler implements NhanhWebhookHandler {
 

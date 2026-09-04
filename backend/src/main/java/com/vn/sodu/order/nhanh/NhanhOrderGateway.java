@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -29,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+@ConditionalOnProperty(name = "integration.nhanh.enabled", havingValue = "true")
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -275,8 +277,11 @@ public class NhanhOrderGateway {
     }
 
     private void requireShipping(Order order) {
-        if (order.getCustomerCityId() == null || order.getCustomerDistrictId() == null || order.getCustomerWardId() == null) {
-            throw new IllegalArgumentException("Nhanh sync requires customer city, district, and ward ids");
+        boolean is2Level = order.getLocationVersion() == null
+                || "v2".equalsIgnoreCase(order.getLocationVersion())
+                || "2025.1".equals(order.getLocationVersion());
+        if (order.getCustomerCityId() == null || (!is2Level && order.getCustomerDistrictId() == null) || order.getCustomerWardId() == null) {
+            throw new IllegalArgumentException("Nhanh sync requires customer city, district (for 3-level), and ward ids");
         }
         if (order.getCarrierId() == null || order.getCarrierServiceId() == null) {
             throw new IllegalArgumentException("Nhanh sync requires carrier id and carrier service id");

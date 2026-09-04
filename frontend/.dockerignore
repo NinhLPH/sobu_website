@@ -6,6 +6,9 @@ coverage/
 Dockerfile
 .dockerignore
 README.md
+*.md
+.env
+.env.*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

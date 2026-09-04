@@ -4,19 +4,16 @@ import com.vn.sodu.product.Product;
 import com.vn.sodu.product.ProductAttribute;
 import com.vn.sodu.product.ProductImage;
 import com.vn.sodu.product.ProductUnit;
-import com.vn.sodu.product.dto.NhanhProductDTO;
+import com.vn.sodu.product.dto.*;
+import com.vn.sodu.seo.dto.SeoMetadataDTO;
+import com.vn.sodu.product.service.ProductPricing;
+import com.vn.sodu.utilites.SlugUtils;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import com.vn.sodu.product.dto.ProductAttributeDTO;
-import com.vn.sodu.product.dto.ProductDetailDTO;
-import com.vn.sodu.product.dto.ProductListItemDTO;
-import com.vn.sodu.product.dto.ProductUnitDTO;
-import org.springframework.stereotype.Component;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,18 +27,20 @@ public class ProductMapper {
 
         Product product = new Product();
         product.setId(dto.getId());
-        // Map externalId from Nhanh DTO for upsert mapping
         product.setExternalId(dto.getId());
         product.setParentId(dto.getParentId());
         product.setCode(dto.getCode());
         product.setBarcode(dto.getBarcode());
         product.setName(dto.getName());
+        product.setSlug(SlugUtils.toSlug(dto.getName()));
         product.setOtherName(dto.getOtherName());
         product.setStatus(dto.getStatus());
         product.setVat(dto.getVat());
         product.setDescription(dto.getDescription());
         product.setContent(dto.getContent());
         product.setCountryName(dto.getCountryName());
+        product.setCurrency("VND");
+        product.setConditionType("NEW");
         product.setRawData(null);
 
         if (dto.getCategory() != null) {
@@ -84,6 +83,8 @@ public class ProductMapper {
         if (dto.getInventory() != null) {
             product.setStockRemain(dto.getInventory().getRemain());
             product.setStockAvailable(dto.getInventory().getAvailable());
+            product.setAvailability((dto.getInventory().getAvailable() != null && dto.getInventory().getAvailable() > 0)
+                    ? "IN_STOCK" : "OUT_OF_STOCK");
         }
 
         product.setCreatedAt(toLocalDateTime(dto.getCreatedAt()));
@@ -145,6 +146,7 @@ public class ProductMapper {
             return result;
         }
 
+        int sortOrder = 0;
         for (String url : dto.getImages().getOthers()) {
             if (url == null || url.isBlank()) {
                 continue;
@@ -153,6 +155,8 @@ public class ProductMapper {
             ProductImage image = new ProductImage();
             image.setProductId(productId);
             image.setUrl(url);
+            image.setAltText(dto.getName());
+            image.setSortOrder(++sortOrder);
             result.add(image);
         }
 
@@ -178,23 +182,67 @@ public class ProductMapper {
         }
         return LocalDateTime.ofInstant(Instant.ofEpochMilli(normalized), ZoneId.systemDefault());
     }
+
     public ProductListItemDTO toListItem(Product entity) {
         if (entity == null) {
             return null;
         }
 
+        String brandSlug = entity.getBrand() != null && entity.getBrand().getSlug() != null
+                ? entity.getBrand().getSlug()
+                : (entity.getBrandName() != null ? SlugUtils.toSlug(entity.getBrandName()) : null);
+
+        String categorySlug = entity.getCategory() != null && entity.getCategory().getSlug() != null
+                ? entity.getCategory().getSlug()
+                : (entity.getCategoryName() != null ? SlugUtils.toSlug(entity.getCategoryName()) : null);
+
+        String slug = entity.getSlug() != null && !entity.getSlug().isBlank()
+                ? entity.getSlug()
+                : SlugUtils.toSlug(entity.getName());
+
         return ProductListItemDTO.builder()
                 .id(entity.getId())
                 .externalId(entity.getExternalId())
                 .name(entity.getName())
+                .slug(slug)
                 .code(entity.getCode())
+                .sku(entity.getCode())
                 .price(entity.getRetailPrice())
+                .oldPrice(entity.getOldPrice())
+                .salePrice(entity.getSalePrice() != null ? entity.getSalePrice() : entity.getRetailPrice())
+                .currency(entity.getCurrency() != null ? entity.getCurrency() : "VND")
                 .status(entity.getStatus())
+                .conditionType(entity.getConditionType() != null ? entity.getConditionType() : "NEW")
+                .availability(entity.getAvailability() != null ? entity.getAvailability() : "IN_STOCK")
                 .avatarImage(entity.getAvatarImage())
+                .avatarAltText(entity.getName())
+                .brandId(entity.getBrandId())
                 .brandName(entity.getBrandName())
+                .brandSlug(brandSlug)
+                .categoryId(entity.getCategoryId())
                 .categoryName(entity.getCategoryName())
+                .categorySlug(categorySlug)
                 .stockAvailable(entity.getStockAvailable())
+                .active(entity.getActive())
+                .badgeId(entity.getBadgeId())
+                .badgeName(entity.getBadgeName())
+                .badgeColor(entity.getBadgeColor())
+                .badgeTextColor(entity.getBadgeTextColor())
                 .build();
+    }
+
+    public ProductListItemDTO toPublicListItem(Product entity) {
+        ProductListItemDTO dto = toListItem(entity);
+        return applyPublicPricing(dto, entity);
+    }
+
+    public ProductListItemDTO applyPublicPricing(ProductListItemDTO dto, Product entity) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(entity);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
     }
 
     public ProductDetailDTO toDetail(
@@ -237,26 +285,67 @@ public class ProductMapper {
             }
         }
 
-        List<String> imageUrls = null;
+        List<String> imageUrls = new ArrayList<>();
+        List<ProductImageDTO> imageDetails = new ArrayList<>();
         if (images != null) {
-            imageUrls = new ArrayList<>(images.size());
             for (ProductImage image : images) {
-                if (image == null) {
-                    continue;
-                }
-                if (image.getUrl() == null) {
+                if (image == null || image.getUrl() == null) {
                     continue;
                 }
                 imageUrls.add(image.getUrl());
+                imageDetails.add(ProductImageDTO.builder()
+                        .id(image.getId())
+                        .url(image.getUrl())
+                        .altText(image.getAltText() != null ? image.getAltText() : product.getName())
+                        .caption(image.getCaption())
+                        .width(image.getWidth())
+                        .height(image.getHeight())
+                        .sortOrder(image.getSortOrder())
+                        .isAvatar(image.getIsAvatar())
+                        .build());
             }
         }
+
+        String brandSlug = product.getBrand() != null && product.getBrand().getSlug() != null
+                ? product.getBrand().getSlug()
+                : (product.getBrandName() != null ? SlugUtils.toSlug(product.getBrandName()) : null);
+
+        String categorySlug = product.getCategory() != null && product.getCategory().getSlug() != null
+                ? product.getCategory().getSlug()
+                : (product.getCategoryName() != null ? SlugUtils.toSlug(product.getCategoryName()) : null);
+
+        String slug = product.getSlug() != null && !product.getSlug().isBlank()
+                ? product.getSlug()
+                : SlugUtils.toSlug(product.getName());
+
+        String seoTitle = product.getSeoTitle() != null && !product.getSeoTitle().isBlank()
+                ? product.getSeoTitle()
+                : product.getName() + " | Sobu";
+
+        String metaDesc = product.getMetaDescription() != null && !product.getMetaDescription().isBlank()
+                ? product.getMetaDescription()
+                : (product.getDescription() != null ? product.getDescription() : product.getName());
+
+        SeoMetadataDTO seo = SeoMetadataDTO.builder()
+                .seoTitle(seoTitle)
+                .metaDescription(metaDesc)
+                .canonicalUrl(product.getCanonicalUrl())
+                .robots("index, follow")
+                .ogTitle(seoTitle)
+                .ogDescription(metaDesc)
+                .ogImage(product.getAvatarImage())
+                .ogType("product")
+                .build();
 
         return ProductDetailDTO.builder()
                 .id(product.getId())
                 .externalId(product.getExternalId())
                 .name(product.getName())
+                .slug(slug)
+                .h1Title(product.getH1Title() != null ? product.getH1Title() : product.getName())
                 .otherName(product.getOtherName())
                 .code(product.getCode())
+                .sku(product.getCode())
                 .barcode(product.getBarcode())
                 .status(product.getStatus())
                 .description(product.getDescription())
@@ -264,17 +353,54 @@ public class ProductMapper {
                 .price(product.getRetailPrice())
                 .wholesalePrice(product.getWholesalePrice())
                 .oldPrice(product.getOldPrice())
+                .salePrice(product.getSalePrice() != null ? product.getSalePrice() : product.getRetailPrice())
+                .saleValidFrom(product.getSaleValidFrom())
+                .saleValidThrough(product.getSaleValidThrough())
+                .currency(product.getCurrency() != null ? product.getCurrency() : "VND")
                 .vat(product.getVat())
+                .conditionType(product.getConditionType() != null ? product.getConditionType() : "NEW")
+                .availability(product.getAvailability() != null ? product.getAvailability() : "IN_STOCK")
+                .preorderExpectedDate(product.getPreorderExpectedDate())
                 .avatarImage(product.getAvatarImage())
+                .avatarAltText(product.getName())
+                .brandId(product.getBrandId())
                 .brandName(product.getBrandName())
+                .brandSlug(brandSlug)
+                .categoryId(product.getCategoryId())
                 .categoryName(product.getCategoryName())
+                .categorySlug(categorySlug)
                 .stockAvailable(product.getStockAvailable())
                 .stockRemain(product.getStockRemain())
                 .units(unitDTOs)
                 .attributes(attributeDTOs)
                 .images(imageUrls)
+                .imageDetails(imageDetails)
                 .updatedAt(product.getUpdatedAt())
+                .active(product.getActive())
+                .badgeId(product.getBadgeId())
+                .badgeName(product.getBadgeName())
+                .badgeColor(product.getBadgeColor())
+                .badgeTextColor(product.getBadgeTextColor())
+                .seo(seo)
                 .build();
     }
-}
 
+    public ProductDetailDTO toPublicDetail(
+            Product product,
+            List<ProductUnit> units,
+            List<ProductAttribute> attributes,
+            List<ProductImage> images
+    ) {
+        ProductDetailDTO dto = toDetail(product, units, attributes, images);
+        return applyPublicPricing(dto, product);
+    }
+
+    public ProductDetailDTO applyPublicPricing(ProductDetailDTO dto, Product product) {
+        if (dto == null) return null;
+        ProductPricing.PriceView pricing = ProductPricing.resolve(product);
+        dto.setPrice(pricing.price());
+        dto.setSalePrice(pricing.price());
+        dto.setOldPrice(pricing.oldPrice());
+        return dto;
+    }
+}

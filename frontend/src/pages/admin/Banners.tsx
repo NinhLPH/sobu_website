@@ -1,5 +1,5 @@
 import {FormEvent, useCallback, useEffect, useMemo, useState} from 'react';
-import {ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Loader2, Search, X} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Loader2, X} from 'lucide-react';
 import {AdminUiService, buildBannerFormData} from '../../service/admin-ui.service';
 import {BannerDTO, BannerMutationPayload} from '../../interface/public-ui-config.model';
 import {PageResponse} from '../../interface/api-response';
@@ -7,7 +7,8 @@ import {getPublicImageUrl} from '../../utils/file-url';
 import {ToastService} from '../../service/toast.service';
 import {usePublicUiStore} from '../../store/usePublicUiStore';
 import {findBannerPositionOption} from '../../constants/banner-positions';
-import SearchSuggestInput, {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+import {SearchSuggestion} from '../../components/common/SearchSuggestInput';
+import {AdminButton, AdminSearch, AdminToolbar} from '../../components/admin/AdminUi';
 
 const emptyPage: PageResponse<BannerDTO> = {
     content: [], pageNumber: 1, pageSize: 10, totalElements: 0, totalPages: 0,
@@ -155,23 +156,16 @@ export default function AdminBanners() {
             <form onSubmit={(event) => {
                 event.preventDefault();
                 submitSearch(searchInput);
-            }} className="flex gap-3 rounded-2xl border border-outline-variant/30 bg-white p-4">
-                <div className="relative flex-1"><Search
-                    className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-outline"/><SearchSuggestInput
-                    value={searchInput} onChange={setSearchInput}
-                    onSubmit={submitSearch}
-                    suggestions={searchSuggestions}
-                    placeholder="Tìm theo tiêu đề banner..."
-                    ariaLabel="Tìm banner"
-                    className="w-full rounded-xl bg-surface-container py-2.5 pl-10 pr-4 text-xs font-semibold outline-none"/>
-                </div>
-                <button type="submit" className="rounded-xl bg-surface-container px-4 text-xs font-black">Tìm kiếm</button>
+            }} className="overflow-visible rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
+                <AdminToolbar className="rounded-2xl border-b-0"><AdminSearch value={searchInput} onChange={setSearchInput}
+                    onSubmit={submitSearch} suggestions={searchSuggestions} placeholder="Tìm theo tiêu đề banner..."
+                    ariaLabel="Tìm banner"/><AdminButton type="submit" variant="secondary">Tìm kiếm</AdminButton></AdminToolbar>
             </form>
 
             {error && !modalOpen && <div
                 className="rounded-xl border border-error/20 bg-error/10 p-4 text-xs font-bold text-error">{error}</div>}
 
-            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] text-left text-xs">
                         <thead className="bg-surface-variant text-on-surface-variant">
@@ -204,7 +198,7 @@ export default function AdminBanners() {
                                 <td className="px-5 py-3">{banner.deviceType}</td>
                                 <td className="px-5 py-3">{banner.displayOrder ?? 0}</td>
                                 <td className="px-5 py-3"><span
-                                    className={`rounded-full px-2.5 py-1 text-[10px] font-black ${banner.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{banner.isActive ? 'Hoạt động' : 'Không hoạt động'}</span>
+                                    className={`rounded-full px-2.5 py-1 text-[10px] font-black ${banner.isActive ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-surface-container text-outline'}`}>{banner.isActive ? 'Hoạt động' : 'Không hoạt động'}</span>
                                     <p className="mt-2 text-[10px] text-outline">{banner.startDate ? new Date(banner.startDate).toLocaleDateString('vi-VN') : 'Ngay lập tức'} → {banner.endDate ? new Date(banner.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}</p>
                                 </td>
                                 <td className="px-5 py-3">
@@ -243,7 +237,7 @@ export default function AdminBanners() {
             </div>
 
             {modalOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
-                <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-xl">
+                <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-surface shadow-xl">
                     <div className="flex items-center justify-between border-b border-outline-variant/30 p-6"><h2
                         className="text-xl font-black">Cập nhật banner</h2>
                         <button type="button" onClick={() => setModalOpen(false)} aria-label="Đóng"><X
@@ -267,7 +261,7 @@ export default function AdminBanners() {
                                 bi</label><select value={form.deviceType} onChange={(event) => setForm({
                                 ...form,
                                 deviceType: event.target.value as BannerMutationPayload['deviceType']
-                            })} className="w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm">
+                            })} className="admin-select w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm">
                                 <option value="ALL">ALL</option>
                                 <option value="WEB">WEB</option>
                                 <option value="MOBILE">MOBILE</option>

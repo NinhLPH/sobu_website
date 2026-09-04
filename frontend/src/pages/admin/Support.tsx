@@ -302,7 +302,7 @@ export default function AdminSupport() {
                 </button>
             </div>
 
-            <div className="grid h-[36rem] overflow-hidden rounded-2xl border border-outline-variant/30 bg-white shadow-sm lg:grid-cols-[20rem_minmax(0,1fr)]">
+            <div className="grid h-[36rem] overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface shadow-sm lg:grid-cols-[20rem_minmax(0,1fr)]">
                 <aside className="border-b border-outline-variant/30 bg-surface-container-lowest lg:border-b-0 lg:border-r">
                     <div className="flex items-center justify-between border-b border-outline-variant/20 px-4 py-3">
                         <p className="text-xs font-black uppercase tracking-widest text-outline">
@@ -333,7 +333,7 @@ export default function AdminSupport() {
                                     className={`mb-2 w-full cursor-pointer rounded-xl border px-3 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 ${
                                         isSelected
                                             ? 'border-primary bg-primary text-on-primary'
-                                            : 'border-outline-variant/20 bg-white text-on-surface hover:bg-surface-container-low'
+                                            : 'border-outline-variant/20 bg-surface text-on-surface hover:bg-surface-container-low'
                                     }`}
                                 >
                                     <p className="truncate text-sm font-black">
@@ -396,7 +396,7 @@ export default function AdminSupport() {
                                         className={`max-w-[76%] rounded-lg px-3 py-2 text-sm shadow-sm ${
                                             isMine
                                                 ? 'bg-primary text-on-primary'
-                                                : 'border border-outline-variant/35 bg-white text-on-surface'
+                                                : 'border border-outline-variant/35 bg-surface text-on-surface'
                                         }`}
                                     >
                                         <p className="whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
@@ -419,7 +419,7 @@ export default function AdminSupport() {
                             onChange={(event) => setDraft(event.target.value)}
                             disabled={!selectedConversationId || !isAuthenticatedSocket}
                             placeholder={selectedConversationId ? 'Nhập phản hồi...' : 'Chọn hội thoại'}
-                            className="min-w-0 flex-1 rounded-full border border-outline-variant/50 bg-white px-4 py-2.5 text-sm font-semibold text-on-surface outline-none transition-colors placeholder:text-outline disabled:cursor-not-allowed disabled:bg-surface-container-high focus:border-primary focus:ring-2 focus:ring-primary/20"
+                            className="min-w-0 flex-1 rounded-full border border-outline-variant/50 bg-surface px-4 py-2.5 text-sm font-semibold text-on-surface outline-none transition-colors placeholder:text-outline disabled:cursor-not-allowed disabled:bg-surface-container-high focus:border-primary focus:ring-2 focus:ring-primary/20"
                         />
                         <button
                             type="submit"

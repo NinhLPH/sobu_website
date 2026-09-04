@@ -1,4 +1,4 @@
-import React, { DragEvent, useRef, useState } from 'react';
+import { DragEvent, useRef, useState } from 'react';
 import { Loader2, Trash2, Upload } from 'lucide-react';
 import { FileService } from '../../service/file.service';
 import { getPublicImageUrl } from '../../utils/file-url';

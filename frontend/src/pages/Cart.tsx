@@ -1,6 +1,6 @@
-import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ExternalLink, Loader2, Minus, PhoneCall, Plus, Search, ShoppingBag, Trash2, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ExternalLink, Loader2, Minus, PhoneCall, Plus, RefreshCw, Search, ShoppingBag, TicketPercent, Trash2, X } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useLocationStore } from '../store/useLocationStore';
@@ -13,9 +13,13 @@ import { redirectToPaymentCheckout } from '../utils/payment-session';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
 import { ShippingService } from '../service/shipping.service';
 import { ShippingQuoteDto } from '../interface/shipping.model';
-import { LocationCity, LocationDistrict, LocationWard } from '../interface/location.model';
+import { LocationProvince, LocationWard } from '../interface/location.model';
 import { parseJsonConfig } from '../utils/website-config';
 import { getPaymentCheckoutErrorMessage } from '../utils/payment-checkout-error';
+import { useIntegrationStore } from '../store/useIntegrationStore';
+import { VoucherService } from '../service/voucher.service';
+import { ActiveVoucher, VoucherApplyResponse } from '../interface/voucher.model';
+import { useConfirmDialog } from '../components/common/ConfirmDialog';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -31,17 +35,15 @@ interface CheckoutForm {
     customerEmail: string;
     customerAddress: string;
     customerCityName: string;
-    customerDistrictName: string;
     customerWardName: string;
     customerCityId: number | null;
-    customerDistrictId: number | null;
     customerWardId: number | null;
     description: string;
 }
 
 type CheckoutTextField = Exclude<
     keyof CheckoutForm,
-    'customerCityId' | 'customerDistrictId' | 'customerWardId'
+    'customerCityId' | 'customerWardId'
 >;
 
 type SocialLinks = Record<string, string>;
@@ -52,10 +54,8 @@ const initialCheckoutForm: CheckoutForm = {
     customerEmail: '',
     customerAddress: '',
     customerCityName: '',
-    customerDistrictName: '',
     customerWardName: '',
     customerCityId: null,
-    customerDistrictId: null,
     customerWardId: null,
     description: ''
 };
@@ -106,16 +106,18 @@ const normalizeShippingQuote = (
     }
 
     const fee = shippingQuoteFee(quote);
+    const carrierId = parsePositiveInteger(quote.carrierId);
+    const carrierServiceId = parsePositiveInteger(quote.carrierServiceId);
 
-    if (!Number.isFinite(fee) || fee < 0) {
+    if (!Number.isFinite(fee) || fee < 0 || carrierId === null || carrierServiceId === null) {
         return null;
     }
 
     return {
         ...quote,
-        carrierId: parsePositiveInteger(quote.carrierId),
+        carrierId,
         carrierName: hasText(quote.carrierName) ? quote.carrierName.trim() : null,
-        carrierServiceId: parsePositiveInteger(quote.carrierServiceId),
+        carrierServiceId,
         carrierServiceName: hasText(quote.carrierServiceName) ? quote.carrierServiceName.trim() : null,
         shipFee: quote.shipFee === null || quote.shipFee === undefined
             ? quote.shipFee
@@ -129,14 +131,6 @@ const normalizeShippingQuote = (
 const isUsableShippingQuote = (
     quote: ShippingQuoteDto | null | undefined
 ): quote is CompleteShippingQuote => normalizeShippingQuote(quote) !== null;
-
-const TEMPORARY_SHIPPING_CARRIER_ID = 29;
-const TEMPORARY_SHIPPING_CARRIER_SERVICE_ID = 186;
-
-// TODO(backend): Remove this temporary checkout restriction after the shipping quotes contract is stable.
-const isTemporarySupportedShippingQuote = (quote: CompleteShippingQuote) =>
-    quote.carrierId === TEMPORARY_SHIPPING_CARRIER_ID &&
-    quote.carrierServiceId === TEMPORARY_SHIPPING_CARRIER_SERVICE_ID;
 
 const normalizeSearchText = (value: unknown) =>
     typeof value === 'string'
@@ -153,7 +147,8 @@ const shippingQuoteLabel = (quote: CompleteShippingQuote, index: number) =>
 
 const shippingQuoteKey = (quote: CompleteShippingQuote, index: number) =>
     [
-        index,
+        quote.carrierId,
+        quote.carrierServiceId,
         shippingQuoteMode(quote, index),
         shippingQuoteFee(quote)
     ].join('-');
@@ -163,6 +158,24 @@ const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.error ||
     error?.message ||
     fallback;
+
+const isInsufficientStockError = (error: any) =>
+    error?.response?.data?.code === 'INSUFFICIENT_STOCK'
+    || /insufficient stock for product/i.test(getErrorMessage(error, ''));
+
+const voucherBenefitText = (voucher: ActiveVoucher) => {
+    if (voucher.type === 'FREE_SHIP') {
+        return voucher.maxDiscountAmount
+            ? `Giảm phí ship tối đa ${formatCurrency(voucher.maxDiscountAmount)}`
+            : 'Miễn phí vận chuyển';
+    }
+    const benefit = voucher.type === 'DISCOUNT_PERCENT'
+        ? `Giảm ${voucher.value ?? 0}%`
+        : `Giảm ${formatCurrency(voucher.value ?? 0)}`;
+    return voucher.minOrderValue
+        ? `${benefit} · Đơn từ ${formatCurrency(voucher.minOrderValue)}`
+        : benefit;
+};
 
 interface LocationComboboxOption {
     id: number;
@@ -196,8 +209,12 @@ function LocationCombobox({
                           }: LocationComboboxProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
+    const [activeIndex, setActiveIndex] = useState(-1);
+    const id = useId();
     const rootRef = useRef<HTMLDivElement | null>(null);
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
+    const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const selectedOption = options.find((option) => option.id === value) ?? null;
     const filteredOptions = useMemo(() => {
         const normalizedQuery = normalizeSearchText(query.trim());
@@ -225,6 +242,7 @@ function LocationCombobox({
             window.setTimeout(() => searchInputRef.current?.focus(), 0);
         } else {
             setQuery('');
+            setActiveIndex(-1);
         }
     }, [isOpen]);
 
@@ -237,6 +255,7 @@ function LocationCombobox({
     const selectOption = (optionValue: number | null) => {
         onSelect(optionValue);
         setIsOpen(false);
+        window.setTimeout(() => triggerRef.current?.focus(), 0);
     };
 
     const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -248,13 +267,33 @@ function LocationCombobox({
         }
     };
 
+    const handleDropdownKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setIsOpen(false);
+            triggerRef.current?.focus();
+            return;
+        }
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        event.preventDefault();
+        const direction = event.key === 'ArrowDown' ? 1 : -1;
+        const nextIndex = Math.max(0, Math.min(filteredOptions.length - 1, activeIndex + direction));
+        setActiveIndex(nextIndex);
+        optionRefs.current[nextIndex]?.focus();
+    };
+
     return (
         <div ref={rootRef} className="relative">
+            <span id={`${id}-label`} className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-outline">
+                {label}
+            </span>
             <button
+                ref={triggerRef}
                 type="button"
-                aria-label={label}
+                aria-labelledby={`${id}-label`}
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
+                aria-controls={`${id}-listbox`}
                 onClick={openDropdown}
                 onKeyDown={handleKeyDown}
                 disabled={disabled}
@@ -268,7 +307,10 @@ function LocationCombobox({
                 <ChevronDown className={`h-4 w-4 shrink-0 text-outline transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
             {isOpen && (
-                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-surface-container bg-surface-container-lowest p-2 shadow-xl shadow-black/10">
+                <div
+                    onKeyDown={handleDropdownKeyDown}
+                    className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-surface-container bg-surface-container-lowest p-2 shadow-xl shadow-black/10"
+                >
                     <div className="relative mb-2">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-outline" />
                         <input
@@ -277,10 +319,10 @@ function LocationCombobox({
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder={searchPlaceholder}
-                            className="h-9 w-full rounded-lg border border-surface-container bg-white pl-9 pr-3 text-xs font-medium text-on-surface outline-none transition-colors placeholder:text-outline/60 focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
+                            className="h-9 w-full rounded-lg border border-surface-container bg-surface pl-9 pr-3 text-xs font-medium text-on-surface outline-none transition-colors placeholder:text-outline/60 focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
                         />
                     </div>
-                    <div role="listbox" aria-label={label} className="max-h-[220px] overflow-y-auto pr-1">
+                    <div id={`${id}-listbox`} role="listbox" aria-labelledby={`${id}-label`} className="max-h-[220px] overflow-y-auto pr-1">
                         <button
                             type="button"
                             role="option"
@@ -293,6 +335,9 @@ function LocationCombobox({
                         {filteredOptions.map((option) => (
                             <button
                                 key={option.id}
+                                ref={(element) => {
+                                    optionRefs.current[filteredOptions.indexOf(option)] = element;
+                                }}
                                 type="button"
                                 role="option"
                                 aria-selected={option.id === value}
@@ -321,22 +366,14 @@ function LocationCombobox({
     );
 }
 
-const cityToComboboxOption = (city: LocationCity): LocationComboboxOption => ({
-    id: city.cityId,
-    name: city.cityName,
-    otherName: city.otherName
-});
-
-const districtToComboboxOption = (district: LocationDistrict): LocationComboboxOption => ({
-    id: district.districtId,
-    name: district.districtName,
-    otherName: district.otherName
+const provinceToComboboxOption = (province: LocationProvince): LocationComboboxOption => ({
+    id: province.id,
+    name: province.name
 });
 
 const wardToComboboxOption = (ward: LocationWard): LocationComboboxOption => ({
-    id: ward.wardId,
-    name: ward.wardName,
-    otherName: ward.otherName
+    id: ward.id,
+    name: ward.name
 });
 
 const locationSelectValue = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
@@ -418,7 +455,12 @@ export default function Cart() {
         getTotals,
         submitOrder,
         isSubmitting,
+        isHydratingProducts,
+        hydrationError,
+        hydrateProducts,
         checkoutError,
+        cartLoadError,
+        hasLegacyEmptyCart,
         clearCheckoutError,
         fetchCart
     } = useCartStore();
@@ -428,16 +470,26 @@ export default function Cart() {
     } = usePaymentStore();
     const configMap = usePublicUiStore((state) => state.configMap);
     const {
-        locationTree,
+        provinces,
+        wards,
         locationsLoaded,
         isLoading: isLocationsLoading,
+        isLoadingWards,
+        notice: locationNotice,
         error: locationError,
-        fetchLocations,
+        initialize: initializeLocations,
+        selectProvince,
+        retry: retryLocations,
         cancelScheduledRetry
     } = useLocationStore();
+    const nhanhEnabled = useIntegrationStore((state) => state.nhanhEnabled);
+    const integrationLoaded = useIntegrationStore((state) => state.loaded);
+    const integrationLoading = useIntegrationStore((state) => state.loading);
+    const ensureIntegrationLoaded = useIntegrationStore((state) => state.ensureLoaded);
     const { subtotal, itemCount } = getTotals();
     const { isAuthenticated, user } = useAuthStore();
     const navigate = useNavigate();
+    const confirm = useConfirmDialog();
     const [form, setForm] = useState<CheckoutForm>(initialCheckoutForm);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ONLINE');
     const [validationError, setValidationError] = useState<string | null>(null);
@@ -447,7 +499,17 @@ export default function Cart() {
     const [isLoadingShippingQuotes, setIsLoadingShippingQuotes] = useState(false);
     const [isConfirmingShippingQuote, setIsConfirmingShippingQuote] = useState(false);
     const [shippingQuoteError, setShippingQuoteError] = useState<string | null>(null);
+    const [shippingQuoteRetry, setShippingQuoteRetry] = useState(0);
+    const [activeVouchers, setActiveVouchers] = useState<ActiveVoucher[]>([]);
+    const [voucherInput, setVoucherInput] = useState('');
+    const [discountVoucherCode, setDiscountVoucherCode] = useState('');
+    const [shippingVoucherCode, setShippingVoucherCode] = useState('');
+    const [voucherPreview, setVoucherPreview] = useState<VoucherApplyResponse | null>(null);
+    const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
+    const [isApplyingVouchers, setIsApplyingVouchers] = useState(false);
+    const [voucherError, setVoucherError] = useState<string | null>(null);
     const confirmShippingQuoteRequestRef = useRef(0);
+    const voucherPreviewRequestRef = useRef(0);
     const socialLinks = useMemo(
         () => parseJsonConfig<SocialLinks>(configMap, 'social_links', {}),
         [configMap]
@@ -455,12 +517,42 @@ export default function Cart() {
     const facebookSupportUrl = socialLinks.facebook?.trim() || '';
 
     useEffect(() => {
-        void fetchLocations(true);
+        void ensureIntegrationLoaded();
         if (isAuthenticated) {
-            void fetchCart();
+            void Promise.resolve(fetchCart()).then(() => hydrateProducts());
         }
         return cancelScheduledRetry;
-    }, [fetchLocations, cancelScheduledRetry, fetchCart, isAuthenticated]);
+    }, [ensureIntegrationLoaded, cancelScheduledRetry, fetchCart, hydrateProducts, isAuthenticated, user?.id]);
+
+    useEffect(() => {
+        if (integrationLoaded) {
+            void initializeLocations(nhanhEnabled, { autoRetry: true });
+        }
+    }, [initializeLocations, integrationLoaded, nhanhEnabled]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setIsLoadingVouchers(true);
+        void VoucherService.getActive()
+            .then((response) => {
+                if (cancelled) return;
+                if (!response.success) throw new Error(response.message || 'Could not load vouchers.');
+                setActiveVouchers(response.data ?? []);
+            })
+            .catch((error) => {
+                if (!cancelled) {
+                    const message = getErrorMessage(error, 'Không thể tải voucher gợi ý.');
+                    setVoucherError(message);
+                    ToastService.error(message);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoadingVouchers(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         if (!user) {
@@ -483,26 +575,12 @@ export default function Cart() {
         clearCheckoutError();
     };
 
-    const cities = useMemo(() => locationTree?.cities ?? [], [locationTree]);
-    const selectedCity = useMemo(
-        () => cities.find((city) => city.cityId === form.customerCityId),
-        [cities, form.customerCityId]
-    );
-    const districts = useMemo(() => selectedCity?.districts ?? [], [selectedCity]);
-    const selectedDistrict = useMemo(
-        () => districts.find((district) => district.districtId === form.customerDistrictId),
-        [districts, form.customerDistrictId]
-    );
-    const wards = useMemo(() => selectedDistrict?.wards ?? [], [selectedDistrict]);
-    const cityOptions = useMemo(() => cities.map(cityToComboboxOption), [cities]);
-    const districtOptions = useMemo(() => districts.map(districtToComboboxOption), [districts]);
+    const provinceOptions = useMemo(() => provinces.map(provinceToComboboxOption), [provinces]);
     const wardOptions = useMemo(() => wards.map(wardToComboboxOption), [wards]);
     const hasSelectedShippingLocation =
         form.customerCityId !== null &&
-        form.customerDistrictId !== null &&
         form.customerWardId !== null &&
         Boolean(form.customerCityName) &&
-        Boolean(form.customerDistrictName) &&
         Boolean(form.customerWardName);
     const selectedShippingQuote = shippingQuotes.find(
         (quote, index) => shippingQuoteKey(quote, index) === selectedShippingQuoteKey
@@ -511,12 +589,19 @@ export default function Cart() {
     const selectedShippingFee = isUsableShippingQuote(displayShippingQuote)
         ? shippingQuoteFee(displayShippingQuote)
         : 0;
-    const orderTotal = subtotal + selectedShippingFee;
+    const orderTotal = voucherPreview?.finalTotal ?? subtotal + selectedShippingFee;
     const isCheckoutDisabled =
         isSubmitting ||
         isCreatingPayment ||
+        integrationLoading ||
+        !integrationLoaded ||
+        isHydratingProducts ||
+        Boolean(hydrationError) ||
         isLoadingShippingQuotes ||
         isConfirmingShippingQuote ||
+        isApplyingVouchers ||
+        Boolean(voucherError) ||
+        !voucherPreview ||
         !locationsLoaded ||
         items.length === 0 ||
         !isUsableShippingQuote(confirmedShippingQuote);
@@ -529,7 +614,6 @@ export default function Cart() {
 
         return {
             customerCityId: form.customerCityId as number,
-            customerDistrictId: form.customerDistrictId as number,
             customerWardId: form.customerWardId as number,
             cartSubtotal: subtotal,
             codAmount: paymentMethod === 'COD' ? subtotal : 0,
@@ -542,7 +626,6 @@ export default function Cart() {
         };
     }, [
         form.customerCityId,
-        form.customerDistrictId,
         form.customerWardId,
         paymentMethod,
         subtotal
@@ -575,8 +658,7 @@ export default function Cart() {
                 const quotes = response.data ?? [];
                 const usableQuotes = quotes
                     .map(normalizeShippingQuote)
-                    .filter((quote): quote is CompleteShippingQuote => quote !== null)
-                    .filter(isTemporarySupportedShippingQuote);
+                    .filter((quote): quote is CompleteShippingQuote => quote !== null);
                 setShippingQuotes(usableQuotes);
                 if (usableQuotes.length === 0) {
                     setShippingQuoteError(
@@ -605,8 +687,93 @@ export default function Cart() {
     }, [
         buildShippingQuoteRequest,
         hasSelectedShippingLocation,
+        shippingQuoteRetry,
         subtotal
     ]);
+
+    useEffect(() => {
+        const confirmedFee = isUsableShippingQuote(confirmedShippingQuote)
+            ? shippingQuoteFee(confirmedShippingQuote)
+            : null;
+        voucherPreviewRequestRef.current += 1;
+        const requestId = voucherPreviewRequestRef.current;
+        setVoucherPreview(null);
+        setVoucherError(null);
+
+        if (confirmedFee === null || isHydratingProducts || hydrationError || items.length === 0) {
+            setIsApplyingVouchers(false);
+            return;
+        }
+
+        const controller = new AbortController();
+        setIsApplyingVouchers(true);
+        void VoucherService.apply({
+            discountVoucherCode: discountVoucherCode || undefined,
+            shippingVoucherCode: shippingVoucherCode || undefined,
+            subtotal,
+            shippingFee: confirmedFee,
+            items: items.map(({ product, quantity }) => ({
+                productId: Number(product.id),
+                categoryId: product.categoryId ? Number(product.categoryId) : undefined,
+                name: product.name,
+                price: product.price,
+                quantity
+            })),
+            customerCityName: form.customerCityName || undefined,
+            customerWardName: form.customerWardName || undefined,
+            customerCityId: form.customerCityId ?? undefined,
+            customerWardId: form.customerWardId ?? undefined,
+            autoApply: true
+        }, controller.signal)
+            .then((response) => {
+                if (requestId !== voucherPreviewRequestRef.current) return;
+                if (!response.success || !response.data) {
+                    throw new Error(response.message || 'Could not preview vouchers.');
+                }
+                if (!response.data.valid) {
+                    throw new Error(response.data.message || 'Voucher không hợp lệ.');
+                }
+                setVoucherPreview(response.data);
+                setVoucherError(null);
+            })
+            .catch((error) => {
+                if (requestId === voucherPreviewRequestRef.current && error?.code !== 'ERR_CANCELED') {
+                    const message = getErrorMessage(error, 'Không thể tính ưu đãi. Vui lòng thử lại.');
+                    setVoucherError(message);
+                    ToastService.error(message);
+                }
+            })
+            .finally(() => {
+                if (requestId === voucherPreviewRequestRef.current) setIsApplyingVouchers(false);
+            });
+
+        return () => controller.abort();
+    }, [
+        confirmedShippingQuote,
+        discountVoucherCode,
+        form.customerCityId,
+        form.customerCityName,
+        form.customerWardId,
+        form.customerWardName,
+        hydrationError,
+        isHydratingProducts,
+        items,
+        shippingVoucherCode,
+        subtotal
+    ]);
+
+    const applyVoucherCode = (rawCode: string) => {
+        const code = rawCode.trim().toUpperCase();
+        if (!code) return;
+        const voucher = activeVouchers.find((item) => item.code.toUpperCase() === code);
+        if (voucher?.slot === 'SHIPPING' || voucher?.type === 'FREE_SHIP') {
+            setShippingVoucherCode(code);
+        } else {
+            setDiscountVoucherCode(code);
+        }
+        setVoucherInput('');
+        setVoucherError(null);
+    };
 
     const handleShippingQuoteSelect = async (quote: ShippingQuoteDto, index: number) => {
         if (!isUsableShippingQuote(quote)) {
@@ -646,7 +813,6 @@ export default function Cart() {
             const confirmedQuote = (response.data ?? [])
                 .map(normalizeShippingQuote)
                 .filter((item): item is CompleteShippingQuote => item !== null)
-                .filter(isTemporarySupportedShippingQuote)
                 .find((item): item is CompleteShippingQuote =>
                     shippingQuoteKey(item, index) === key
                 );
@@ -668,46 +834,30 @@ export default function Cart() {
         }
     };
 
-    const handleCityChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
-        const cityId = locationSelectValue(value);
-        const city = cities.find((item) => item.cityId === cityId);
+    const handleProvinceChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
+        const provinceId = locationSelectValue(value);
+        const province = provinces.find((item) => item.id === provinceId);
 
         setForm((current) => ({
             ...current,
-            customerCityId: city?.cityId ?? null,
-            customerCityName: city?.cityName ?? '',
-            customerDistrictId: null,
-            customerDistrictName: '',
+            customerCityId: province?.id ?? null,
+            customerCityName: province?.name ?? '',
             customerWardId: null,
             customerWardName: ''
         }));
-        setValidationError(null);
-        clearCheckoutError();
-    };
-
-    const handleDistrictChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
-        const districtId = locationSelectValue(value);
-        const district = districts.find((item) => item.districtId === districtId);
-
-        setForm((current) => ({
-            ...current,
-            customerDistrictId: district?.districtId ?? null,
-            customerDistrictName: district?.districtName ?? '',
-            customerWardId: null,
-            customerWardName: ''
-        }));
+        selectProvince(provinceId);
         setValidationError(null);
         clearCheckoutError();
     };
 
     const handleWardChange = (value: number | null | ChangeEvent<HTMLSelectElement>) => {
         const wardId = locationSelectValue(value);
-        const ward = wards.find((item) => item.wardId === wardId);
+        const ward = wards.find((item) => item.id === wardId);
 
         setForm((current) => ({
             ...current,
-            customerWardId: ward?.wardId ?? null,
-            customerWardName: ward?.wardName ?? ''
+            customerWardId: ward?.id ?? null,
+            customerWardName: ward?.name ?? ''
         }));
         setValidationError(null);
         clearCheckoutError();
@@ -728,27 +878,36 @@ export default function Cart() {
             return;
         }
 
-        if (form.customerAddress.trim().length > MAX_CUSTOMER_ADDRESS_LENGTH) {
+        const detailedAddress = form.customerAddress.trim();
+        if (!detailedAddress) {
+            setValidationError('Vui lòng nhập địa chỉ chi tiết để giao hàng.');
+            return;
+        }
+
+        if (detailedAddress.length > MAX_CUSTOMER_ADDRESS_LENGTH) {
             setValidationError('Dia chi giao hang khong duoc vuot qua 500 ky tu.');
             return;
         }
 
         if (
             form.customerCityId === null ||
-            form.customerDistrictId === null ||
             form.customerWardId === null ||
             !form.customerCityName ||
-            !form.customerDistrictName ||
             !form.customerWardName
         ) {
             setValidationError(
-                'Vui lòng chọn đầy đủ tỉnh/thành phố, quận/huyện và phường/xã.'
+                'Vui lòng chọn đầy đủ tỉnh/thành phố và phường/xã.'
             );
             return;
         }
 
         if (!isUsableShippingQuote(confirmedShippingQuote)) {
             setValidationError('Vui lòng chọn đơn vị giao hàng trước khi đặt hàng.');
+            return;
+        }
+
+        if (!voucherPreview || voucherError) {
+            setValidationError('Vui lòng chờ hệ thống xác nhận tổng thanh toán.');
             return;
         }
 
@@ -761,14 +920,16 @@ export default function Cart() {
                 customerName: form.customerName.trim(),
                 customerMobile: form.customerMobile.trim(),
                 customerEmail: form.customerEmail.trim() || undefined,
-                customerAddress: form.customerAddress.trim() || undefined,
+                customerAddress: detailedAddress,
                 customerCityName: form.customerCityName,
-                customerDistrictName: form.customerDistrictName,
                 customerWardName: form.customerWardName,
                 customerCityId: form.customerCityId,
-                customerDistrictId: form.customerDistrictId,
                 customerWardId: form.customerWardId,
                 shippingFee,
+                // Preserve explicit customer choices. The preview's generic discount code
+                // prefers ORDER over ITEM and can otherwise replace a manual ITEM voucher.
+                discountVoucherCode: discountVoucherCode || voucherPreview.discountVoucherCode || undefined,
+                shippingVoucherCode: shippingVoucherCode || voucherPreview.shippingVoucherCode || undefined,
                 ...(carrierId !== null && carrierServiceId !== null
                     ? {
                         carrierId,
@@ -804,10 +965,38 @@ export default function Cart() {
                     { replace: true }
                 );
             }
-        } catch {
-            // The cart store exposes the backend error through checkoutError.
+        } catch (error: any) {
+            if (isInsufficientStockError(error)) {
+                clearCheckoutError();
+                ToastService.error('Sản phẩm vượt quá số lượng hiện có trong kho');
+            }
         }
     };
+
+    const retryCart = async () => {
+        if (hasLegacyEmptyCart) {
+            const confirmed = await confirm({
+                title: 'Tải giỏ từ máy chủ?',
+                message: 'Giỏ dự phòng cũ đang trống. Tải từ máy chủ có thể khôi phục các món bạn đã xóa trước đó. Bạn có muốn tiếp tục?',
+                confirmLabel: 'Tải giỏ từ máy chủ',
+                tone: 'warning'
+            });
+            if (!confirmed) return;
+        }
+        await fetchCart({ recoverLegacyEmpty: Boolean(hasLegacyEmptyCart) });
+        await hydrateProducts();
+    };
+    const cartLoadNotice = (cartLoadError || hasLegacyEmptyCart) && (
+        <div role="alert" className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
+            <span>{cartLoadError || 'Giỏ dự phòng cũ đang trống, chưa xác nhận được giỏ trên máy chủ.'}</span>
+            <button type="button" disabled={isLoading || isSubmitting || isCreatingPayment}
+                onClick={() => void retryCart()}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-400 px-3 py-2 focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-wait disabled:opacity-50">
+                <RefreshCw className="h-3.5 w-3.5" />
+                {hasLegacyEmptyCart ? 'Tải giỏ từ máy chủ' : 'Thử lại'}
+            </button>
+        </div>
+    );
 
     if (isLoading) {
         return (
@@ -824,10 +1013,13 @@ export default function Cart() {
                 <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-surface-container shadow-inner">
                     <ShoppingBag className="h-10 w-10 text-primary opacity-40" />
                 </div>
-                <h2 className="mb-2 text-2xl font-black text-on-surface">Giỏ hàng trống</h2>
+                <h2 className="mb-2 text-2xl font-black text-on-surface">
+                    {cartLoadError || hasLegacyEmptyCart ? 'Chưa tải được giỏ hàng' : 'Giỏ hàng trống'}
+                </h2>
                 <p className="mb-8 text-xs font-medium text-on-surface-variant">
-                    Bạn chưa chọn sản phẩm nào.
+                    {cartLoadError || hasLegacyEmptyCart ? 'Vui lòng kiểm tra lại giỏ hàng trước khi tiếp tục.' : 'Bạn chưa chọn sản phẩm nào.'}
                 </p>
+                {cartLoadNotice}
                 <Link
                     to="/products"
                     className="rounded-xl bg-primary px-8 py-3 text-xs font-bold uppercase tracking-wider text-on-primary shadow-md transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -861,11 +1053,33 @@ export default function Cart() {
                 <span className="text-sm font-black text-primary">{itemCount} sản phẩm</span>
             </header>
 
+            {cartLoadNotice}
             <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="space-y-8 lg:col-span-7">
-                    {(validationError || checkoutError || locationError || shippingQuoteError) && (
-                        <div className="rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">
-                            {validationError || checkoutError || locationError || shippingQuoteError}
+                    {(validationError || checkoutError || locationError || hydrationError || shippingQuoteError) && (
+                        <div role="alert" aria-live="assertive" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-xs font-bold text-error">
+                            <span>{validationError || checkoutError || locationError || hydrationError || shippingQuoteError}</span>
+                            {locationError && (
+                                <button type="button" onClick={() => void retryLocations()} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-error/30 px-3 py-2 transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error/30">
+                                    <RefreshCw className="h-3.5 w-3.5" /> Thử lại địa chỉ
+                                </button>
+                            )}
+                            {hydrationError && (
+                                <button type="button" onClick={() => void hydrateProducts()} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-error/30 px-3 py-2 transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error/30">
+                                    <RefreshCw className="h-3.5 w-3.5" /> Tải lại sản phẩm
+                                </button>
+                            )}
+                            {shippingQuoteError && (
+                                <button type="button" onClick={() => setShippingQuoteRetry((value) => value + 1)} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-error/30 px-3 py-2 transition-colors hover:bg-error/10 focus-visible:ring-2 focus-visible:ring-error/30">
+                                    <RefreshCw className="h-3.5 w-3.5" /> Tính lại phí ship
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {locationNotice && (
+                        <div aria-live="polite" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
+                            {locationNotice}
                         </div>
                     )}
 
@@ -876,6 +1090,7 @@ export default function Cart() {
                         <div className="space-y-3">
                             <input
                                 type="text"
+                                aria-label="Họ và tên khách hàng"
                                 value={form.customerName}
                                 onChange={(event) => updateField('customerName', event.target.value)}
                                 disabled={isSubmitting || isCreatingPayment}
@@ -885,6 +1100,7 @@ export default function Cart() {
                             />
                             <input
                                 type="tel"
+                                aria-label="Số điện thoại di động"
                                 value={form.customerMobile}
                                 onChange={(event) => updateField('customerMobile', event.target.value)}
                                 disabled={isSubmitting || isCreatingPayment}
@@ -894,6 +1110,7 @@ export default function Cart() {
                             />
                             <input
                                 type="email"
+                                aria-label="Email"
                                 value={form.customerEmail}
                                 onChange={(event) => updateField('customerEmail', event.target.value)}
                                 disabled={isSubmitting || isCreatingPayment}
@@ -908,41 +1125,35 @@ export default function Cart() {
                             Thông tin vận chuyển
                         </h2>
                         <div className="space-y-3">
-                            <input
-                                type="text"
-                                value={form.customerAddress}
-                                onChange={(event) => updateField('customerAddress', event.target.value)}
-                                disabled={isSubmitting || isCreatingPayment}
-                                maxLength={MAX_CUSTOMER_ADDRESS_LENGTH}
-                                placeholder="Địa chỉ giao hàng chi tiết (Địa chỉ sau sát nhập)"
-                                className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                            />
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <label className="block text-[10px] font-black uppercase tracking-wider text-outline">
+                                Địa chỉ giao nhận
+                                <input
+                                    type="text"
+                                    aria-label="Địa chỉ chi tiết"
+                                    value={form.customerAddress}
+                                    onChange={(event) => updateField('customerAddress', event.target.value)}
+                                    disabled={isSubmitting || isCreatingPayment}
+                                    maxLength={MAX_CUSTOMER_ADDRESS_LENGTH}
+                                    placeholder="Địa chỉ chi tiết *"
+                                    className="mt-1.5 w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </label>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <LocationCombobox
                                     label="Tỉnh/Thành phố"
                                     placeholder="Tỉnh/Thành phố *"
-                                    options={cityOptions}
+                                    options={provinceOptions}
                                     value={form.customerCityId}
-                                    onSelect={handleCityChange}
+                                    onSelect={handleProvinceChange}
                                     disabled={
                                         isSubmitting ||
                                         isCreatingPayment ||
+                                        !integrationLoaded ||
+                                        integrationLoading ||
                                         isLocationsLoading ||
                                         !locationsLoaded
                                     }
                                     loading={isLocationsLoading}
-                                />
-                                <LocationCombobox
-                                    label="Quận/Huyện"
-                                    placeholder="Quận/Huyện *"
-                                    options={districtOptions}
-                                    value={form.customerDistrictId}
-                                    onSelect={handleDistrictChange}
-                                    disabled={
-                                        isSubmitting ||
-                                        isCreatingPayment ||
-                                        !selectedCity
-                                    }
                                 />
                                 <LocationCombobox
                                     label="Phường/Xã"
@@ -953,75 +1164,16 @@ export default function Cart() {
                                     disabled={
                                         isSubmitting ||
                                         isCreatingPayment ||
-                                        !selectedDistrict
+                                        !integrationLoaded ||
+                                        integrationLoading ||
+                                        form.customerCityId === null ||
+                                        isLoadingWards
                                     }
+                                    loading={isLoadingWards}
                                 />
                             </div>
-                            <div hidden aria-hidden="true" className="hidden">
-                                <select
-                                    value={form.customerCityId ?? ''}
-                                    onChange={handleCityChange}
-                                    disabled={
-                                        isSubmitting ||
-                                        isCreatingPayment ||
-                                        isLocationsLoading ||
-                                        !locationsLoaded
-                                    }
-                                    className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                    required
-                                >
-                                    <option value="">
-                                        {isLocationsLoading ? 'Đang tải...' : 'Tỉnh / Thành phố *'}
-                                    </option>
-                                    {cities.map((city) => (
-                                        <option key={city.cityId} value={city.cityId}>
-                                            {city.cityName}
-                                        </option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={form.customerDistrictId ?? ''}
-                                    onChange={handleDistrictChange}
-                                    disabled={
-                                        isSubmitting ||
-                                        isCreatingPayment ||
-                                        !selectedCity
-                                    }
-                                    className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                    required
-                                >
-                                    <option value="">Quận/Huyện *</option>
-                                    {districts.map((district) => (
-                                        <option key={district.districtId} value={district.districtId}>
-                                            {district.districtName}
-                                        </option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={form.customerWardId ?? ''}
-                                    onChange={handleWardChange}
-                                    disabled={
-                                        isSubmitting ||
-                                        isCreatingPayment ||
-                                        !selectedDistrict
-                                    }
-                                    className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                    required
-                                >
-                                    <option value="">Phường/Xã *</option>
-                                    {wards.map((ward) => (
-                                        <option key={ward.wardId} value={ward.wardId}>
-                                            {ward.wardName}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            {locationTree?.stale && (
-                                <p className="text-xs font-semibold text-amber-700">
-                                    Đang sử dụng dữ liệu địa điểm được lưu gần nhất.
-                                </p>
-                            )}
                             <textarea
+                                aria-label="Ghi chú giao hàng"
                                 value={form.description}
                                 onChange={(event) => updateField('description', event.target.value)}
                                 disabled={isSubmitting || isCreatingPayment}
@@ -1084,7 +1236,7 @@ export default function Cart() {
                             </legend>
                             {!hasSelectedShippingLocation && (
                                 <p className="mt-2 text-xs font-semibold text-on-surface-variant">
-                                    Chọn đầy đủ tỉnh/thành, quận/huyện và phường/xã để tính phí giao hàng.
+                                    Chọn đầy đủ tỉnh/thành phố và phường/xã để tính phí giao hàng.
                                 </p>
                             )}
                             {hasSelectedShippingLocation && isLoadingShippingQuotes && (
@@ -1192,7 +1344,7 @@ export default function Cart() {
                                                     )}
                                                     <a
                                                         href="tel:0963340529"
-                                                        className="inline-flex min-h-[34px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-wider text-amber-900 transition-colors hover:border-primary/50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-amber-300/50"
+                                                        className="inline-flex min-h-[34px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-500/40 bg-surface px-3 py-2 text-[11px] font-black uppercase tracking-wider text-amber-800 transition-colors hover:border-primary/50 hover:text-primary focus:outline-none focus:ring-2 focus:ring-amber-500/40 dark:text-amber-200"
                                                     >
                                                         <PhoneCall className="h-3.5 w-3.5" />
                                                         0963340529
@@ -1205,11 +1357,120 @@ export default function Cart() {
                             )}
                         </fieldset>
 
+                        <section className="mb-5 border-t border-surface-container-high pt-4" aria-labelledby="checkout-voucher-title">
+                            <div className="flex items-center justify-between gap-3">
+                                <h4 id="checkout-voucher-title" className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-outline">
+                                    <TicketPercent className="h-4 w-4 text-primary" /> Voucher
+                                </h4>
+                                {(isLoadingVouchers || isApplyingVouchers) && (
+                                    <span aria-live="polite" className="inline-flex items-center gap-1.5 text-[10px] font-bold text-primary">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Đang kiểm tra
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="mt-3 flex min-w-0 gap-2">
+                                <label htmlFor="checkout-voucher-code" className="sr-only">Mã voucher</label>
+                                <input
+                                    id="checkout-voucher-code"
+                                    type="text"
+                                    value={voucherInput}
+                                    onChange={(event) => setVoucherInput(event.target.value.toUpperCase())}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            event.preventDefault();
+                                            applyVoucherCode(voucherInput);
+                                        }
+                                    }}
+                                    disabled={isSubmitting || isCreatingPayment}
+                                    placeholder="Nhập mã voucher"
+                                    className="min-w-0 flex-1 rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-bold uppercase text-on-surface outline-none placeholder:normal-case placeholder:font-medium focus:ring-2 focus:ring-primary/20"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => applyVoucherCode(voucherInput)}
+                                    disabled={!voucherInput.trim() || isSubmitting || isCreatingPayment}
+                                    className="cursor-pointer rounded-xl bg-primary px-4 py-2.5 text-xs font-black uppercase text-on-primary transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Áp dụng
+                                </button>
+                            </div>
+
+                            {(discountVoucherCode || shippingVoucherCode) && (
+                                <div className="mt-3 flex flex-wrap gap-2" aria-label="Mã voucher đã nhập">
+                                    {discountVoucherCode && (
+                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-black text-primary">
+                                            <Check className="h-3.5 w-3.5" /> {discountVoucherCode}
+                                            <button type="button" aria-label={`Xóa voucher ${discountVoucherCode}`} onClick={() => setDiscountVoucherCode('')} className="cursor-pointer rounded-full p-0.5 transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary/30">
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </span>
+                                    )}
+                                    {shippingVoucherCode && (
+                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-black text-primary">
+                                            <Check className="h-3.5 w-3.5" /> {shippingVoucherCode}
+                                            <button type="button" aria-label={`Xóa voucher ${shippingVoucherCode}`} onClick={() => setShippingVoucherCode('')} className="cursor-pointer rounded-full p-0.5 transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary/30">
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            {(voucherPreview?.appliedVouchers?.length ?? 0) > 0 && (
+                                <div className="mt-3" aria-live="polite">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-outline">Ưu đãi đang áp dụng</p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {voucherPreview?.appliedVouchers.map(voucher => (
+                                            <span key={`${voucher.slot}-${voucher.code}`} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-black text-emerald-800">
+                                                <Check className="h-3.5 w-3.5"/>
+                                                {voucher.code} · -{formatCurrency(voucher.discountAmount)}
+                                                <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-emerald-700">
+                                                    {voucher.autoApplied ? 'Tự động' : 'Đã nhập'}
+                                                </span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeVouchers.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-[10px] font-black uppercase tracking-wider text-outline">Gợi ý cho bạn</p>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {activeVouchers.slice(0, 4).map((voucher) => (
+                                            <button
+                                                key={voucher.id}
+                                                type="button"
+                                                onClick={() => applyVoucherCode(voucher.code)}
+                                                className="min-w-0 cursor-pointer rounded-xl border border-surface-container-high bg-surface-container-lowest px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-primary/30"
+                                            >
+                                                <span className="block truncate text-xs font-black text-on-surface">{voucher.code}</span>
+                                                <span className="mt-0.5 block text-[10px] font-semibold leading-relaxed text-on-surface-variant">{voucherBenefitText(voucher)}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+
                         <div className="space-y-2.5 border-t border-surface-container-high pt-4 text-xs font-bold">
                             <div className="flex justify-between text-on-surface-variant">
                                 <span>Tạm tính</span>
                                 <span>{formatCurrency(subtotal)}</span>
                             </div>
+                            {(voucherPreview?.itemDiscount ?? 0) > 0 && (
+                                <div className="flex justify-between text-emerald-700">
+                                    <span>Giảm sản phẩm</span>
+                                    <span>-{formatCurrency(voucherPreview?.itemDiscount ?? 0)}</span>
+                                </div>
+                            )}
+                            {(voucherPreview?.orderDiscount ?? 0) > 0 && (
+                                <div className="flex justify-between text-emerald-700">
+                                    <span>Giảm toàn đơn</span>
+                                    <span>-{formatCurrency(voucherPreview?.orderDiscount ?? 0)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-on-surface-variant">
                                 <span>Phí giao hàng</span>
                                 <span className="text-[10px] uppercase tracking-wider text-primary">
@@ -1222,12 +1483,23 @@ export default function Cart() {
                                                 : 'Chưa chọn'}
                                 </span>
                             </div>
+                            {(voucherPreview?.shippingDiscount ?? 0) > 0 && (
+                                <div className="flex justify-between text-emerald-700">
+                                    <span>Giảm phí giao hàng</span>
+                                    <span>-{formatCurrency(voucherPreview?.shippingDiscount ?? 0)}</span>
+                                </div>
+                            )}
                             <div className="mt-2 flex items-end justify-between border-t border-dashed border-surface-container-high pt-3">
                                 <span className="text-sm font-black uppercase">Tổng thanh toán</span>
                                 <span className="text-xl font-black leading-none tracking-tight text-primary sm:text-2xl">
                                     {formatCurrency(orderTotal)}
                                 </span>
                             </div>
+                            {isApplyingVouchers && (
+                                <p aria-live="polite" className="text-right text-[10px] font-semibold text-primary">
+                                    Đang cập nhật tổng thanh toán...
+                                </p>
+                            )}
                         </div>
 
                         <label className="mt-5 block text-[10px] font-black uppercase tracking-wider text-outline">
