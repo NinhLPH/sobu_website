@@ -99,10 +99,19 @@ describe('ChatDock', () => {
             user: mockUser
         };
         (global as any).WebSocket = MockWebSocket;
+        (HTMLElement.prototype as any).scrollIntoView = jest.fn();
         jest.clearAllMocks();
         mockGetAccessToken.mockReturnValue('jwt-token');
         mockGetConversation.mockResolvedValue({ success: true, message: 'ok', data: {} });
         mockGetMessages.mockReturnValue(new Promise(() => undefined));
+        Object.defineProperty(window, 'matchMedia', {
+            writable: true,
+            value: jest.fn().mockImplementation(() => ({
+                matches: true,
+                addEventListener: jest.fn(),
+                removeEventListener: jest.fn(),
+            })),
+        });
     });
 
     it('renders social links above support chat inside the desktop wrapper', () => {
@@ -148,5 +157,22 @@ describe('ChatDock', () => {
         expect(screen.getAllByRole('link', { name: 'Mo Zalo' }).length).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', { name: 'Mo Tiktok' }).length).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', { name: 'Mo Youtube' }).length).toBeGreaterThan(0);
+    });
+
+    it('mounts only one support chat dock in the mobile layout', () => {
+        (window.matchMedia as any).mockImplementation(() => ({
+            matches: false,
+            addEventListener: jest.fn(),
+            removeEventListener: jest.fn(),
+        }));
+        mockGetConversation.mockReturnValueOnce(new Promise(() => undefined));
+
+        render(<ChatDock/>);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Mo menu ho tro' }));
+        expect(screen.getAllByRole('button', { name: 'Mo chat ho tro' })).toHaveLength(1);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Mo chat ho tro' }));
+        expect(screen.getAllByLabelText('Support chat')).toHaveLength(1);
     });
 });

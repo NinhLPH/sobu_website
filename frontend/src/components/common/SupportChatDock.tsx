@@ -51,6 +51,23 @@ const formatMessageTime = (createdAt: string) => {
 
 const sortOldestFirst = (messages: SupportMessage[]) => [...messages].reverse();
 
+const getMessageKey = (message: SupportMessage) => (
+    message.id != null
+        ? `id:${message.id}`
+        : `${message.conversationId}-${message.senderId}-${message.createdAt}-${message.content}`
+);
+
+const mergeMessagesOldestFirst = (...messageGroups: SupportMessage[][]) => {
+    const messagesByKey = new Map<string, SupportMessage>();
+    messageGroups.flat().forEach((message) => messagesByKey.set(getMessageKey(message), message));
+
+    return [...messagesByKey.values()].sort((left, right) => {
+        const leftTime = new Date(left.createdAt).getTime();
+        const rightTime = new Date(right.createdAt).getTime();
+        return leftTime - rightTime;
+    });
+};
+
 export { getSupportWebSocketUrl };
 
 export default function SupportChatDock({
@@ -163,7 +180,7 @@ export default function SupportChatDock({
                 if (event.type === 'MESSAGE_CREATED') {
                     const createdMessage = getMessageFromEvent(event);
                     if (createdMessage) {
-                        setMessages((current) => [...current, createdMessage]);
+                        setMessages((current) => mergeMessagesOldestFirst(current, [createdMessage]));
                     }
                     return;
                 }
@@ -231,7 +248,10 @@ export default function SupportChatDock({
                 SupportChatService.getMessages({ page: HISTORY_PAGE, size: HISTORY_SIZE })
                     .then((response) => {
                         if (isDisposed) return;
-                        setMessages(sortOldestFirst(response.data.content || []));
+                        setMessages((current) => mergeMessagesOldestFirst(
+                            sortOldestFirst(response.data.content || []),
+                            current
+                        ));
                     })
                     .catch((error) => {
                         if (isDisposed) return;
