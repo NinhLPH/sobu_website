@@ -15,7 +15,7 @@ import { createIdempotencyKey } from '../utils/idempotency';
 import { CartItemDto } from '../interface/cart.dto';
 import { authStorage } from '../utils/auth-storage';
 import { onlineCartRecovery } from '../utils/online-cart-recovery';
-import { cartFallback } from '../utils/cart-fallback';
+import { cartFallback, CartFallbackSource } from '../utils/cart-fallback';
 import { PublicCatalogService } from '../service/public-catalog.service';
 import { useIntegrationStore } from './useIntegrationStore';
 
@@ -61,6 +61,10 @@ const handleAuthError = (error: any) => {
 interface CartState {
     items: CartItem[];
     isUsingFallback: boolean;
+    fallbackSource: CartFallbackSource | null;
+    cartOwnerId: string | null;
+    cartLoadError: string | null;
+    hasLegacyEmptyCart: boolean;
     isLoading: boolean;
     isSubmitting: boolean;
     isHydratingProducts: boolean;
@@ -69,7 +73,7 @@ interface CartState {
     lastCreatedOrder: OrderResponseDto | null;
     pendingOrderKey: string | null;
     pendingOrderFingerprint: string | null;
-    fetchCart: () => Promise<void>;
+    fetchCart: (options?: { recoverLegacyEmpty?: boolean }) => Promise<void>;
     hydrateProducts: () => Promise<void>;
     addToCart: (product: ProductModel, quantity?: number) => Promise<void>;
     removeFromCart: (productId: string) => Promise<void>;
@@ -81,9 +85,35 @@ interface CartState {
     getTotals: () => { subtotal: number; tax: number; total: number; itemCount: number };
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
+const currentCartOwner = (): string | null => {
+    const token = authStorage.getAccessToken();
+    return token ? String(authStorage.getUser()?.id ?? token) : null;
+};
+
+export const useCartStore = create<CartState>((set, get) => {
+    let cartRevision = 0;
+    let fetchSequence = 0;
+    let hydrationSequence = 0;
+
+    const prepareCartMutation = () => {
+        cartRevision++;
+        hydrationSequence++;
+        const owner = currentCartOwner();
+        const changedOwner = get().cartOwnerId !== null && get().cartOwnerId !== owner;
+        set({
+            ...(changedOwner ? { items: [], isUsingFallback: false, fallbackSource: null } : {}),
+            cartOwnerId: owner, isLoading: false, isHydratingProducts: false,
+            cartLoadError: null, hasLegacyEmptyCart: false
+        });
+    };
+
+    return ({
     items: [],
     isUsingFallback: false,
+    fallbackSource: null,
+    cartOwnerId: null,
+    cartLoadError: null,
+    hasLegacyEmptyCart: false,
     isLoading: false,
     isSubmitting: false,
     isHydratingProducts: false,
@@ -93,46 +123,86 @@ export const useCartStore = create<CartState>((set, get) => ({
     pendingOrderKey: null,
     pendingOrderFingerprint: null,
 
-    fetchCart: async () => {
-        if (!authStorage.getAccessToken()) {
-            set({ items: [], isLoading: false, isUsingFallback: false });
+    fetchCart: async (options = {}) => {
+        const sequence = ++fetchSequence;
+        const revision = cartRevision;
+        const owner = currentCartOwner();
+        hydrationSequence++;
+        set({ isHydratingProducts: false });
+        if (!owner) {
+            set({ items: [], isLoading: false, isUsingFallback: false, fallbackSource: null,
+                cartOwnerId: null, cartLoadError: null, hasLegacyEmptyCart: false });
             return;
         }
 
-        const fallbackItems = cartFallback.get();
-        if (fallbackItems !== null) {
-            set({ items: fallbackItems, isLoading: false, isUsingFallback: true });
+        if (get().cartOwnerId !== null && get().cartOwnerId !== owner) {
+            set({ items: [], isUsingFallback: false, fallbackSource: null,
+                cartLoadError: null, hasLegacyEmptyCart: false });
+        }
+        set({ cartOwnerId: owner });
+        const snapshot = cartFallback.getSnapshot();
+        const memorySource = get().isUsingFallback ? get().fallbackSource : null;
+        const source = memorySource ?? snapshot?.source ?? null;
+        const fallbackItems = memorySource ? get().items : snapshot?.items;
+        const legacyEmpty = source === 'legacy-empty';
+        const recoverLegacy = legacyEmpty && options.recoverLegacyEmpty === true;
+        if (source === 'local-edit' || (legacyEmpty && !recoverLegacy)) {
+            set({ items: fallbackItems ?? [], isLoading: false, isUsingFallback: true,
+                fallbackSource: source, hasLegacyEmptyCart: legacyEmpty, cartLoadError: null });
             return;
         }
 
-        set({ isLoading: true });
+        if (fallbackItems) set({ items: fallbackItems });
+        set({ isLoading: get().items.length === 0, cartLoadError: null });
+        const isCurrent = () => sequence === fetchSequence && revision === cartRevision
+            && currentCartOwner() === owner;
         try {
             const response = await CustomerService.getCart();
+            if (!isCurrent()) return;
             if (response.success) {
                 const serverItems = (response.data?.items || []).map(mapCartItemDto);
                 const pendingOnlineCart = onlineCartRecovery.get();
                 const items = serverItems.length > 0
                     ? serverItems
                     : pendingOnlineCart?.items ?? [];
-                set({ items, isLoading: false, isUsingFallback: false });
+                cartFallback.clear();
+                set({ items, isLoading: false, isUsingFallback: false, fallbackSource: null,
+                    cartLoadError: null, hasLegacyEmptyCart: false });
                 return;
             }
-            set({ items: [], isLoading: false, isUsingFallback: true });
-            cartFallback.save([]);
+            throw new Error(response.message || 'Không thể tải giỏ hàng. Vui lòng thử lại.');
         } catch (error) {
+            if (!isCurrent()) return;
             if (isAuthError(error)) {
                 set({ isLoading: false });
                 return;
             }
 
-            set({ items: [], isLoading: false, isUsingFallback: true });
-            cartFallback.save([]);
+            // A failed read is not evidence of an empty cart. Keep local edits intact.
+            if (!recoverLegacy) cartFallback.save(get().items, 'read-cache');
+            set({ isLoading: false, isUsingFallback: true,
+                fallbackSource: recoverLegacy ? 'legacy-empty' : 'read-cache',
+                hasLegacyEmptyCart: recoverLegacy,
+                cartLoadError: getErrorMessage(error, 'Không thể tải giỏ hàng. Vui lòng thử lại.') });
+        } finally {
+            if (sequence === fetchSequence && revision === cartRevision) {
+                if (currentCartOwner() !== owner) {
+                    set({ items: [], isUsingFallback: false, fallbackSource: null,
+                        cartOwnerId: null, cartLoadError: null, hasLegacyEmptyCart: false });
+                }
+                set({ isLoading: false });
+            }
         }
     },
 
     hydrateProducts: async () => {
         const currentItems = get().items;
         if (currentItems.length === 0 || get().isHydratingProducts) return;
+        const sequence = ++hydrationSequence;
+        const revision = cartRevision;
+        const owner = currentCartOwner();
+        const isCurrent = () => sequence === hydrationSequence && revision === cartRevision
+            && owner === currentCartOwner() && get().items === currentItems;
         set({ isHydratingProducts: true, hydrationError: null });
         try {
             const items = await Promise.all(currentItems.map(async (item) => {
@@ -145,19 +215,22 @@ export const useCartStore = create<CartState>((set, get) => ({
                     quantity: item.quantity
                 };
             }));
-            set({ items, isHydratingProducts: false, hydrationError: null });
+            if (isCurrent()) set({ items, isHydratingProducts: false, hydrationError: null });
         } catch (error) {
-            set({
+            if (isCurrent()) set({
                 isHydratingProducts: false,
                 hydrationError: getErrorMessage(
                     error,
                     'Không thể cập nhật thông tin sản phẩm. Vui lòng thử lại.'
                 )
             });
+        } finally {
+            if (sequence === hydrationSequence) set({ isHydratingProducts: false });
         }
     },
 
     addToCart: async (product, quantity = 1) => {
+        prepareCartMutation();
         const addToFallback = () => {
             const items = [
                 ...get().items.filter(item => item.product.id !== product.id),
@@ -165,7 +238,7 @@ export const useCartStore = create<CartState>((set, get) => ({
             ];
             onlineCartRecovery.clear();
             cartFallback.save(items);
-            set({ items, isUsingFallback: true });
+            set({ items, isUsingFallback: true, fallbackSource: 'local-edit' });
         };
 
         if (get().isUsingFallback) {
@@ -200,6 +273,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     },
 
     removeFromCart: async (productId) => {
+        prepareCartMutation();
         const previousItems = get().items;
         const items = previousItems.filter(item => item.product.id !== productId);
         set({ items });
@@ -207,7 +281,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         const removeFromFallback = () => {
             onlineCartRecovery.clear();
             cartFallback.save(items);
-            set({ isUsingFallback: true });
+            set({ isUsingFallback: true, fallbackSource: 'local-edit' });
         };
 
         if (get().isUsingFallback) {
@@ -235,6 +309,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     },
 
     updateQuantity: async (productId, quantity) => {
+        prepareCartMutation();
         const safeQuantity = Math.max(1, quantity);
         const previousItems = get().items;
         const items = previousItems.map(item =>
@@ -247,7 +322,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         const updateFallback = () => {
             onlineCartRecovery.clear();
             cartFallback.save(items);
-            set({ isUsingFallback: true });
+            set({ isUsingFallback: true, fallbackSource: 'local-edit' });
         };
 
         if (get().isUsingFallback) {
@@ -272,13 +347,14 @@ export const useCartStore = create<CartState>((set, get) => ({
     },
 
     clearCart: async () => {
+        prepareCartMutation();
         const previousItems = get().items;
         set({ items: [] });
 
         const clearFallback = () => {
             onlineCartRecovery.clear();
             cartFallback.save([]);
-            set({ isUsingFallback: true });
+            set({ isUsingFallback: true, fallbackSource: 'local-edit' });
         };
 
         if (get().isUsingFallback) {
@@ -373,36 +449,61 @@ export const useCartStore = create<CartState>((set, get) => ({
             pendingOrderFingerprint: fingerprint
         });
 
+        let createdOrder: OrderResponseDto;
         try {
             const response = await CustomerService.createOrder(payload, idempotencyKey);
             if (!response.success) {
                 throw new Error(response.message || 'Không thể tạo đơn hàng.');
             }
-
-            if (shouldClearCart) {
-                if (get().isUsingFallback) {
-                    cartFallback.clear();
-                } else {
-                    await CustomerService.clearCart();
-                }
-                onlineCartRecovery.clear();
-            }
-
-            set({
-                ...(shouldClearCart ? { items: [] } : {}),
-                ...(shouldClearCart ? { isUsingFallback: false } : {}),
-                isSubmitting: false,
-                checkoutError: null,
-                lastCreatedOrder: response.data,
-                pendingOrderKey: null,
-                pendingOrderFingerprint: null
-            });
-            return response.data;
+            createdOrder = response.data;
         } catch (error) {
             const message = getErrorMessage(error, 'Không thể tạo đơn hàng. Vui lòng thử lại.');
             set({ isSubmitting: false, checkoutError: message });
             throw error;
         }
+
+        // Order creation is the business result; cart cleanup must not undo it.
+        set({ lastCreatedOrder: createdOrder, checkoutError: null,
+            pendingOrderKey: null, pendingOrderFingerprint: null });
+        let cleanupFailed = false;
+        let preserveEmptyFallback = false;
+        if (shouldClearCart) {
+            try {
+                prepareCartMutation();
+                preserveEmptyFallback = get().isUsingFallback;
+                if (!preserveEmptyFallback) {
+                    const cleanup = await CustomerService.clearCart();
+                    cleanupFailed = !cleanup.success;
+                }
+            } catch {
+                cleanupFailed = true;
+            }
+            // Offline checkout also has no confirmed server deletion. Do not resurrect
+            // an older server cart the next time the customer opens this page.
+            preserveEmptyFallback = preserveEmptyFallback || cleanupFailed;
+            if (preserveEmptyFallback) cartFallback.save([], 'local-edit');
+            else cartFallback.clear();
+            try {
+                onlineCartRecovery.clear();
+            } catch {
+                // Browser storage can be unavailable; the order is still successful.
+            }
+        }
+
+        set({
+                ...(shouldClearCart ? { items: [] } : {}),
+                ...(shouldClearCart ? { isUsingFallback: preserveEmptyFallback,
+                    fallbackSource: preserveEmptyFallback ? 'local-edit' : null } : {}),
+                isSubmitting: false,
+                checkoutError: null,
+                lastCreatedOrder: createdOrder,
+                pendingOrderKey: null,
+                pendingOrderFingerprint: null
+        });
+        if (cleanupFailed) {
+            ToastService.warning('Đơn hàng đã được tạo. Giỏ hàng trên máy chủ chưa được cập nhật.');
+        }
+        return createdOrder;
     },
 
     restorePendingOnlineCart: () => {
@@ -410,6 +511,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         if (!pendingOnlineCart) {
             return false;
         }
+        prepareCartMutation();
         set({ items: pendingOnlineCart.items });
         return true;
     },
@@ -422,4 +524,5 @@ export const useCartStore = create<CartState>((set, get) => ({
         const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
         return { subtotal, tax, total, itemCount };
     }
-}));
+    });
+});

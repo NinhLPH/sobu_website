@@ -3,8 +3,11 @@ import { authStorage } from './auth-storage';
 
 const CART_FALLBACK_KEY_PREFIX = 'sobu.cartFallback.v1';
 
-interface CartFallbackSnapshot {
+export type CartFallbackSource = 'read-cache' | 'local-edit' | 'legacy-empty';
+
+export interface CartFallbackSnapshot {
     items: CartItem[];
+    source: CartFallbackSource;
 }
 
 const cloneItems = (items: CartItem[]): CartItem[] =>
@@ -29,12 +32,13 @@ const isCartItem = (item: Partial<CartItem> | null | undefined): item is CartIte
 
 export const cartFallback = {
     get: (): CartItem[] | null => {
-        const key = getStorageKey();
-        if (!key || typeof window === 'undefined') {
-            return null;
-        }
+        return cartFallback.getSnapshot()?.items ?? null;
+    },
 
+    getSnapshot: (): CartFallbackSnapshot | null => {
         try {
+            const key = getStorageKey();
+            if (!key || typeof window === 'undefined') return null;
             const value = window.sessionStorage.getItem(key);
             if (!value) {
                 return null;
@@ -52,20 +56,20 @@ export const cartFallback = {
                 return null;
             }
 
-            return cloneItems(items);
+            const source = snapshot.source === 'read-cache' || snapshot.source === 'local-edit'
+                ? snapshot.source
+                : items.length > 0 ? 'local-edit' : 'legacy-empty';
+            return { items: cloneItems(items), source };
         } catch {
             return null;
         }
     },
 
-    save: (items: CartItem[]): boolean => {
-        const key = getStorageKey();
-        if (!key || typeof window === 'undefined') {
-            return false;
-        }
-
+    save: (items: CartItem[], source: Exclude<CartFallbackSource, 'legacy-empty'> = 'local-edit'): boolean => {
         try {
-            const snapshot: CartFallbackSnapshot = { items: cloneItems(items) };
+            const key = getStorageKey();
+            if (!key || typeof window === 'undefined') return false;
+            const snapshot: CartFallbackSnapshot = { items: cloneItems(items), source };
             window.sessionStorage.setItem(key, JSON.stringify(snapshot));
             return true;
         } catch {
@@ -74,12 +78,9 @@ export const cartFallback = {
     },
 
     clear: (): void => {
-        const key = getStorageKey();
-        if (!key || typeof window === 'undefined') {
-            return;
-        }
-
         try {
+            const key = getStorageKey();
+            if (!key || typeof window === 'undefined') return;
             window.sessionStorage.removeItem(key);
         } catch {
             // Storage access can be disabled by the browser; keep the in-memory cart usable.

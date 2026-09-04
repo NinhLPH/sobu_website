@@ -12,8 +12,11 @@ import { ShippingService } from '../service/shipping.service';
 import { useIntegrationStore } from '../store/useIntegrationStore';
 import { VoucherService } from '../service/voucher.service';
 import { ToastService } from '../service/toast.service';
+import { CustomerService } from '../service/custom.service';
 
 const mockNavigate = jest.fn();
+const mockConfirm = jest.fn(async () => true);
+jest.mock('../components/common/ConfirmDialog', () => ({ useConfirmDialog: () => mockConfirm }));
 
 jest.mock('react-router-dom', () => ({
     Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
@@ -29,6 +32,7 @@ jest.mock('../store/useIntegrationStore');
 jest.mock('../service/shipping.service');
 jest.mock('../service/voucher.service');
 jest.mock('../service/toast.service');
+jest.mock('../service/custom.service');
 jest.mock('../utils/payment-session', () => ({
     redirectToPaymentCheckout: require('@jest/globals').jest.fn()
 }));
@@ -41,6 +45,8 @@ jest.mock('../utils/online-cart-recovery', () => ({
 }));
 
 const mockedUseCartStore = jest.mocked(useCartStore);
+type CartStoreState = ReturnType<typeof useCartStore.getState>;
+const currentMockCart = () => mockedUseCartStore((state: CartStoreState) => state) as CartStoreState;
 const mockedUseAuthStore = jest.mocked(useAuthStore);
 const mockedUseLocationStore = jest.mocked(useLocationStore);
 const mockedUsePaymentStore = jest.mocked(usePaymentStore);
@@ -143,6 +149,7 @@ const invalidShippingQuote = {
 describe('Cart payment selection', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockConfirm.mockResolvedValue(true);
         mockSubmitOrder.mockResolvedValue({ id: 12 });
         mockedShippingService.getQuotes.mockResolvedValue({
             success: true,
@@ -186,6 +193,8 @@ describe('Cart payment selection', () => {
             hydrationError: null,
             hydrateProducts: jest.fn(),
             checkoutError: null,
+            cartLoadError: null,
+            hasLegacyEmptyCart: false,
             clearCheckoutError: jest.fn(),
             fetchCart: jest.fn()
         } as unknown as ReturnType<typeof useCartStore>);
@@ -255,6 +264,62 @@ describe('Cart payment selection', () => {
         await clickShippingQuote();
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
     };
+
+    it('shows load failure instead of a misleading empty cart and allows retry', async () => {
+        const cart = currentMockCart();
+        mockedUseCartStore.mockReturnValue({ ...cart, items: [], cartLoadError: 'Network unavailable' });
+        render(<Cart />);
+        expect(screen.queryByText('Bạn chưa chọn sản phẩm nào.')).toBeNull();
+        expect(screen.getByText('Chưa tải được giỏ hàng')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+        await waitFor(() => expect(cart.fetchCart).toHaveBeenCalledWith({ recoverLegacyEmpty: false }));
+        expect(cart.hydrateProducts).toHaveBeenCalled();
+    });
+
+    it('shows a retry notice while preserving visible cart items', () => {
+        mockedUseCartStore.mockReturnValue({ ...currentMockCart(), cartLoadError: 'Network unavailable' });
+        render(<Cart />);
+        expect(screen.getByText('Network unavailable')).toBeTruthy();
+        expect(screen.getByText('Áo hoodie')).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Thử lại' })).toBeTruthy();
+    });
+
+    it('requires confirmation before recovering legacy empty cart data', async () => {
+        const cart = currentMockCart();
+        mockedUseCartStore.mockReturnValue({ ...cart, items: [], hasLegacyEmptyCart: true });
+        mockConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        render(<Cart />);
+        const callsBeforeClick = jest.mocked(cart.fetchCart).mock.calls.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Tải giỏ từ máy chủ' }));
+        await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
+        expect(cart.fetchCart).toHaveBeenCalledTimes(callsBeforeClick);
+        fireEvent.click(screen.getByRole('button', { name: 'Tải giỏ từ máy chủ' }));
+        await waitFor(() => expect(cart.fetchCart).toHaveBeenCalledWith({ recoverLegacyEmpty: true }));
+    });
+
+    it('continues COD payment and navigation when real store cart cleanup fails', async () => {
+        const actualStore = (jest.requireActual('../store/useCartStore') as typeof import('../store/useCartStore')).useCartStore;
+        window.sessionStorage.setItem('accessToken', 'audit-token');
+        window.sessionStorage.setItem('user', JSON.stringify({ id: 990 }));
+        actualStore.setState({ items: [{ product, quantity: 1 }], isUsingFallback: false,
+            fallbackSource: null, cartOwnerId: null, cartLoadError: null, hasLegacyEmptyCart: false });
+        // The real checkout function runs; the page's unrelated loading hooks stay mocked.
+        mockedUseCartStore.mockReturnValue({ ...currentMockCart(), submitOrder: actualStore.getState().submitOrder });
+        jest.mocked(useIntegrationStore.getState).mockReturnValue({ nhanhEnabled: false } as any);
+        jest.mocked(CustomerService).createOrder.mockResolvedValue({ success: true, data: { id: 990 } } as any);
+        jest.mocked(CustomerService).clearCart.mockRejectedValue(new Error('Redis unavailable'));
+        mockCreatePayment.mockResolvedValue({ id: 21 });
+        render(<Cart />);
+        selectShippingLocation();
+        fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), { target: { value: 'COD' } });
+        await clickShippingQuote(/Hỏa tốc/i);
+        await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
+        fireEvent.click(getCheckoutButton());
+        await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(990, { type: 'FULL', paymentMethod: 'COD' }));
+        expect(mockNavigate).toHaveBeenCalledWith('/orders/990?paymentSetup=cod', { replace: true });
+        expect(actualStore.getState().checkoutError).toBeNull();
+        window.sessionStorage.clear();
+    });
 
     it('collects one detailed delivery address through customerAddress', () => {
         render(<Cart />);

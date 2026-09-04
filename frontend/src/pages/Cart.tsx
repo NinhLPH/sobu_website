@@ -19,6 +19,7 @@ import { getPaymentCheckoutErrorMessage } from '../utils/payment-checkout-error'
 import { useIntegrationStore } from '../store/useIntegrationStore';
 import { VoucherService } from '../service/voucher.service';
 import { ActiveVoucher, VoucherApplyResponse } from '../interface/voucher.model';
+import { useConfirmDialog } from '../components/common/ConfirmDialog';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -458,6 +459,8 @@ export default function Cart() {
         hydrationError,
         hydrateProducts,
         checkoutError,
+        cartLoadError,
+        hasLegacyEmptyCart,
         clearCheckoutError,
         fetchCart
     } = useCartStore();
@@ -486,6 +489,7 @@ export default function Cart() {
     const { subtotal, itemCount } = getTotals();
     const { isAuthenticated, user } = useAuthStore();
     const navigate = useNavigate();
+    const confirm = useConfirmDialog();
     const [form, setForm] = useState<CheckoutForm>(initialCheckoutForm);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ONLINE');
     const [validationError, setValidationError] = useState<string | null>(null);
@@ -518,7 +522,7 @@ export default function Cart() {
             void Promise.resolve(fetchCart()).then(() => hydrateProducts());
         }
         return cancelScheduledRetry;
-    }, [ensureIntegrationLoaded, cancelScheduledRetry, fetchCart, hydrateProducts, isAuthenticated]);
+    }, [ensureIntegrationLoaded, cancelScheduledRetry, fetchCart, hydrateProducts, isAuthenticated, user?.id]);
 
     useEffect(() => {
         if (integrationLoaded) {
@@ -969,6 +973,31 @@ export default function Cart() {
         }
     };
 
+    const retryCart = async () => {
+        if (hasLegacyEmptyCart) {
+            const confirmed = await confirm({
+                title: 'Tải giỏ từ máy chủ?',
+                message: 'Giỏ dự phòng cũ đang trống. Tải từ máy chủ có thể khôi phục các món bạn đã xóa trước đó. Bạn có muốn tiếp tục?',
+                confirmLabel: 'Tải giỏ từ máy chủ',
+                tone: 'warning'
+            });
+            if (!confirmed) return;
+        }
+        await fetchCart({ recoverLegacyEmpty: Boolean(hasLegacyEmptyCart) });
+        await hydrateProducts();
+    };
+    const cartLoadNotice = (cartLoadError || hasLegacyEmptyCart) && (
+        <div role="alert" className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
+            <span>{cartLoadError || 'Giỏ dự phòng cũ đang trống, chưa xác nhận được giỏ trên máy chủ.'}</span>
+            <button type="button" disabled={isLoading || isSubmitting || isCreatingPayment}
+                onClick={() => void retryCart()}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-400 px-3 py-2 focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-wait disabled:opacity-50">
+                <RefreshCw className="h-3.5 w-3.5" />
+                {hasLegacyEmptyCart ? 'Tải giỏ từ máy chủ' : 'Thử lại'}
+            </button>
+        </div>
+    );
+
     if (isLoading) {
         return (
             <main className="flex min-h-[60vh] w-full min-w-0 flex-col items-center justify-center bg-surface px-4 py-28 text-center sm:px-6 sm:py-32">
@@ -984,10 +1013,13 @@ export default function Cart() {
                 <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-surface-container shadow-inner">
                     <ShoppingBag className="h-10 w-10 text-primary opacity-40" />
                 </div>
-                <h2 className="mb-2 text-2xl font-black text-on-surface">Giỏ hàng trống</h2>
+                <h2 className="mb-2 text-2xl font-black text-on-surface">
+                    {cartLoadError || hasLegacyEmptyCart ? 'Chưa tải được giỏ hàng' : 'Giỏ hàng trống'}
+                </h2>
                 <p className="mb-8 text-xs font-medium text-on-surface-variant">
-                    Bạn chưa chọn sản phẩm nào.
+                    {cartLoadError || hasLegacyEmptyCart ? 'Vui lòng kiểm tra lại giỏ hàng trước khi tiếp tục.' : 'Bạn chưa chọn sản phẩm nào.'}
                 </p>
+                {cartLoadNotice}
                 <Link
                     to="/products"
                     className="rounded-xl bg-primary px-8 py-3 text-xs font-bold uppercase tracking-wider text-on-primary shadow-md transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -1021,6 +1053,7 @@ export default function Cart() {
                 <span className="text-sm font-black text-primary">{itemCount} sản phẩm</span>
             </header>
 
+            {cartLoadNotice}
             <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12 lg:gap-10">
                 <div className="space-y-8 lg:col-span-7">
                     {(validationError || checkoutError || locationError || hydrationError || shippingQuoteError) && (

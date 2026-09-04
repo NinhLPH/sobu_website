@@ -96,6 +96,10 @@ describe('useCartStore order submission', () => {
         useCartStore.setState({
             items: [],
             isUsingFallback: false,
+            fallbackSource: null,
+            cartOwnerId: null,
+            cartLoadError: null,
+            hasLegacyEmptyCart: false,
             isLoading: false,
             isSubmitting: false,
             isHydratingProducts: false,
@@ -217,7 +221,8 @@ describe('useCartStore order submission', () => {
 
         expect(useCartStore.getState().items).toEqual([]);
         expect(useCartStore.getState().isUsingFallback).toBe(true);
-        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBe(JSON.stringify({ items: [] }));
+        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBe(JSON.stringify({ items: [], source: 'read-cache' }));
+        expect(useCartStore.getState().cartLoadError).toBe('Network unavailable');
     });
 
     it('restores a pending online cart when the server cart is empty', async () => {
@@ -244,7 +249,7 @@ describe('useCartStore order submission', () => {
         expect(useCartStore.getState().items).toEqual([{ product, quantity: 2 }]);
         expect(useCartStore.getState().isUsingFallback).toBe(true);
         expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({
-            items: [{ product, quantity: 2 }]
+            items: [{ product, quantity: 2 }], source: 'local-edit'
         });
     });
 
@@ -267,7 +272,7 @@ describe('useCartStore order submission', () => {
         mockedCustomerService.clearCart.mockRejectedValue(new Error('Server unavailable'));
         await useCartStore.getState().clearCart();
         expect(useCartStore.getState().items).toEqual([]);
-        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({ items: [] });
+        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({ items: [], source: 'local-edit' });
     });
 
     it('keeps the current cart and does not enter fallback after an authentication failure', async () => {
@@ -431,8 +436,10 @@ describe('useCartStore order submission', () => {
 
         expect(mockedCustomerService.clearCart).not.toHaveBeenCalled();
         expect(useCartStore.getState().items).toEqual([]);
-        expect(useCartStore.getState().isUsingFallback).toBe(false);
-        expect(window.sessionStorage.getItem(fallbackStorageKey())).toBeNull();
+        expect(useCartStore.getState().isUsingFallback).toBe(true);
+        expect(JSON.parse(window.sessionStorage.getItem(fallbackStorageKey()) || '{}')).toEqual({ items: [], source: 'local-edit' });
+        await useCartStore.getState().fetchCart();
+        expect(mockedCustomerService.getCart).not.toHaveBeenCalled();
     });
 
     it('keeps cart items and exposes the backend message when creation fails', async () => {
