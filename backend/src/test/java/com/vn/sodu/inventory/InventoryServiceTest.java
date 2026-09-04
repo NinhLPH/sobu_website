@@ -3,12 +3,19 @@ package com.vn.sodu.inventory;
 import com.vn.sodu.audit.AuditService;
 import com.vn.sodu.global.exception.BadRequestException;
 import com.vn.sodu.global.exception.NotFoundException;
+import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.inventory.dto.InventoryAdjustmentDto;
 import com.vn.sodu.inventory.dto.InventoryBalanceDto;
+import com.vn.sodu.inventory.dto.InventoryProductDto;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.OrderItem;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.repo.ProductRepo;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -262,7 +269,7 @@ class InventoryServiceTest {
     @Test
     void getBalanceComputesReservedFromRemainAndAvailable() {
         Product product = product(15L, 10.0, 7.0);
-        when(productRepo.findByIdForUpdate(15L)).thenReturn(Optional.of(product));
+        when(productRepo.findById(15L)).thenReturn(Optional.of(product));
 
         InventoryBalanceDto balance = inventoryService.getBalance(15L);
 
@@ -273,8 +280,38 @@ class InventoryServiceTest {
 
     @Test
     void missingProductThrowsNotFound() {
-        when(productRepo.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+        when(productRepo.findById(99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> inventoryService.getBalance(99L))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getInventoryProductsReturnsMappedDtos() {
+        Product product1 = Product.builder()
+                .id(1L)
+                .name("Kem chống nắng")
+                .code("KCN-01")
+                .stockRemain(20.0)
+                .stockAvailable(15.0)
+                .build();
+        Product product2 = Product.builder()
+                .id(2L)
+                .name("Sữa rửa mặt")
+                .code("SRM-01")
+                .stockRemain(10.0)
+                .stockAvailable(0.0)
+                .build();
+
+        Page<Product> page = new PageImpl<>(List.of(product1, product2), PageRequest.of(0, 20), 2);
+        when(productRepo.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+
+        PageResponse<InventoryProductDto> response = inventoryService.getInventoryProducts(
+                "Kem", "IN_STOCK", 0, 20, "id", "DESC");
+
+        assertThat(response.getContent()).hasSize(2);
+        assertThat(response.getContent().get(0).getReserved()).isEqualTo(5.0);
+        assertThat(response.getContent().get(0).getName()).isEqualTo("Kem chống nắng");
+        assertThat(response.getContent().get(1).getReserved()).isEqualTo(10.0);
     }
 }
