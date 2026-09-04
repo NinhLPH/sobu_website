@@ -16,3 +16,24 @@ describe('AdminCatalogService.setProductActive', () => {
         });
     });
 });
+
+describe('AdminCatalogService.getInventoryProducts', () => {
+    it('uses the dedicated inventory path, server pagination, filters, sorting, and cancellation signal', async () => {
+        const controller = new AbortController();
+        const page = {content: [], pageNumber: 1, pageSize: 20, totalElements: 20, totalPages: 2};
+        jest.mocked(apiClient.get).mockResolvedValue(page);
+
+        await expect(AdminCatalogService.getInventoryProducts({
+            search: 'serum', stockStatus: 'LOW_STOCK', page: 1, pageSize: 20,
+            sortBy: 'stockAvailable', sortDirection: 'DESC'
+        }, controller.signal)).resolves.toBe(page);
+
+        expect(apiClient.get).toHaveBeenCalledWith('/api/admin/inventory', {
+            params: {
+                search: 'serum', stockStatus: 'LOW_STOCK', page: 1, pageSize: 20,
+                sortBy: 'stockAvailable', sortDirection: 'DESC'
+            },
+            signal: controller.signal
+        });
+    });
+});

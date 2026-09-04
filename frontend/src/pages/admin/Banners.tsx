@@ -261,7 +261,7 @@ export default function AdminBanners() {
                                 bi</label><select value={form.deviceType} onChange={(event) => setForm({
                                 ...form,
                                 deviceType: event.target.value as BannerMutationPayload['deviceType']
-                            })} className="w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm">
+                            })} className="admin-select w-full rounded-xl border border-outline-variant px-4 py-2.5 text-sm">
                                 <option value="ALL">ALL</option>
                                 <option value="WEB">WEB</option>
                                 <option value="MOBILE">MOBILE</option>

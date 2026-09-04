@@ -3,6 +3,7 @@ import {fireEvent, render, screen} from '@testing-library/react';
 import AdminOrders from './Orders';
 import {useAdminStore} from '../../store/useAdminStore';
 import {useIntegrationStore} from '../../store/useIntegrationStore';
+import {ConfirmDialogProvider} from '../../components/common/ConfirmDialog';
 
 jest.mock('react-router-dom', () => ({
     Link: ({children, to, ...props}: {children: React.ReactNode; to: string}) => <a href={to} {...props}>{children}</a>,
@@ -41,6 +42,8 @@ describe('AdminOrders search suggest', () => {
             fetchOrders: jest.fn(),
             retryOrderSync: jest.fn(),
             retryingOrderIds: [],
+            updateAdminOrderStatus: jest.fn(),
+            updatingOrderStatusIds: [],
             isOrdersLoading: false,
             ordersError: null,
             ordersPage: {
@@ -55,7 +58,7 @@ describe('AdminOrders search suggest', () => {
             },
         } as any);
 
-        render(<AdminOrders/>);
+        render(<ConfirmDialogProvider><AdminOrders/></ConfirmDialogProvider>);
 
         fireEvent.change(screen.getByLabelText('Tìm kiếm đơn hàng quản trị'), {
             target: {value: 'minh'},
@@ -81,15 +84,18 @@ describe('AdminOrders search suggest', () => {
             fetchOrders: jest.fn(),
             retryOrderSync: jest.fn(),
             retryingOrderIds: [],
+            updateAdminOrderStatus: jest.fn(),
+            updatingOrderStatusIds: [],
             isOrdersLoading: false,
             ordersError: null,
             ordersPage: {pageNumber: 0, pageSize: 10, totalElements: 1, totalPages: 1, first: true, last: true, hasNext: false, hasPrevious: false}
         } as any);
 
-        render(<AdminOrders/>);
+        render(<ConfirmDialogProvider><AdminOrders/></ConfirmDialogProvider>);
 
         expect(screen.getByText('Quản lý đơn hàng')).toBeTruthy();
         expect(screen.getByText(/Nhanh \(lịch sử\): NH-001/i)).toBeTruthy();
+        expect(screen.getByRole('button', {name: 'Chuyển đơn SO-001 sang Đang xử lý'})).toBeTruthy();
         expect(screen.queryByLabelText('Lọc theo trạng thái đồng bộ Nhanh.vn')).toBeNull();
         expect(screen.queryByLabelText(/Retry đồng bộ/i)).toBeNull();
     });

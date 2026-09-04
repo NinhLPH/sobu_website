@@ -19,6 +19,8 @@ import {
     AdminCard,
     AdminEmpty,
     AdminError,
+    AdminFilterGroup,
+    AdminFilterSelect,
     AdminLoading,
     AdminModal,
     AdminPage,
@@ -72,6 +74,8 @@ export default function AdminProducts() {
     const [brands, setBrands] = useState<AdminBrand[]>([]);
     const [badges, setBadges] = useState<ProductBadge[]>([]);
     const [query, setQuery] = useState('');
+    const [stockFilter, setStockFilter] = useState<'ALL' | 'IN_STOCK' | 'OUT_OF_STOCK'>('ALL');
+    const [stockSort, setStockSort] = useState<'DEFAULT' | 'ASC' | 'DESC'>('DEFAULT');
     const [page, setPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -99,7 +103,14 @@ export default function AdminProducts() {
         setError('');
         try {
             const [products, categoryData, brandData, badgeData] = await Promise.all([
-                AdminCatalogService.getProducts({page, pageSize: 20, search: query || undefined}),
+                AdminCatalogService.getProducts({
+                    page,
+                    pageSize: 20,
+                    search: query || undefined,
+                    inStock: stockFilter === 'ALL' ? undefined : stockFilter === 'IN_STOCK',
+                    sortBy: stockSort === 'DEFAULT' ? undefined : 'stockAvailable',
+                    sortDirection: stockSort === 'DEFAULT' ? undefined : stockSort
+                }),
                 AdminCatalogService.getCategories(), AdminCatalogService.getBrands(), AdminCatalogService.getBadges(),
             ]);
             setItems(products.content || []);
@@ -112,7 +123,7 @@ export default function AdminProducts() {
         } finally {
             setLoading(false);
         }
-    }, [page, query]);
+    }, [page, query, stockFilter, stockSort]);
 
     useEffect(() => {
         const timer = window.setTimeout(() => void load(), 250);
@@ -236,6 +247,13 @@ export default function AdminProducts() {
                 setQuery(value);
                 setPage(0);
             }} placeholder="Tìm theo tên hoặc mã sản phẩm" ariaLabel="Tìm kiếm sản phẩm quản trị"/>
+                <AdminFilterGroup label="Tồn kho"><AdminFilterSelect label="Lọc theo tồn kho" value={stockFilter}
+                    onChange={value => { setStockFilter(value as typeof stockFilter); setPage(0); }}>
+                    <option value="ALL">Tất cả</option><option value="IN_STOCK">Còn hàng</option><option value="OUT_OF_STOCK">Hết hàng</option>
+                </AdminFilterSelect><AdminFilterSelect label="Sắp xếp theo tồn kho" value={stockSort}
+                    onChange={value => { setStockSort(value as typeof stockSort); setPage(0); }}>
+                    <option value="DEFAULT">Sắp xếp mặc định</option><option value="ASC">Tồn khả dụng: thấp đến cao</option><option value="DESC">Tồn khả dụng: cao đến thấp</option>
+                </AdminFilterSelect></AdminFilterGroup>
                 <div className="self-center whitespace-nowrap text-xs text-outline">{items.length} sản phẩm trên trang
                 </div>
             </AdminToolbar>
@@ -329,11 +347,11 @@ export default function AdminProducts() {
                                                                                              onChange={e => set('code', e.target.value.toUpperCase())}/></Field><Field
                     label="Tên sản phẩm"><input required className={inputClass} value={form.name}
                                                 onChange={e => set('name', e.target.value)}/></Field><Field
-                    label="Danh mục"><select className={inputClass} value={form.categoryId ?? ''}
+                    label="Danh mục"><select className={`${inputClass} admin-select`} value={form.categoryId ?? ''}
                                              onChange={e => set('categoryId', numberOrNull(e.target.value))}>
                     <option value="">Chưa phân loại</option>
                     {categories.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field
-                    label="Thương hiệu"><select className={inputClass} value={form.brandId ?? ''}
+                    label="Thương hiệu"><select className={`${inputClass} admin-select`} value={form.brandId ?? ''}
                                                 onChange={e => set('brandId', numberOrNull(e.target.value))}>
                     <option value="">Chưa có</option>
                     {brands.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field
@@ -351,7 +369,7 @@ export default function AdminProducts() {
                                                                                               set('saleValidThrough', null);
                                                                                           }
                                                                                       }}/></Field><Field
-                    label="Tag thủ công" hint="Tối đa một tag HOT, NEW hoặc tùy chỉnh"><select className={inputClass} value={form.badgeId ?? ''}
+                    label="Tag thủ công" hint="Tối đa một tag HOT, NEW hoặc tùy chỉnh"><select className={`${inputClass} admin-select`} value={form.badgeId ?? ''}
                                                  onChange={e => set('badgeId', numberOrNull(e.target.value))}>
                     <option value="">Không có tag</option>
                     {badges.filter(x => x.status === 1 && x.name.toUpperCase() !== 'SALE').map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -443,6 +461,7 @@ export default function AdminProducts() {
                         color: detail.badgeTextColor || '#ffffff'
                     }}>{detail.badgeName}</span>}{detail.oldPrice != null && detail.oldPrice > (detail.retailPrice ?? detail.price ?? 0) &&
                     <span className="inline-flex rounded-full bg-error px-2.5 py-1 text-xs font-black text-on-error">SALE hệ thống</span>}</div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 border-y border-outline-variant/25 py-4 text-sm"><div><dt className="text-xs font-bold uppercase text-outline">Tồn thực tế</dt><dd className="mt-1 text-lg font-black text-on-surface">{detail.stockRemain ?? 0}</dd></div><div><dt className="text-xs font-bold uppercase text-outline">Tồn khả dụng</dt><dd className="mt-1 text-lg font-black text-primary">{detail.stockAvailable ?? 0}</dd></div></dl>
                 <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-on-surface-variant">{detail.description || 'Chưa có mô tả.'}</p>
             </div>
         </div>}</AdminModal>

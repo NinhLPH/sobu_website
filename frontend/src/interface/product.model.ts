@@ -102,8 +102,8 @@ export interface ProductDetailDTO {
     categoryId?: number | null;
     categoryName: string;
     categorySlug?: string | null;
-    stockAvailable: number;
-    stockRemain: number;
+    stockAvailable?: number | null;
+    stockRemain?: number | null;
     units: ProductUnitDTO[];
     attributes: ProductAttributeDTO[];
     images: string[];
@@ -191,7 +191,7 @@ export const mapDetailToProductModel = (dto: ProductDetailDTO): ProductModel => 
         imageUrl: dto.avatarImage || 'https://placehold.co/400x300?text=SOBU',
         imageAlt: dto.avatarAltText || dto.name,
         description: dto.description || dto.content || '',
-        stock: dto.stockAvailable || dto.stockRemain || 0,
+        stock: dto.stockAvailable ?? dto.stockRemain ?? 0,
         isNew: manualTag?.label.toUpperCase() === 'NEW',
         isHot: manualTag?.label.toUpperCase() === 'HOT',
         manualTag,

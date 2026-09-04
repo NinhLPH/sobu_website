@@ -37,15 +37,12 @@ interface CheckoutForm {
     customerWardName: string;
     customerCityId: number | null;
     customerWardId: number | null;
-    customerStreet: string;
-    customerHamlet: string;
-    hasStreet: boolean;
     description: string;
 }
 
 type CheckoutTextField = Exclude<
     keyof CheckoutForm,
-    'customerCityId' | 'customerWardId' | 'hasStreet'
+    'customerCityId' | 'customerWardId'
 >;
 
 type SocialLinks = Record<string, string>;
@@ -59,9 +56,6 @@ const initialCheckoutForm: CheckoutForm = {
     customerWardName: '',
     customerCityId: null,
     customerWardId: null,
-    customerStreet: '',
-    customerHamlet: '',
-    hasStreet: true,
     description: ''
 };
 
@@ -880,7 +874,13 @@ export default function Cart() {
             return;
         }
 
-        if (form.customerAddress.trim().length > MAX_CUSTOMER_ADDRESS_LENGTH) {
+        const detailedAddress = form.customerAddress.trim();
+        if (!detailedAddress) {
+            setValidationError('Vui lòng nhập địa chỉ chi tiết để giao hàng.');
+            return;
+        }
+
+        if (detailedAddress.length > MAX_CUSTOMER_ADDRESS_LENGTH) {
             setValidationError('Dia chi giao hang khong duoc vuot qua 500 ky tu.');
             return;
         }
@@ -894,13 +894,6 @@ export default function Cart() {
             setValidationError(
                 'Vui lòng chọn đầy đủ tỉnh/thành phố và phường/xã.'
             );
-            return;
-        }
-
-        const street = form.hasStreet ? form.customerStreet.trim() : '';
-        const hamlet = form.hasStreet ? form.customerHamlet.trim() : '';
-        if (!street && !hamlet) {
-            setValidationError('Vui lòng nhập tên đường hoặc xóm/ấp để giao hàng.');
             return;
         }
 
@@ -923,13 +916,11 @@ export default function Cart() {
                 customerName: form.customerName.trim(),
                 customerMobile: form.customerMobile.trim(),
                 customerEmail: form.customerEmail.trim() || undefined,
-                customerAddress: form.customerAddress.trim() || undefined,
+                customerAddress: detailedAddress,
                 customerCityName: form.customerCityName,
                 customerWardName: form.customerWardName,
                 customerCityId: form.customerCityId,
                 customerWardId: form.customerWardId,
-                customerStreet: street || undefined,
-                customerHamlet: hamlet || undefined,
                 shippingFee,
                 // Preserve explicit customer choices. The preview's generic discount code
                 // prefers ORDER over ITEM and can otherwise replace a manual ITEM voucher.
@@ -1101,16 +1092,19 @@ export default function Cart() {
                             Thông tin vận chuyển
                         </h2>
                         <div className="space-y-3">
-                            <input
-                                type="text"
-                                aria-label="Địa chỉ giao hàng chi tiết"
-                                value={form.customerAddress}
-                                onChange={(event) => updateField('customerAddress', event.target.value)}
-                                disabled={isSubmitting || isCreatingPayment}
-                                maxLength={MAX_CUSTOMER_ADDRESS_LENGTH}
-                                placeholder="Địa chỉ giao hàng chi tiết (số nhà, đường, xóm/ấp...)"
-                                className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                            />
+                            <label className="block text-[10px] font-black uppercase tracking-wider text-outline">
+                                Địa chỉ giao nhận
+                                <input
+                                    type="text"
+                                    aria-label="Địa chỉ chi tiết"
+                                    value={form.customerAddress}
+                                    onChange={(event) => updateField('customerAddress', event.target.value)}
+                                    disabled={isSubmitting || isCreatingPayment}
+                                    maxLength={MAX_CUSTOMER_ADDRESS_LENGTH}
+                                    placeholder="Địa chỉ chi tiết *"
+                                    className="mt-1.5 w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </label>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <LocationCombobox
                                     label="Tỉnh/Thành phố"
@@ -1145,60 +1139,6 @@ export default function Cart() {
                                     loading={isLoadingWards}
                                 />
                             </div>
-                            <div className="flex items-center justify-between gap-3">
-                                <p className="text-[10px] font-black uppercase tracking-wider text-outline">
-                                    Địa chỉ giao nhận
-                                </p>
-                                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-on-surface-variant">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.hasStreet}
-                                        onChange={(event) => {
-                                            setForm((current) => ({
-                                                ...current,
-                                                hasStreet: event.target.checked
-                                            }));
-                                            setValidationError(null);
-                                            clearCheckoutError();
-                                        }}
-                                        disabled={isSubmitting || isCreatingPayment}
-                                        className="h-4 w-4 accent-primary"
-                                    />
-                                    Có tên đường
-                                </label>
-                            </div>
-                            {form.hasStreet ? (
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <input
-                                        type="text"
-                                        aria-label="Tên đường"
-                                        value={form.customerStreet}
-                                        onChange={(event) => updateField('customerStreet', event.target.value)}
-                                        disabled={isSubmitting || isCreatingPayment}
-                                        placeholder="Tên đường *"
-                                        className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                    />
-                                    <input
-                                        type="text"
-                                        aria-label="Xóm hoặc ấp"
-                                        value={form.customerHamlet}
-                                        onChange={(event) => updateField('customerHamlet', event.target.value)}
-                                        disabled={isSubmitting || isCreatingPayment}
-                                        placeholder="Xóm/Ấp (nếu có)"
-                                        className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                    />
-                                </div>
-                            ) : (
-                                <input
-                                    type="text"
-                                    aria-label="Tên xóm, ấp hoặc địa danh nhận hàng"
-                                    value={form.customerHamlet}
-                                    onChange={(event) => updateField('customerHamlet', event.target.value)}
-                                    disabled={isSubmitting || isCreatingPayment}
-                                    placeholder="Tên xóm/ấp/địa danh nhận hàng *"
-                                    className="w-full rounded-xl border border-surface-container bg-surface-container-lowest px-4 py-2.5 text-xs font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
-                                />
-                            )}
                             <textarea
                                 aria-label="Ghi chú giao hàng"
                                 value={form.description}

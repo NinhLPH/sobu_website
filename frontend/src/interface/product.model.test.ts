@@ -40,6 +40,16 @@ describe('product model mappers', () => {
         expect(product.reviewsCount).toBe(12);
     });
 
+    it('preserves a zero available stock instead of falling back to remaining stock', () => {
+        const product = mapDetailToProductModel({
+            id: 1004, name: 'Reserved model', code: 'RES-001', description: '', content: '', price: 100000,
+            avatarImage: '', brandName: '', categoryName: '', stockAvailable: 0, stockRemain: 8,
+            units: [], attributes: [], images: [], updatedAt: '2026-07-04T00:00:00'
+        });
+
+        expect(product.stock).toBe(0);
+    });
+
     it('maps one manual tag and derives sale only from a valid price pair', () => {
         const product = mapListItemToProductModel({
             id: 1002,

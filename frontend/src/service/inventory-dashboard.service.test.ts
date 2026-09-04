@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it, jest} from '@jest/globals';
+import apiClient from '../api/api-client';
 import {AdminCatalogService} from './admin-catalog.service';
-import {PublicUiService} from './public-ui.service';
 import {
     DEFAULT_LOW_STOCK_THRESHOLD,
     InventoryDashboardService,
@@ -9,10 +9,9 @@ import {
 } from './inventory-dashboard.service';
 
 jest.mock('./admin-catalog.service');
-jest.mock('./public-ui.service');
+jest.mock('../api/api-client');
 
 const mockedCatalog = jest.mocked(AdminCatalogService);
-const mockedPublicUi = jest.mocked(PublicUiService);
 
 describe('InventoryDashboardService', () => {
     beforeEach(() => {
@@ -20,15 +19,18 @@ describe('InventoryDashboardService', () => {
     });
 
     it('reads and validates the configured low-stock threshold', async () => {
-        mockedPublicUi.getConfigByKey.mockResolvedValue({id: 1, key: 'business_low_stock_threshold', value: '7', type: 'number', isPublic: true});
+        (apiClient.get as any).mockResolvedValue({value: '7'});
         await expect(InventoryDashboardService.getLowStockThreshold()).resolves.toBe(7);
-        expect(mockedPublicUi.getConfigByKey).toHaveBeenCalledWith('business_low_stock_threshold', undefined);
+        expect(apiClient.get).toHaveBeenCalledWith(
+            '/api/public/configs/key/business_low_stock_threshold',
+            {signal: undefined}
+        );
         expect(parseLowStockThreshold('-1')).toBe(DEFAULT_LOW_STOCK_THRESHOLD);
         expect(parseLowStockThreshold('invalid')).toBe(DEFAULT_LOW_STOCK_THRESHOLD);
     });
 
     it('falls back to five when the configuration API fails', async () => {
-        mockedPublicUi.getConfigByKey.mockRejectedValue(new Error('Config unavailable'));
+        (apiClient.get as any).mockRejectedValue(new Error('Config unavailable'));
         await expect(InventoryDashboardService.getLowStockThreshold()).resolves.toBe(5);
     });
 
@@ -54,7 +56,7 @@ describe('InventoryDashboardService', () => {
     it('rejects an aborted request instead of applying the fallback', async () => {
         const controller = new AbortController();
         controller.abort();
-        mockedPublicUi.getConfigByKey.mockResolvedValue({id: 1, key: 'business_low_stock_threshold', value: '5', type: 'number', isPublic: true});
+        (apiClient.get as any).mockResolvedValue({value: '5'});
         await expect(InventoryDashboardService.getLowStockThreshold(controller.signal)).rejects.toMatchObject({name: 'AbortError'});
     });
 

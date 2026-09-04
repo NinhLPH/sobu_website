@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+    ArrowRight,
     ChevronLeft,
     ChevronRight,
     Eye,
@@ -15,6 +16,8 @@ import {SearchSuggestion} from '../../components/common/SearchSuggestInput';
 import {useIntegrationStore} from '../../store/useIntegrationStore';
 import {hasNhanhHistory} from '../../utils/order-sync';
 import {AdminFilterGroup, AdminFilterReset, AdminFilterSelect, AdminSearch, AdminToolbar} from '../../components/admin/AdminUi';
+import {useConfirmDialog} from '../../components/common/ConfirmDialog';
+import {getNextAdminOrderStatus} from '../../utils/admin-order-status';
 
 const getStatusColor = (status?: string) => {
     switch (status) {
@@ -102,11 +105,14 @@ const canRetrySync = (status?: string) =>
     status === 'FAILED' || status === 'NEED_RECONCILE' || status === 'DEAD';
 
 export default function AdminOrders() {
+    const confirm = useConfirmDialog();
     const {
         workflowOrders,
         fetchOrders,
         retryOrderSync,
         retryingOrderIds,
+        updateAdminOrderStatus,
+        updatingOrderStatusIds,
         isOrdersLoading,
         ordersError,
         ordersPage
@@ -201,6 +207,23 @@ export default function AdminOrders() {
             await retryOrderSync(orderId);
         } catch {
             // The store exposes the backend error through ordersError.
+        }
+    };
+
+    const handleAdvanceOrderStatus = async (orderId: number, orderCode: string | number | undefined, nextStatusLabel: string, nextStatus: Parameters<typeof updateAdminOrderStatus>[1]) => {
+        const confirmed = await confirm({
+            title: 'Chuyển trạng thái đơn hàng?',
+            message: `Đơn #${orderCode || orderId} sẽ chuyển sang trạng thái “${nextStatusLabel}”.`,
+            confirmLabel: `Chuyển sang ${nextStatusLabel}`,
+            tone: 'warning'
+        });
+        if (!confirmed) {
+            return;
+        }
+        try {
+            await updateAdminOrderStatus(orderId, nextStatus);
+        } catch {
+            // The admin store exposes the backend error through ordersError.
         }
     };
 
@@ -395,6 +418,22 @@ export default function AdminOrders() {
                                     </td>
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex items-center justify-center gap-2">
+                                            {!showNhanhControls && getNextAdminOrderStatus(order.status) && (() => {
+                                                const transition = getNextAdminOrderStatus(order.status)!;
+                                                const isUpdatingStatus = updatingOrderStatusIds.includes(order.id);
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleAdvanceOrderStatus(order.id, order.orderCode, transition.label, transition.status)}
+                                                        disabled={isUpdatingStatus}
+                                                        className="inline-flex items-center gap-1 rounded-lg border border-primary/25 px-2 py-1 text-[10px] font-black text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        aria-label={`Chuyển đơn ${order.orderCode || order.id} sang ${transition.label}`}
+                                                    >
+                                                        <ArrowRight className={`h-3.5 w-3.5 ${isUpdatingStatus ? 'animate-pulse' : ''}`} />
+                                                        {transition.label}
+                                                    </button>
+                                                );
+                                            })()}
                                             {showNhanhControls && canRetrySync(order.syncStatus) && (
                                                 <button
                                                     type="button"

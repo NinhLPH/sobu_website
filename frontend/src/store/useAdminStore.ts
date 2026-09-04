@@ -13,6 +13,7 @@ import { AdminWorkflowService } from '../service/admin.service';
 import { useIntegrationStore } from './useIntegrationStore';
 import { mockProducts, mockCategories, mockRequests } from '../data/mockData';
 import {compareNhanhHistoryNewestFirst, hasNhanhHistory} from '../utils/order-sync';
+import {OrderStatus} from '../enum/union-types';
 
 const getErrorMessage = (error: any, fallback: string) =>
     error?.response?.data?.message || error?.message || fallback;
@@ -99,6 +100,7 @@ interface AdminState {
     isOrderDetailLoading: boolean;
     isRetryingOrderSync: boolean;
     retryingOrderIds: number[];
+    updatingOrderStatusIds: number[];
     isOrderSyncQueueLoading: boolean;
     orderSyncQueueError: string | null;
     isNhanhHistoryLoading: boolean;
@@ -124,6 +126,7 @@ interface AdminState {
     fetchNhanhHistory: (force?: boolean) => Promise<void>;
     clearNhanhHistory: () => void;
     retryOrderSync: (id: string | number) => Promise<OrderSyncResultDto>;
+    updateAdminOrderStatus: (id: string | number, status: OrderStatus) => Promise<OrderResponseDto>;
     retryOrderSyncBatch: (ids: Array<string | number>) => Promise<OrderSyncBatchResult>;
     createPreorderFinalPayment: (id: string | number) => Promise<OrderPaymentResponseDto>;
     confirmMockPayment: (paymentCode: string) => Promise<OrderPaymentResponseDto>;
@@ -158,6 +161,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     isOrderDetailLoading: false,
     isRetryingOrderSync: false,
     retryingOrderIds: [],
+    updatingOrderStatusIds: [],
     isOrderSyncQueueLoading: false,
     orderSyncQueueError: null,
     isNhanhHistoryLoading: false,
@@ -498,6 +502,43 @@ export const useAdminStore = create<AdminState>((set, get) => ({
                     isRetryingOrderSync: nextRetryingIds.length > 0
                 };
             });
+            throw error;
+        }
+    },
+
+    updateAdminOrderStatus: async (id, status) => {
+        const orderId = Number(id);
+        if (get().updatingOrderStatusIds.includes(orderId)) {
+            throw new Error('Đơn hàng này đang được cập nhật trạng thái.');
+        }
+
+        set((state) => ({
+            updatingOrderStatusIds: [...state.updatingOrderStatusIds, orderId],
+            ordersError: null,
+            orderActionMessage: null
+        }));
+        try {
+            const response = await AdminWorkflowService.updateAdminOrderStatus(id, status);
+            const updatedOrder = response.data;
+            set((state) => {
+                const updatingOrderStatusIds = state.updatingOrderStatusIds.filter(item => item !== orderId);
+                return {
+                    workflowOrders: state.workflowOrders.map(order =>
+                        order.id === orderId ? {...order, ...updatedOrder} : order
+                    ),
+                    currentOrderDetail: state.currentOrderDetail?.id === orderId
+                        ? {...state.currentOrderDetail, ...updatedOrder}
+                        : state.currentOrderDetail,
+                    updatingOrderStatusIds,
+                    orderActionMessage: response.message || 'Đã cập nhật trạng thái đơn hàng.'
+                };
+            });
+            return updatedOrder;
+        } catch (error) {
+            set((state) => ({
+                updatingOrderStatusIds: state.updatingOrderStatusIds.filter(item => item !== orderId),
+                ordersError: getErrorMessage(error, 'Không thể cập nhật trạng thái đơn hàng.')
+            }));
             throw error;
         }
     },

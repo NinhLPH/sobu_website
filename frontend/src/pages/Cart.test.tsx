@@ -238,7 +238,7 @@ describe('Cart payment selection', () => {
     const selectShippingLocation = () => {
         selectLocationOption('Tỉnh/Thành phố', provinces[0].name);
         selectLocationOption('Phường/Xã', wards[0].name);
-        fireEvent.change(screen.getByPlaceholderText(/Tên đường/), {
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {
             target: { value: '1 Nguyen Trai' }
         });
     };
@@ -255,6 +255,15 @@ describe('Cart payment selection', () => {
         await clickShippingQuote();
         await waitFor(() => expect(getCheckoutButton().disabled).toBe(false));
     };
+
+    it('collects one detailed delivery address through customerAddress', () => {
+        render(<Cart />);
+
+        expect(screen.getByLabelText('Địa chỉ chi tiết')).toBeTruthy();
+        expect(screen.queryByLabelText('Tên đường')).toBeNull();
+        expect(screen.queryByText('Có tên đường')).toBeNull();
+        expect(screen.queryByPlaceholderText(/Xóm\/Ấp/i)).toBeNull();
+    });
 
     it('requests shipping quotes after the customer selects a full location', async () => {
         render(<Cart />);
@@ -328,7 +337,7 @@ describe('Cart payment selection', () => {
 
         await waitFor(() => expect(mockedShippingService.getQuotes).toHaveBeenCalledTimes(1));
 
-        fireEvent.change(screen.getByPlaceholderText(/Địa chỉ giao hàng chi tiết/), {
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {
             target: { value: '123 Nguyen Trai' }
         });
 
@@ -721,7 +730,7 @@ describe('Cart payment selection', () => {
         });
         render(<Cart />);
         selectShippingLocation();
-        fireEvent.change(screen.getByPlaceholderText(/Địa chỉ giao hàng chi tiết/), {
+        fireEvent.change(screen.getByLabelText('Địa chỉ chi tiết'), {
             target: { value: '123 Nguyen Trai' }
         });
         fireEvent.change(screen.getByLabelText('Phương thức thanh toán'), {
@@ -740,6 +749,8 @@ describe('Cart payment selection', () => {
         }), {
             clearCartOnSuccess: true
         }));
+        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('customerStreet');
+        expect(mockSubmitOrder.mock.calls[0][0]).not.toHaveProperty('customerHamlet');
         await waitFor(() => expect(mockCreatePayment).toHaveBeenCalledWith(12, {
             type: 'FULL',
             paymentMethod: 'COD'

@@ -1,12 +1,12 @@
 import {describe, expect, it, jest, beforeEach} from '@jest/globals';
 import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import AdminProducts from './Products';
+import apiClient from '../../api/api-client';
 import {AdminCatalogService} from '../../service/admin-catalog.service';
-import {PublicUiService} from '../../service/public-ui.service';
 import {ConfirmDialogProvider} from '../../components/common/ConfirmDialog';
 
 jest.mock('../../service/admin-catalog.service');
-jest.mock('../../service/public-ui.service');
+jest.mock('../../api/api-client');
 jest.mock('../../service/toast.service');
 
 const products = [
@@ -25,13 +25,7 @@ describe('AdminProducts API catalog', () => {
         (AdminCatalogService.getBrands as any).mockResolvedValue([]);
         (AdminCatalogService.getBadges as any).mockResolvedValue([]);
         (AdminCatalogService.setProductActive as any).mockResolvedValue({...products[0], active: false});
-        (PublicUiService.getConfigByKey as any).mockResolvedValue({
-            id: 1,
-            key: 'business_low_stock_threshold',
-            value: '5',
-            type: 'number',
-            isPublic: true
-        });
+        (apiClient.get as any).mockResolvedValue({value: '5'});
     });
 
     it('renders products returned by admin API', async () => {
@@ -48,6 +42,20 @@ describe('AdminProducts API catalog', () => {
         await waitFor(() => expect(AdminCatalogService.getProducts).toHaveBeenLastCalledWith(
             expect.objectContaining({search: 'serum'})
         ), {timeout: 1000});
+    });
+
+    it('passes explicit false for out-of-stock and stock sort options without changing the default sort', async () => {
+        renderPage();
+        await screen.findAllByText('Serum phục hồi');
+        expect(AdminCatalogService.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({
+            inStock: undefined, sortBy: undefined, sortDirection: undefined
+        }));
+
+        fireEvent.change(screen.getByLabelText('Lọc theo tồn kho'), {target: {value: 'OUT_OF_STOCK'}});
+        fireEvent.change(screen.getByLabelText('Sắp xếp theo tồn kho'), {target: {value: 'DESC'}});
+        await waitFor(() => expect(AdminCatalogService.getProducts).toHaveBeenLastCalledWith(expect.objectContaining({
+            inStock: false, sortBy: 'stockAvailable', sortDirection: 'DESC'
+        })));
     });
 
     it('sends the configured sale window and one manual tag when updating', async () => {
@@ -84,13 +92,13 @@ describe('AdminProducts API catalog', () => {
 
     it('uses the configured threshold for accessible desktop and mobile stock indicators', async () => {
         renderPage();
-        expect((await screen.findAllByText('Hết hàng')).length).toBe(2);
+        await waitFor(() => expect(screen.getAllByText('Hết hàng').filter(node => node.tagName !== 'OPTION')).toHaveLength(2));
         expect(screen.getAllByText('Sắp hết · 3')).toHaveLength(2);
         expect(screen.getAllByText('10').length).toBeGreaterThan(0);
         expect(screen.getAllByRole('article')).toHaveLength(3);
-        expect(PublicUiService.getConfigByKey).toHaveBeenCalledWith(
-            'business_low_stock_threshold',
-            expect.any(AbortSignal)
+        expect(apiClient.get).toHaveBeenCalledWith(
+            '/api/public/configs/key/business_low_stock_threshold',
+            {signal: expect.any(AbortSignal)}
         );
     });
 

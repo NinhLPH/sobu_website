@@ -2,12 +2,12 @@ import {FormEvent, useEffect, useMemo, useRef, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {AlertTriangle, ArrowDownToLine, PackageCheck, RefreshCw, ShoppingCart, Warehouse} from 'lucide-react';
 import {
-    AdminProductListItem,
     InventoryAdjustment,
     InventoryAdjustmentType,
-    InventoryBalance
+    InventoryBalance,
+    InventoryProduct
 } from '../../interface/admin-catalog.model';
-import {AdminCatalogService} from '../../service/admin-catalog.service';
+import {AdminCatalogService, InventoryProductParams} from '../../service/admin-catalog.service';
 import {
     DEFAULT_LOW_STOCK_THRESHOLD,
     InventoryDashboardService,
@@ -20,7 +20,6 @@ import {
     AdminEmpty,
     AdminError,
     AdminFilterGroup,
-    AdminFilterSelect,
     AdminLoading,
     AdminModal,
     AdminPage,
@@ -34,6 +33,10 @@ import {
 import {StockIndicator} from '../../components/admin/StockIndicator';
 
 const LOW_STOCK_PAGE_SIZE = 10;
+const INVENTORY_PAGE_SIZE = 20;
+type InventorySelection = Pick<InventoryProduct, 'id' | 'name' | 'code'>;
+type InventorySortBy = NonNullable<InventoryProductParams['sortBy']>;
+type InventoryStockStatus = NonNullable<InventoryProductParams['stockStatus']> | 'ALL';
 const typeNames: Record<InventoryAdjustmentType, string> = {
     OPENING_STOCK: 'Tồn đầu kỳ', STOCK_IN: 'Nhập kho', STOCK_OUT: 'Xuất kho',
     CORRECTION: 'Điều chỉnh kiểm kê', DAMAGED: 'Hàng hỏng', RETURNED: 'Hoàn kho',
@@ -47,11 +50,16 @@ const balanceLabel = (entry: InventoryAdjustment) => isOrderLedger(entry) ? 'Kh�
 const formatDate = (value?: string) => value ? new Date(value).toLocaleString('vi-VN') : '—';
 
 export default function AdminInventory() {
-    const [products, setProducts] = useState<AdminProductListItem[]>([]);
+    const [products, setProducts] = useState<InventoryProduct[]>([]);
     const [productQuery, setProductQuery] = useState('');
-    const [productSearchRetry, setProductSearchRetry] = useState(0);
+    const [stockStatus, setStockStatus] = useState<InventoryStockStatus>('ALL');
+    const [sortBy, setSortBy] = useState<InventorySortBy>('name');
+    const [sortDirection, setSortDirection] = useState<'ASC' | 'DESC'>('ASC');
+    const [productPage, setProductPage] = useState(0);
+    const [productTotalPages, setProductTotalPages] = useState(0);
+    const [productListRetry, setProductListRetry] = useState(0);
     const [productId, setProductId] = useState<number | null>(null);
-    const [selectedProduct, setSelectedProduct] = useState<AdminProductListItem | null>(null);
+    const [selectedProduct, setSelectedProduct] = useState<InventorySelection | null>(null);
     const [productsLoading, setProductsLoading] = useState(true);
     const [productsError, setProductsError] = useState('');
     const [balance, setBalance] = useState<InventoryBalance | null>(null);
@@ -60,7 +68,10 @@ export default function AdminInventory() {
     const [detailError, setDetailError] = useState('');
     const [detailRetry, setDetailRetry] = useState(0);
     const [threshold, setThreshold] = useState(DEFAULT_LOW_STOCK_THRESHOLD);
-    const [lowStockProducts, setLowStockProducts] = useState<AdminProductListItem[]>([]);
+    const [lowStockProducts, setLowStockProducts] = useState<Array<InventorySelection & {
+        stockAvailable?: number | null;
+        stockRemain?: number | null;
+    }>>([]);
     const [overviewLoading, setOverviewLoading] = useState(true);
     const [overviewError, setOverviewError] = useState('');
     const [overviewRetry, setOverviewRetry] = useState(0);
@@ -80,11 +91,18 @@ export default function AdminInventory() {
             setProductsLoading(true);
             setProductsError('');
             try {
-                const response = await AdminCatalogService.getProducts({
-                    page: 0, pageSize: 100,
-                    search: productQuery.trim() || undefined, sortBy: 'name', sortDirection: 'ASC'
+                const response = await AdminCatalogService.getInventoryProducts({
+                    page: productPage,
+                    pageSize: INVENTORY_PAGE_SIZE,
+                    search: productQuery.trim() || undefined,
+                    stockStatus: stockStatus === 'ALL' ? undefined : stockStatus,
+                    sortBy,
+                    sortDirection
                 }, controller.signal);
-                if (!controller.signal.aborted) setProducts(response.content ?? []);
+                if (!controller.signal.aborted) {
+                    setProducts(response.content ?? []);
+                    setProductTotalPages(response.totalPages ?? 0);
+                }
             } catch (error) {
                 if (!controller.signal.aborted && !isAbortError(error)) setProductsError(getApiError(error, 'Không thể tải danh sách sản phẩm.'));
             } finally {
@@ -95,7 +113,7 @@ export default function AdminInventory() {
             controller.abort();
             window.clearTimeout(timer);
         };
-    }, [productQuery, productSearchRetry]);
+    }, [productPage, productQuery, productListRetry, sortBy, sortDirection, stockStatus]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -146,7 +164,7 @@ export default function AdminInventory() {
     const visibleLowStockProducts = lowStockProducts.slice(lowStockPage * LOW_STOCK_PAGE_SIZE, (lowStockPage + 1) * LOW_STOCK_PAGE_SIZE);
     const canSetOpeningStock = Boolean(productId) && !detailLoading && !detailError && ledger.length === 0;
 
-    const selectProduct = (product: AdminProductListItem, focusDetail = false) => {
+    const selectProduct = (product: InventorySelection, focusDetail = false) => {
         setSelectedProduct(product);
         setProductId(product.id);
         if (focusDetail) window.setTimeout(() => {
@@ -199,6 +217,7 @@ export default function AdminInventory() {
             setMode(null);
             setDetailRetry(value => value + 1);
             setOverviewRetry(value => value + 1);
+            setProductListRetry(value => value + 1);
         } catch (error) {
             const message = getApiError(error, 'Không thể ghi nhận điều chỉnh kho.');
             setFormError(message);
@@ -207,8 +226,17 @@ export default function AdminInventory() {
             setSaving(false);
         }
     };
-    const renderStockState = (product: AdminProductListItem) =>
+    const renderStockState = (product: {stockAvailable?: number | null; stockRemain?: number | null}) =>
         <StockIndicator stock={inventoryQuantity(product)} threshold={threshold}/>;
+    const changeInventoryFilter = (update: () => void) => {
+        update();
+        setProductPage(0);
+    };
+    const refreshInventory = () => {
+        setProductListRetry(value => value + 1);
+        setOverviewRetry(value => value + 1);
+        if (productId) setDetailRetry(value => value + 1);
+    };
     const quantityLabel = mode === 'opening'
         ? 'Số lượng tồn đầu kỳ'
         : type === 'CORRECTION' ? 'Tồn thực tế sau kiểm kê' : 'Số lượng';
@@ -222,8 +250,8 @@ export default function AdminInventory() {
                 <div><h2 id="low-stock-title" className="flex items-center gap-2 font-black text-on-surface">
                     <AlertTriangle className="h-5 w-5 text-amber-600"/>Cảnh báo tồn thấp</h2>
                     <p className="mt-1 text-xs text-outline">Ngưỡng hiện hành: tồn khả dụng ≤ {threshold}</p></div>
-                <AdminButton variant="secondary" disabled={overviewLoading}
-                             onClick={() => setOverviewRetry(value => value + 1)}>
+                <AdminButton variant="secondary" disabled={overviewLoading || productsLoading || detailLoading}
+                             onClick={refreshInventory}>
                     <RefreshCw
                         className={`h-4 w-4 ${overviewLoading ? 'animate-spin motion-reduce:animate-none' : ''}`}/>Làm
                     mới
@@ -277,29 +305,54 @@ export default function AdminInventory() {
                                          onChange={setLowStockPage}/></>}
         </AdminCard></section>
 
-        <AdminCard>
+        <section aria-labelledby="inventory-list-title"><AdminCard>
+            <header className="border-b border-outline-variant/30 px-4 pt-4">
+                <h2 id="inventory-list-title" className="font-black text-on-surface">Danh sách tồn kho</h2>
+                <p className="mt-1 pb-4 text-xs text-outline">Hiển thị 20 sản phẩm mỗi trang. Chọn một sản phẩm để xem số dư và sổ kho.</p>
+            </header>
             <AdminToolbar>
-                <AdminSearch value={productQuery} onChange={setProductQuery} placeholder="Tìm sản phẩm theo tên hoặc mã"
-                             ariaLabel="Tìm sản phẩm để xem tồn kho"/>
-                <AdminFilterGroup label="Sản phẩm"><AdminFilterSelect label="Chọn sản phẩm" value={productId ?? ''}
-                                                                      className="sm:min-w-72" onChange={value => {
-                    const id = value ? Number(value) : null;
-                    setProductId(id);
-                    setSelectedProduct(products.find(product => product.id === id) ?? null);
-                }}>
-                    <option value="">{productsLoading ? 'Đang tải sản phẩm...' : 'Chọn sản phẩm'}</option>
-                    {selectedProduct && !products.some(product => product.id === selectedProduct.id) ? <option
-                        value={selectedProduct.id}>{selectedProduct.code || `#${selectedProduct.id}`} — {selectedProduct.name}</option> : null}
-                    {products.map(product => <option key={product.id}
-                                                     value={product.id}>{product.code || `#${product.id}`} — {product.name}</option>)}
-                </AdminFilterSelect></AdminFilterGroup>
+                <AdminSearch value={productQuery} onChange={value => changeInventoryFilter(() => setProductQuery(value))}
+                             placeholder="Tìm sản phẩm theo tên hoặc mã" ariaLabel="Tìm kiếm tồn kho"/>
+                <AdminFilterGroup label="Lọc và sắp xếp">
+                    <label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Trạng thái tồn kho</span><select
+                        aria-label="Trạng thái tồn kho" value={stockStatus}
+                        onChange={event => changeInventoryFilter(() => setStockStatus(event.target.value as InventoryStockStatus))}
+                        className={`${inputClass} min-w-[10rem] cursor-pointer bg-surface-container-lowest sm:w-auto`}>
+                        <option value="ALL">Tất cả tồn kho</option><option value="IN_STOCK">Còn hàng</option>
+                        <option value="LOW_STOCK">Tồn thấp</option><option value="OUT_OF_STOCK">Hết hàng</option>
+                    </select></label>
+                    <label className="min-w-0 flex-1 sm:flex-none"><span className="sr-only">Sắp xếp tồn kho</span><select
+                        aria-label="Sắp xếp tồn kho" value={`${sortBy}:${sortDirection}`}
+                        onChange={event => changeInventoryFilter(() => {
+                            const [nextSortBy, nextDirection] = event.target.value.split(':') as [InventorySortBy, 'ASC' | 'DESC'];
+                            setSortBy(nextSortBy);
+                            setSortDirection(nextDirection);
+                        })} className={`${inputClass} min-w-[12rem] cursor-pointer bg-surface-container-lowest sm:w-auto`}>
+                        <option value="name:ASC">Tên: A–Z</option><option value="name:DESC">Tên: Z–A</option>
+                        <option value="stockAvailable:ASC">Tồn khả dụng: thấp đến cao</option>
+                        <option value="stockAvailable:DESC">Tồn khả dụng: cao đến thấp</option>
+                    </select></label>
+                </AdminFilterGroup>
             </AdminToolbar>
-            {productsError && <div
-                className="m-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-error/10 px-3 py-2 text-xs font-bold text-error">
-                <span>{productsError}</span><AdminButton variant="secondary" className="!min-h-9 !px-3"
-                                                         onClick={() => setProductSearchRetry(value => value + 1)}>Thử
-                lại</AdminButton></div>}
-        </AdminCard>
+            {productsLoading ? <AdminLoading label="Đang tải danh sách tồn kho..."/> : productsError
+                ? <AdminError message={productsError} onRetry={() => setProductListRetry(value => value + 1)}/>
+                : !products.length ? <AdminEmpty title="Không có sản phẩm phù hợp" description="Thử thay đổi từ khóa hoặc bộ lọc."/>
+                    : <><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left text-sm">
+                        <thead className="bg-surface-container text-xs uppercase text-outline"><tr><th className="px-4 py-3">Sản phẩm</th>
+                            <th className="px-4 py-3 text-right">Tồn thực tế</th><th className="px-4 py-3 text-right">Tồn khả dụng</th>
+                            <th className="px-4 py-3 text-right">Đang giữ</th><th className="px-4 py-3 text-right">Thao tác</th></tr></thead>
+                        <tbody>{products.map(product => <tr key={product.id} className="border-t border-outline-variant/25 hover:bg-surface-container-low">
+                            <td className="px-4 py-3"><p className="font-bold text-on-surface">{product.name}</p><p className="text-xs text-outline">{product.code || `#${product.id}`}</p></td>
+                            <td className="px-4 py-3 text-right font-bold">{product.stockRemain ?? 0}</td>
+                            <td className="px-4 py-3 text-right">{renderStockState(product)}</td><td className="px-4 py-3 text-right font-bold text-amber-700">{product.reserved ?? 0}</td>
+                            <td className="px-4 py-3 text-right"><AdminButton variant="ghost" className="!min-h-10 !px-3" onClick={() => selectProduct(product, true)}>Xem sổ kho</AdminButton></td>
+                        </tr>)}</tbody></table></div>
+                        <div className="space-y-3 p-4 md:hidden">{products.map(product => <button key={product.id} type="button" onClick={() => selectProduct(product, true)}
+                            className="w-full cursor-pointer rounded-xl border border-outline-variant/35 bg-surface p-4 text-left transition-colors hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                            <span className="block font-bold text-on-surface">{product.name}</span><span className="text-xs text-outline">{product.code || `#${product.id}`}</span>
+                            <span className="mt-3 grid grid-cols-3 gap-2 text-xs"><span><span className="block font-bold uppercase text-outline">Thực tế</span>{product.stockRemain ?? 0}</span><span><span className="block font-bold uppercase text-outline">Khả dụng</span>{product.stockAvailable ?? 0}</span><span><span className="block font-bold uppercase text-outline">Đang giữ</span>{product.reserved ?? 0}</span></span>
+                        </button>)}</div><AdminPagination page={productPage} totalPages={productTotalPages} onChange={setProductPage}/></>}
+        </AdminCard></section>
 
         <div ref={detailRef} tabIndex={-1} className="scroll-mt-32 outline-none">
             {!productId ? <AdminCard><AdminEmpty title="Chọn sản phẩm để xem tồn kho"/></AdminCard>
@@ -412,7 +465,7 @@ export default function AdminInventory() {
                     description={selectedProduct?.name} size="md">
             <form noValidate onSubmit={submit} className="space-y-4 p-5">{mode === 'adjust' &&
                 <Field label="Loại điều chỉnh"><select aria-label="Loại điều chỉnh" data-autofocus
-                                                       className={inputClass} value={type} onChange={event => {
+                                                       className={`${inputClass} admin-select`} value={type} onChange={event => {
                     setType(event.target.value as ManualType);
                     setQuantity('');
                     setFormError('');

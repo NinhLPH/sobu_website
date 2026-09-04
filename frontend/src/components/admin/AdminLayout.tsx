@@ -20,8 +20,9 @@ import {
     X
 } from 'lucide-react';
 import {useAuthStore} from '../../store/useAuthStore';
+import {useIntegrationStore} from '../../store/useIntegrationStore';
 
-type AdminNavItem = { name: string; path: string; icon: typeof Package; adminOnly?: boolean };
+type AdminNavItem = { name: string; path: string; icon: typeof Package; adminOnly?: boolean; requiresNhanh?: boolean };
 type AdminNavGroup = { label: string; items: AdminNavItem[] };
 
 const groups: AdminNavGroup[] = [
@@ -56,7 +57,7 @@ const groups: AdminNavGroup[] = [
                 path: '/admin/reviews',
                 icon: Star
             },
-            {name: 'Đồng bộ ERP', path: '/admin/sync', icon: Settings},
+            {name: 'Đồng bộ ERP', path: '/admin/sync', icon: Settings, requiresNhanh: true},
         ]
     },
     {
@@ -73,6 +74,8 @@ export default function AdminLayout() {
     const location = useLocation();
     const [open, setOpen] = useState(false);
     const role = useAuthStore(state => state.user?.role?.name);
+    const nhanhEnabled = useIntegrationStore(state => state.nhanhEnabled);
+    const ensureIntegrationLoaded = useIntegrationStore(state => state.ensureLoaded);
     const mainRef = useRef<HTMLElement>(null);
     const drawerRef = useRef<HTMLElement>(null);
     const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -80,6 +83,10 @@ export default function AdminLayout() {
     useEffect(() => {
         if (mainRef.current) mainRef.current.scrollTop = 0;
     }, [location.pathname]);
+
+    useEffect(() => {
+        void ensureIntegrationLoaded();
+    }, [ensureIntegrationLoaded]);
 
     useEffect(() => {
         if (!open) return;
@@ -116,7 +123,10 @@ export default function AdminLayout() {
         };
     }, [open]);
     const nav = <nav className="space-y-6" aria-label="Điều hướng quản trị">{groups.map(group => {
-        const items = group.items.filter(item => !item.adminOnly || role === 'ADMIN');
+        const items = group.items.filter(item =>
+            (!item.adminOnly || role === 'ADMIN')
+            && (!item.requiresNhanh || nhanhEnabled)
+        );
         if (!items.length) return null;
         return <div key={group.label}><p
             className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.16em] text-outline">{group.label}</p>

@@ -9,6 +9,7 @@ import {
     InventoryAdjustment,
     InventoryAdjustmentType,
     InventoryBalance,
+    InventoryProductPage,
     ProductBadge,
     ProductBadgeWriteRequest,
     ProductWriteRequest,
@@ -33,6 +34,15 @@ export type ProductParams = {
     sortDirection?: 'ASC' | 'DESC';
 };
 
+export type InventoryProductParams = {
+    search?: string;
+    stockStatus?: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+    page?: number;
+    pageSize?: number;
+    sortBy?: 'name' | 'stockAvailable';
+    sortDirection?: 'ASC' | 'DESC';
+};
+
 type VoucherParams = {
     keyword?: string;
     active?: boolean;
@@ -47,6 +57,8 @@ type VoucherParams = {
 export const AdminCatalogService = {
     getProducts: (params?: ProductParams, signal?: AbortSignal): Promise<AdminProductPage> =>
         apiClient.get('/api/admin/products', { params, signal }),
+    getInventoryProducts: (params?: InventoryProductParams, signal?: AbortSignal): Promise<InventoryProductPage> =>
+        apiClient.get('/api/admin/inventory', {params, signal}),
     getProduct: (id: number): Promise<AdminProductDetail> =>
         apiClient.get(`/api/admin/products/${id}`),
     createProduct: (data: ProductWriteRequest): Promise<AdminProductDetail> =>

@@ -1,16 +1,22 @@
 import {AdminProductListItem} from '../interface/admin-catalog.model';
+import apiClient from '../api/api-client';
 import {AdminCatalogService} from './admin-catalog.service';
-import {PublicUiService} from './public-ui.service';
 
 export const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 const LOW_STOCK_PAGE_SIZE = 100;
+const LOW_STOCK_THRESHOLD_KEY = 'business_low_stock_threshold';
+
+type InventoryConfig = {value?: unknown};
 
 export interface LowStockOverview {
     threshold: number;
     products: AdminProductListItem[];
 }
 
-export const inventoryQuantity = (product: AdminProductListItem): number => {
+export const inventoryQuantity = <T extends {
+    stockAvailable?: number | null;
+    stockRemain?: number | null;
+}>(product: T): number => {
     const value = product.stockAvailable ?? product.stockRemain ?? 0;
     return Number.isFinite(Number(value)) ? Number(value) : 0;
 };
@@ -29,7 +35,10 @@ const throwIfAborted = (signal?: AbortSignal) => {
 export const InventoryDashboardService = {
     getLowStockThreshold: async (signal?: AbortSignal): Promise<number> => {
         try {
-            const config = await PublicUiService.getConfigByKey('business_low_stock_threshold', signal);
+            const config: InventoryConfig = await apiClient.get(
+                `/api/public/configs/key/${LOW_STOCK_THRESHOLD_KEY}`,
+                {signal}
+            );
             throwIfAborted(signal);
             return parseLowStockThreshold(config?.value);
         } catch (error) {

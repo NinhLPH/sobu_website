@@ -11,6 +11,7 @@ import {
     OrderResponseDto,
     OrderSyncResultDto
 } from '../interface/order.model';
+import {OrderStatus} from '../enum/union-types';
 
 export const AdminWorkflowService = {
     getAdminRequests: (
@@ -62,6 +63,13 @@ export const AdminWorkflowService = {
         orderId: string | number
     ): Promise<ApiResponseDTO<OrderSyncResultDto>> => {
         return apiClient.post(`/api/admin/orders/${orderId}/sync/retry`);
+    },
+
+    updateAdminOrderStatus: (
+        orderId: string | number,
+        status: OrderStatus
+    ): Promise<ApiResponseDTO<OrderResponseDto>> => {
+        return apiClient.patch(`/api/admin/orders/${orderId}/status`, {status});
     },
 
     createPreorderFinalPayment: (

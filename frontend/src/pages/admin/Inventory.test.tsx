@@ -46,8 +46,8 @@ describe('AdminInventory', () => {
             {...product, stockAvailable: 0},
             {...product, id: 12, name: 'Sắp hết', stockAvailable: 3}
         ]});
-        mockedCatalog.getProducts.mockResolvedValue({
-            content: [product], pageNumber: 0, pageSize: 100, totalElements: 1, totalPages: 1,
+        mockedCatalog.getInventoryProducts.mockResolvedValue({
+            content: [{...product, reserved: 3}], pageNumber: 0, pageSize: 20, totalElements: 1, totalPages: 1,
             first: true, last: true, hasNext: false, hasPrevious: false
         });
         mockedCatalog.getInventoryBalance.mockResolvedValue({productId: 10, stockRemain: 10, stockAvailable: 7, reserved: 3});
@@ -64,6 +64,19 @@ describe('AdminInventory', () => {
         expect(screen.getAllByText('system').length).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', {name: /SO-77/})[0].getAttribute('href')).toBe('/admin/orders/77');
         expect((screen.getByRole('button', {name: /Tồn đầu kỳ/}) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('queries the paged inventory API with default sort and resets to page one after changing a filter', async () => {
+        renderInventory();
+        await screen.findByText('Danh sách tồn kho');
+        await waitFor(() => expect(mockedCatalog.getInventoryProducts).toHaveBeenCalledWith(expect.objectContaining({
+            page: 0, pageSize: 20, sortBy: 'name', sortDirection: 'ASC', stockStatus: undefined
+        }), expect.any(AbortSignal)));
+
+        fireEvent.change(screen.getByLabelText('Trạng thái tồn kho'), {target: {value: 'OUT_OF_STOCK'}});
+        await waitFor(() => expect(mockedCatalog.getInventoryProducts).toHaveBeenLastCalledWith(expect.objectContaining({
+            page: 0, stockStatus: 'OUT_OF_STOCK'
+        }), expect.any(AbortSignal)));
     });
 
     it('ignores a stale balance response when the operator selects another product quickly', async () => {

@@ -1,14 +1,22 @@
+import {CSSProperties} from 'react';
 import { ToastContainer, Slide } from 'react-toastify';
 // @ts-ignore
 import 'react-toastify/dist/ReactToastify.css';
 import {useThemeStore} from '../../store/useThemeStore';
+
+export const DEFAULT_TOAST_AUTO_CLOSE = 3000;
+const toastContainerStyle = {
+    '--sobu-toast-auto-close': `${DEFAULT_TOAST_AUTO_CLOSE}ms`
+} as CSSProperties;
 
 export default function Toast() {
     const theme = useThemeStore(state => state.theme);
     return (
         <ToastContainer
             position="bottom-right"
-            autoClose={1500}
+            autoClose={DEFAULT_TOAST_AUTO_CLOSE}
+            progressClassName="sobu-toast-progress"
+            style={toastContainerStyle}
             limit={5}
             hideProgressBar={false}
             newestOnTop={true}

@@ -142,6 +142,16 @@ export interface InventoryBalance {
     reserved: number;
 }
 
+/** A product row returned by the dedicated admin inventory endpoint. */
+export interface InventoryProduct {
+    id: number;
+    name: string;
+    code?: string | null;
+    stockRemain: number | null;
+    stockAvailable: number | null;
+    reserved: number | null;
+}
+
 export interface InventoryAdjustment {
     id: number;
     productId: number;
@@ -156,6 +166,7 @@ export interface InventoryAdjustment {
 }
 
 export type AdminProductPage = PageResponse<AdminProductListItem>;
+export type InventoryProductPage = PageResponse<InventoryProduct>;
 
 export type VoucherType = 'DISCOUNT_PERCENT' | 'DISCOUNT_AMOUNT' | 'FREE_SHIP';
 export type VoucherSlot = 'ITEM' | 'ORDER' | 'SHIPPING';

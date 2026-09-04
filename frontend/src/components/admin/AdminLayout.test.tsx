@@ -36,6 +36,12 @@ describe('AdminLayout independent scrolling', () => {
         expect(sidebar.scrollTop).toBe(80);
     });
 
+    it('hides the ERP sync menu while Nhanh.vn integration is disabled', () => {
+        render(<AdminLayout/>);
+
+        expect(screen.queryByRole('link', {name: 'Đồng bộ ERP'})).toBeNull();
+    });
+
     it('locks background, closes with Escape and restores focus for the mobile drawer', async () => {
         render(<AdminLayout/>);
         const opener = screen.getByRole('button', {name: 'Menu quản trị'});

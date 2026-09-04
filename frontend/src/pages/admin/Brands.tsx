@@ -134,7 +134,7 @@ export default function AdminBrands() {
                                                                                                    })}/></Field><Field
                 label="Tên thương hiệu"><input required className={inputClass} value={form.name}
                                                onChange={e => setForm({...form, name: e.target.value})}/></Field><Field
-                label="Thương hiệu cha"><select className={inputClass} value={form.parentId ?? ''}
+                label="Thương hiệu cha"><select className={`${inputClass} admin-select`} value={form.parentId ?? ''}
                                                 onChange={e => setForm({
                                                     ...form,
                                                     parentId: e.target.value ? Number(e.target.value) : null

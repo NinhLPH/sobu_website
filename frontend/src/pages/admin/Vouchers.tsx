@@ -326,7 +326,7 @@ export default function AdminVouchers() {
                                                         ...form,
                                                         name: e.target.value
                                                     })}/></Field><Field label="Loại ưu đãi"><select
-                    className={inputClass} value={form.type}
+                    className={`${inputClass} admin-select`} value={form.type}
                     onChange={e => {
                         const type = e.target.value as VoucherWriteRequest['type'];
                         setForm({...form, type, slot: type === 'FREE_SHIP' ? 'SHIPPING' : form.slot, geoScope: type === 'FREE_SHIP' ? form.geoScope : 'ALL'});
@@ -334,7 +334,7 @@ export default function AdminVouchers() {
                     <option value="DISCOUNT_PERCENT">Giảm theo phần trăm</option>
                     <option value="DISCOUNT_AMOUNT">Giảm số tiền cố định</option>
                     <option value="FREE_SHIP">Miễn phí vận chuyển</option>
-                </select></Field><Field label="Áp dụng tại"><select className={inputClass} value={form.slot}
+                </select></Field><Field label="Áp dụng tại"><select className={`${inputClass} admin-select`} value={form.slot}
                                                                     onChange={e => setForm({...form, slot: e.target.value as VoucherWriteRequest['slot']})}>
                     <option value="ITEM" disabled={form.type === 'FREE_SHIP'}>Sản phẩm</option>
                     <option value="ORDER" disabled={form.type === 'FREE_SHIP'}>Đơn hàng</option>
@@ -367,7 +367,7 @@ export default function AdminVouchers() {
                                                                  value={form.endDate || ''} onChange={e => setForm({
                     ...form,
                     endDate: e.target.value
-                })}/></Field><Field label="Phạm vi catalog"><select className={inputClass} value={form.scope}
+                })}/></Field><Field label="Phạm vi catalog"><select className={`${inputClass} admin-select`} value={form.scope}
                                                                     onChange={e => {
                                                                         const scope = e.target.value as VoucherWriteRequest['scope'];
                                                                         setForm({
@@ -380,7 +380,7 @@ export default function AdminVouchers() {
                     <option value="ALL">Tất cả</option>
                     <option value="PRODUCT">Sản phẩm chỉ định</option>
                     <option value="CATEGORY">Danh mục chỉ định</option>
-                </select></Field><Field label="Khu vực"><select className={inputClass} value={form.geoScope}
+                </select></Field><Field label="Khu vực"><select className={`${inputClass} admin-select`} value={form.geoScope}
                                                                 disabled={form.type !== 'FREE_SHIP'}
                                                                 onChange={e => setForm({
                                                                     ...form,

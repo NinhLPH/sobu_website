@@ -234,6 +234,39 @@ public class OrderService {
         return cancelled;
     }
 
+    /**
+     * Updates only the fulfilment milestones that are owned by staff in local mode.
+     * Payment-related statuses remain exclusively controlled by the payment flow.
+     */
+    @Transactional
+    public Order updateFulfilmentStatusByStaff(Long orderId, OrderStatus targetStatus) {
+        if (orderId == null || targetStatus == null) {
+            throw new IllegalArgumentException("Order id and target status are required");
+        }
+        if (nhanhEnabled.isEnabled()) {
+            throw new ForbiddenOperationException("Trạng thái đơn đang được đồng bộ từ Nhanh.vn và không thể cập nhật thủ công.");
+        }
+
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        OrderStatus previousStatus = order.getStatus();
+        if (!isAllowedStaffFulfilmentTransition(previousStatus, targetStatus)) {
+            throw new IllegalStateException("Chỉ có thể chuyển đơn theo luồng Mới → Đang xử lý → Đang giao → Đã giao.");
+        }
+
+        order.setStatus(targetStatus);
+        Order updatedOrder = orderRepository.save(order);
+        auditService.record(
+                AuditAction.ORDER_STATUS_OVERRIDE,
+                "ORDER",
+                String.valueOf(updatedOrder.getId()),
+                previousStatus.name(),
+                updatedOrder.getStatus().name(),
+                "Staff fulfilment status update"
+        );
+        return updatedOrder;
+    }
+
     private void validateDirectOrder(CreateNormalOrderDto dto) {
         if (dto == null) {
             throw new IllegalArgumentException("Create order payload is required");
@@ -286,6 +319,12 @@ public class OrderService {
         if (dto.getShippingFee() == null || dto.getShippingFee().signum() < 0) {
             throw new IllegalArgumentException("Shipping fee must be greater than or equal to 0");
         }
+    }
+
+    private boolean isAllowedStaffFulfilmentTransition(OrderStatus currentStatus, OrderStatus targetStatus) {
+        return (currentStatus == OrderStatus.NEW && targetStatus == OrderStatus.PROCESSING)
+                || (currentStatus == OrderStatus.PROCESSING && targetStatus == OrderStatus.SHIPPED)
+                || (currentStatus == OrderStatus.SHIPPED && targetStatus == OrderStatus.DELIVERED);
     }
 
     private ResolvedOrderItem resolveOrderItem(CreateNormalOrderItemDto itemDto) {

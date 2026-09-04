@@ -145,7 +145,7 @@ export default function AdminCategories() {
                                                                                              })}/></Field><Field
                     label="Tên danh mục"><input required className={inputClass} value={form.name}
                                                 onChange={e => setForm({...form, name: e.target.value})}/></Field><Field
-                    label="Danh mục cha"><select className={inputClass} value={form.parentId ?? ''}
+                    label="Danh mục cha"><select className={`${inputClass} admin-select`} value={form.parentId ?? ''}
                                                  onChange={e => setForm({
                                                      ...form,
                                                      parentId: e.target.value ? Number(e.target.value) : null

@@ -6,6 +6,8 @@ import com.vn.sodu.integration.NhanhEnabled;
 import com.vn.sodu.order.Order;
 import com.vn.sodu.order.services.OrderQueryService;
 import com.vn.sodu.order.dtos.OrderSyncResultDto;
+import com.vn.sodu.order.dtos.UpdateOrderStatusRequest;
+import com.vn.sodu.order.services.OrderService;
 import com.vn.sodu.order.services.OrderSyncService;
 import com.vn.sodu.order.dtos.OrderResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,6 +23,8 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import java.util.List;
@@ -36,6 +40,7 @@ public class OrderSyncController {
     private final OrderQueryService orderQueryService;
     private final com.vn.sodu.order.services.OrderExportService orderExportService;
     private final NhanhEnabled nhanhEnabled;
+    private final OrderService orderService;
 
     @PostMapping("/export/spx")
     @Operation(
@@ -116,6 +121,26 @@ public class OrderSyncController {
         return ResponseEntity.ok(ApiResponseDTO.success(
                 order,
                 "Order retrieved",
+                HttpStatus.OK.value()
+        ));
+    }
+
+    @PatchMapping("/{orderId}/status")
+    @Operation(
+            summary = "Advance an order fulfilment status",
+            description = "Staff can advance local orders only through NEW → PROCESSING → SHIPPED → DELIVERED. Payment statuses and Nhanh-managed orders cannot be changed here."
+    )
+    public ResponseEntity<ApiResponseDTO<OrderResponseDto>> updateOrderStatus(
+            @PathVariable Long orderId,
+            @jakarta.validation.Valid @RequestBody UpdateOrderStatusRequest request,
+            Authentication authentication
+    ) {
+        requireStaff(authentication);
+        orderService.updateFulfilmentStatusByStaff(orderId, request.getStatus());
+        OrderResponseDto updatedOrder = orderQueryService.getOrderDetail(orderId);
+        return ResponseEntity.ok(ApiResponseDTO.success(
+                updatedOrder,
+                "Order status updated",
                 HttpStatus.OK.value()
         ));
     }
