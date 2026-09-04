@@ -23,6 +23,7 @@ const product: ProductModel = {
 };
 
 const shippingLocation = {
+    customerStreet: 'Nguyen Trai',
     customerCityName: 'Ha Noi',
     customerDistrictName: 'Ba Dinh',
     customerWardName: 'Phuc Xa',

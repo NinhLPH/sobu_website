@@ -16,6 +16,7 @@ const product: ProductModel = {
     brand: '', imageUrl: '', description: ''
 };
 const details = {
+    customerStreet: 'Nguyen Trai',
     customerName: 'Audit Customer', customerMobile: '0900000001',
     customerCityName: 'Ho Chi Minh', customerWardName: 'Test Ward',
     customerCityId: 79, customerWardId: 27154,
@@ -54,6 +55,44 @@ describe('Customer checkout audit', () => {
         await useCartStore.getState().fetchCart();
         expect(api.getCart).not.toHaveBeenCalled();
         expect(useCartStore.getState().items).toEqual([]);
+    });
+
+    it.each([
+        {customerStreet: undefined, customerHamlet: undefined},
+        {customerStreet: '   ', customerHamlet: '\t'},
+        {customerStreet: 'a'.repeat(256), customerHamlet: undefined},
+        {customerStreet: undefined, customerHamlet: 'a'.repeat(256)},
+    ])('rejects invalid street/hamlet before touching the cart or pending request: %j', async address => {
+        useCartStore.setState({pendingOrderKey: 'existing-key', pendingOrderFingerprint: 'existing-fingerprint'});
+        const before = useCartStore.getState();
+        await expect(before.submitOrder({...details, ...address})).rejects.toThrow(/đường\/ngõ|thôn\/xóm/);
+        expect(api.createOrder).not.toHaveBeenCalled();
+        expect(api.clearCart).not.toHaveBeenCalled();
+        expect(useCartStore.getState()).toEqual({...before, checkoutError: expect.any(String)});
+    });
+
+    it.each(['customerStreet', 'customerHamlet'] as const)('normalizes and accepts 255 characters in %s', async field => {
+        const order = {id: 991, items: []};
+        api.createOrder.mockResolvedValue({success: true, data: order} as any);
+        const value = 'a'.repeat(255);
+        await useCartStore.getState().submitOrder({
+            ...details, customerStreet: undefined, [field]: `  ${value}  `,
+        }, {clearCartOnSuccess: false});
+        const payload = JSON.parse(JSON.stringify(api.createOrder.mock.calls[0][0]));
+        expect(payload[field]).toBe(value);
+        expect(payload).not.toHaveProperty(field === 'customerStreet' ? 'customerHamlet' : 'customerStreet');
+        expect(api.clearCart).not.toHaveBeenCalled();
+    });
+
+    it('reuses the order key for whitespace-only address changes but not a different street', async () => {
+        api.createOrder.mockRejectedValue(new Error('Temporary order failure'));
+        await expect(useCartStore.getState().submitOrder({...details, customerStreet: '  Nguyen Trai  '})).rejects.toThrow();
+        await expect(useCartStore.getState().submitOrder({...details, customerStreet: 'Nguyen Trai'})).rejects.toThrow();
+        await expect(useCartStore.getState().submitOrder({...details, customerStreet: 'Le Loi'})).rejects.toThrow();
+        expect(api.createOrder.mock.calls[0][1]).toBe(api.createOrder.mock.calls[1][1]);
+        expect(api.createOrder.mock.calls[2][1]).not.toBe(api.createOrder.mock.calls[1][1]);
+        expect(useCartStore.getState().items).toEqual([{product, quantity: 1}]);
+        expect(api.clearCart).not.toHaveBeenCalled();
     });
 
     it('preserves existing cart items when a refresh has a transient failure', async () => {
