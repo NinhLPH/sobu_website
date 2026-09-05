@@ -522,7 +522,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             orderActionMessage: null
         }));
         try {
-            const response = await AdminWorkflowService.updateAdminOrderStatus(id, status);
+            const response = await AdminWorkflowService.updateAdminOrderStatus(id, {status});
             const updatedOrder = response.data;
             set((state) => {
                 const updatingOrderStatusIds = state.updatingOrderStatusIds.filter(item => item !== orderId);

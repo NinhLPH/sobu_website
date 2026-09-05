@@ -12,7 +12,6 @@ import {
     OrderSyncResultDto,
     UpdateOrderStatusDto
 } from '../interface/order.model';
-import {OrderStatus} from '../enum/union-types';
 
 export const AdminWorkflowService = {
     getAdminRequests: (

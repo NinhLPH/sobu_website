@@ -220,6 +220,48 @@ describe('useAdminStore order sync', () => {
         expect(useAdminStore.getState().ordersError).toBe('Retry rejected');
     });
 
+    it('sends the list-page status as the DTO required by the backend and merges the response', async () => {
+        useAdminStore.setState({
+            workflowOrders: [{id: 12, orderCode: 'SO-12', status: 'NEW'}],
+            currentOrderDetail: {id: 12, orderCode: 'SO-12', status: 'NEW'},
+            updatingOrderStatusIds: [],
+            ordersError: null,
+            orderActionMessage: null
+        });
+        mockedAdminWorkflowService.updateAdminOrderStatus.mockResolvedValue({
+            success: true,
+            message: 'Order status updated successfully',
+            data: {id: 12, orderCode: 'SO-12', status: 'PROCESSING'}
+        });
+
+        const result = await useAdminStore.getState().updateAdminOrderStatus(12, 'PROCESSING');
+
+        expect(mockedAdminWorkflowService.updateAdminOrderStatus).toHaveBeenCalledWith(12, {
+            status: 'PROCESSING'
+        });
+        expect(result.status).toBe('PROCESSING');
+        expect(useAdminStore.getState().workflowOrders[0].status).toBe('PROCESSING');
+        expect(useAdminStore.getState().currentOrderDetail?.status).toBe('PROCESSING');
+        expect(useAdminStore.getState().updatingOrderStatusIds).toEqual([]);
+        expect(useAdminStore.getState().orderActionMessage).toBe('Order status updated successfully');
+    });
+
+    it('tracks an in-flight status update and clears the id after a backend error', async () => {
+        let rejectUpdate!: (error: unknown) => void;
+        mockedAdminWorkflowService.updateAdminOrderStatus.mockReturnValue(new Promise((_, reject) => {
+            rejectUpdate = reject;
+        }));
+
+        const pending = useAdminStore.getState().updateAdminOrderStatus(12, 'PROCESSING');
+        expect(useAdminStore.getState().updatingOrderStatusIds).toEqual([12]);
+        const error = {response: {data: {message: 'Transition rejected'}}};
+        rejectUpdate(error);
+
+        await expect(pending).rejects.toBe(error);
+        expect(useAdminStore.getState().updatingOrderStatusIds).toEqual([]);
+        expect(useAdminStore.getState().ordersError).toBe('Transition rejected');
+    });
+
     it('creates a final payment and refreshes the order detail', async () => {
         const finalPayment = {
             id: 31,
