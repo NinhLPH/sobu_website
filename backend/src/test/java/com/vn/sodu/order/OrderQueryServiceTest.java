@@ -50,7 +50,7 @@ class OrderQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new OrderQueryService(orderRepository, new OrderResponseMapper(productRepo), accountRepo);
+        service = new OrderQueryService(orderRepository, new OrderResponseMapper(productRepo, new com.vn.sodu.order.policy.OrderTransitionPolicy()), accountRepo);
     }
 
     @Test

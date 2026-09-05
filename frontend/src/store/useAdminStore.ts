@@ -6,7 +6,8 @@ import {
     AdminOrderQueryParams,
     OrderPaymentResponseDto,
     OrderResponseDto,
-    OrderSyncResultDto
+    OrderSyncResultDto,
+    UpdateOrderStatusDto
 } from '../interface/order.model';
 import { PageResponse } from '../interface/api-response';
 import { AdminWorkflowService } from '../service/admin.service';
@@ -130,6 +131,8 @@ interface AdminState {
     retryOrderSyncBatch: (ids: Array<string | number>) => Promise<OrderSyncBatchResult>;
     createPreorderFinalPayment: (id: string | number) => Promise<OrderPaymentResponseDto>;
     confirmMockPayment: (paymentCode: string) => Promise<OrderPaymentResponseDto>;
+    isUpdatingOrderStatus: boolean;
+    updateOrderStatus: (id: string | number, data: UpdateOrderStatusDto) => Promise<OrderResponseDto>;
     clearOrdersError: () => void;
     clearOrderActionMessage: () => void;
     clearCurrentOrder: () => void;
@@ -170,6 +173,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     orderSyncBatchResult: null,
     isCreatingFinalPayment: false,
     confirmingPaymentCode: null,
+    isUpdatingOrderStatus: false,
     ordersError: null,
     orderActionMessage: null,
 
@@ -693,6 +697,27 @@ export const useAdminStore = create<AdminState>((set, get) => ({
             set({
                 ordersError: getErrorMessage(error, 'Không thể xác nhận thanh toán.'),
                 confirmingPaymentCode: null
+            });
+            throw error;
+        }
+    },
+
+    updateOrderStatus: async (id, data) => {
+        set({ isUpdatingOrderStatus: true, ordersError: null, orderActionMessage: null });
+        try {
+            const response = await AdminWorkflowService.updateAdminOrderStatus(id, data);
+            const updated = response.data;
+            set((state) => ({
+                isUpdatingOrderStatus: false,
+                currentOrderDetail: state.currentOrderDetail?.id === updated.id ? updated : state.currentOrderDetail,
+                orderActionMessage: `Cập nhật trạng thái đơn hàng #${updated.orderCode || updated.id} thành ${updated.status} thành công.`
+            }));
+            return updated;
+        } catch (error) {
+            const message = getErrorMessage(error, 'Không thể cập nhật trạng thái đơn hàng.');
+            set({
+                isUpdatingOrderStatus: false,
+                ordersError: message
             });
             throw error;
         }

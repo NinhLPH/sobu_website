@@ -79,7 +79,7 @@ services:
       - "${BACKEND_PORT:-8081}:${SERVER_PORT:-8081}"
 
     volumes:
-      - ${UPLOADS_HOST_DIR:-./uploads}:/app/uploads
+      - uploads_data:/sobu/uploads
 
     networks:
       - sobu-network
@@ -87,3 +87,4 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  uploads_data:

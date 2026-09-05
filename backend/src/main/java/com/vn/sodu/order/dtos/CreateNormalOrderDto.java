@@ -1,5 +1,6 @@
 package com.vn.sodu.order.dtos;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -17,6 +18,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateNormalOrderDto {
 
     @NotBlank(message = "Customer name is required")
@@ -33,9 +35,11 @@ public class CreateNormalOrderDto {
     @Size(max = 500, message = "Customer address must not exceed 500 characters")
     private String customerAddress;
 
+    @Deprecated
     @Size(max = 255, message = "Customer street must not exceed 255 characters")
     private String customerStreet;
 
+    @Deprecated
     @Size(max = 255, message = "Customer hamlet must not exceed 255 characters")
     private String customerHamlet;
 

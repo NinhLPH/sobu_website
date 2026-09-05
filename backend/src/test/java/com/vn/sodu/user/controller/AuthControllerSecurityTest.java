@@ -6,8 +6,7 @@ import com.vn.sodu.security.JwtAuthFilter;
 import com.vn.sodu.security.JwtService;
 import com.vn.sodu.security.SecurityConfig;
 import com.vn.sodu.security.TokenBlacklistService;
-import com.vn.sodu.user.dto.LoginRequest;
-import com.vn.sodu.user.dto.LoginResponse;
+import com.vn.sodu.user.dto.*;
 import com.vn.sodu.user.service.AuthService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -84,6 +83,42 @@ class AuthControllerSecurityTest {
     }
 
     @Test
+    @DisplayName("POST /api/auth/forgot-password and /auth/forgot-password are public")
+    void forgotPasswordIsPublic() throws Exception {
+        ForgotPasswordRequest req = new ForgotPasswordRequest("user@example.com");
+
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(post("/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/reset-password and /auth/reset-password are public")
+    void resetPasswordIsPublic() throws Exception {
+        ResetPasswordRequest req = new ResetPasswordRequest("valid-token", "newpassword123");
+
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
     @DisplayName("Public API preflight allows Vercel frontend origin")
     void publicApiPreflightAllowsVercelOrigin() throws Exception {
         mockMvc.perform(options("/api/public/brands")
@@ -93,5 +128,20 @@ class AuthControllerSecurityTest {
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
                         "https://sobu-jet.vercel.app"));
+    }
+
+    @Test
+    @DisplayName("API preflight allows PATCH method")
+    void apiPreflightAllowsPatchMethod() throws Exception {
+        mockMvc.perform(options("/api/admin/products/1/active")
+                        .header(HttpHeaders.ORIGIN, "https://sobu-jet.vercel.app")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PATCH"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://sobu-jet.vercel.app"))
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        org.hamcrest.Matchers.containsString("PATCH")));
     }
 }

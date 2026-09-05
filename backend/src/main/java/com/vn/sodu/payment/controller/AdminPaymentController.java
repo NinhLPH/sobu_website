@@ -24,7 +24,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("v1/api/admin/payments")
+@RequestMapping("/v1/api/admin/payments")
 @Tag(name = "Admin Payments", description = "Admin endpoints for mock payment confirmation")
 public class AdminPaymentController {
 

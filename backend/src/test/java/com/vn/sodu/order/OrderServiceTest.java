@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -86,10 +87,13 @@ class OrderServiceTest {
     @Mock
     private com.vn.sodu.voucher.service.VoucherService voucherService;
 
+    private com.vn.sodu.order.policy.OrderTransitionPolicy orderTransitionPolicy;
+
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
+        orderTransitionPolicy = new com.vn.sodu.order.policy.OrderTransitionPolicy();
         lenient().when(nhanhEnabled.isEnabled()).thenReturn(true);
         lenient().when(addressService.isWardInProvince(any(), any())).thenReturn(true);
         lenient().when(voucherService.applyVouchers(any())).thenAnswer(invocation -> {
@@ -122,7 +126,8 @@ class OrderServiceTest {
                 addressService,
                 productRepo,
                 inventoryService,
-                voucherService
+                voucherService,
+                orderTransitionPolicy
         );
     }
 
@@ -404,6 +409,49 @@ class OrderServiceTest {
     }
 
     @Test
+    void createNormalOrderIgnoresClientProvidedDiscount() {
+        Product product = Product.builder()
+                .id(500L)
+                .name("Snapshot Name")
+                .retailPrice(new BigDecimal("100000"))
+                .build();
+        when(productRepo.findById(500L)).thenReturn(Optional.of(product));
+
+        CreateNormalOrderDto dto = CreateNormalOrderDto.builder()
+                .customerName("Nguyen Van A")
+                .customerMobile("0900000001")
+                .customerStreet("1 Nguyen Trai")
+                .customerCityName("Thành phố Hồ Chí Minh")
+                .customerCityId(79L)
+                .customerDistrictId(null)
+                .customerWardId(27154L)
+                .carrierId(10L)
+                .carrierServiceId(20L)
+                .shippingFee(BigDecimal.ZERO)
+                .items(List.of(CreateNormalOrderItemDto.builder()
+                        .productId(500L)
+                        .name("Client-Provided Name")
+                        .price(new BigDecimal("100000"))
+                        .discount(new BigDecimal("100000"))
+                        .quantity(1)
+                        .build()))
+                .build();
+        when(orderRepository.findByOrderCode(anyString())).thenReturn(Optional.empty());
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(100L);
+            return order;
+        });
+        when(inventoryService.reserveForOrder(any(Order.class))).thenReturn(List.of());
+
+        Order result = orderService.createNormalOrder(dto);
+
+        OrderItem item = result.getItems().get(0);
+        assertThat(item.getDiscount()).isEqualByComparingTo("0.00");
+        assertThat(result.getTotalAmount()).isEqualByComparingTo("100000.00");
+    }
+
+    @Test
     void createNormalOrderRejectsWhenStockIsInsufficient() {
         Product product = Product.builder()
                 .id(501L)
@@ -439,6 +487,94 @@ class OrderServiceTest {
     }
 
     @Test
+    void createNormalOrderSucceedsWithOnlyCustomerAddress() {
+        CreateNormalOrderDto dto = CreateNormalOrderDto.builder()
+                .customerName("Nguyen Van A")
+                .customerMobile("0900000001")
+                .customerAddress("123 Duong Le Loi")
+                .customerCityName("Thành phố Hồ Chí Minh")
+                .customerCityId(79L)
+                .customerWardId(27154L)
+                .carrierId(10L)
+                .carrierServiceId(20L)
+                .shippingFee(BigDecimal.ZERO)
+                .items(List.of(CreateNormalOrderItemDto.builder()
+                        .nhanhProductId("12345")
+                        .name("Product A")
+                        .price(new BigDecimal("100000"))
+                        .quantity(1)
+                        .build()))
+                .build();
+        when(orderRepository.findByOrderCode(anyString())).thenReturn(Optional.empty());
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(inventoryService.reserveForOrder(any(Order.class))).thenReturn(List.of());
+
+        Order result = orderService.createNormalOrder(dto);
+
+        assertThat(result.getCustomerAddress()).isEqualTo("123 Duong Le Loi");
+        assertThat(result.getCustomerStreet()).isNull();
+        assertThat(result.getCustomerHamlet()).isNull();
+        assertThat(result.getCustomerCityId()).isEqualTo(79L);
+        assertThat(result.getCustomerWardId()).isEqualTo(27154L);
+    }
+
+    @Test
+    void createNormalOrderFallsBackToStreetAndHamletWhenAddressIsBlank() {
+        CreateNormalOrderDto dto = CreateNormalOrderDto.builder()
+                .customerName("Nguyen Van A")
+                .customerMobile("0900000001")
+                .customerStreet("Duong Le Loi")
+                .customerHamlet("Thon 2")
+                .customerCityName("Thành phố Hồ Chí Minh")
+                .customerCityId(79L)
+                .customerWardId(27154L)
+                .carrierId(10L)
+                .carrierServiceId(20L)
+                .shippingFee(BigDecimal.ZERO)
+                .items(List.of(CreateNormalOrderItemDto.builder()
+                        .nhanhProductId("12345")
+                        .name("Product A")
+                        .price(new BigDecimal("100000"))
+                        .quantity(1)
+                        .build()))
+                .build();
+        when(orderRepository.findByOrderCode(anyString())).thenReturn(Optional.empty());
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(inventoryService.reserveForOrder(any(Order.class))).thenReturn(List.of());
+
+        Order result = orderService.createNormalOrder(dto);
+
+        assertThat(result.getCustomerAddress()).isEqualTo("Duong Le Loi, Thon 2");
+    }
+
+    @Test
+    void createNormalOrderRejectsWhenAddressFieldsAreEmpty() {
+        CreateNormalOrderDto dto = CreateNormalOrderDto.builder()
+                .customerName("Nguyen Van A")
+                .customerMobile("0900000001")
+                .customerAddress("   ")
+                .customerStreet("   ")
+                .customerHamlet(null)
+                .customerCityName("Thành phố Hồ Chí Minh")
+                .customerCityId(79L)
+                .customerWardId(27154L)
+                .carrierId(10L)
+                .carrierServiceId(20L)
+                .shippingFee(BigDecimal.ZERO)
+                .items(List.of(CreateNormalOrderItemDto.builder()
+                        .nhanhProductId("12345")
+                        .name("Product A")
+                        .price(new BigDecimal("100000"))
+                        .quantity(1)
+                        .build()))
+                .build();
+
+        assertThatThrownBy(() -> orderService.createNormalOrder(dto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Customer address is required");
+    }
+
+    @Test
     void cancelMyOrderReleasesReservedStock() {
         Authentication auth = customerAuth();
         Account account = new Account();
@@ -458,6 +594,81 @@ class OrderServiceTest {
 
         assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         verify(inventoryService).releaseForOrder(order);
+    }
+
+    @Test
+    void updateOrderStatusAsAdminProcessingToShippedSucceeds() {
+        Order order = Order.builder()
+                .id(301L)
+                .type(OrderType.NORMAL)
+                .status(OrderStatus.PROCESSING)
+                .build();
+
+        when(orderRepository.findByIdForUpdate(301L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Authentication staffAuth = new UsernamePasswordAuthenticationToken("admin_user", "n/a");
+        com.vn.sodu.order.dtos.UpdateOrderStatusDto dto = com.vn.sodu.order.dtos.UpdateOrderStatusDto.builder()
+                .status(OrderStatus.SHIPPED)
+                .trackingCode("SPXVN01234567")
+                .reason("Shipped via SPX")
+                .build();
+
+        Order updated = orderService.updateOrderStatusAsAdmin(301L, dto, staffAuth);
+
+        assertThat(updated.getStatus()).isEqualTo(OrderStatus.SHIPPED);
+        assertThat(updated.getTrackingCode()).isEqualTo("SPXVN01234567");
+        verify(auditService).record(
+                eq(AuditAction.ORDER_STATUS_OVERRIDE),
+                eq("ORDER"),
+                eq("301"),
+                eq("PROCESSING"),
+                eq("SHIPPED"),
+                contains("Shipped via SPX by admin_user")
+        );
+    }
+
+    @Test
+    void updateOrderStatusAsAdminProcessingToCancelledReleasesStock() {
+        Order order = Order.builder()
+                .id(302L)
+                .type(OrderType.NORMAL)
+                .status(OrderStatus.PROCESSING)
+                .build();
+
+        when(orderRepository.findByIdForUpdate(302L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Authentication staffAuth = new UsernamePasswordAuthenticationToken("staff_user", "n/a");
+        com.vn.sodu.order.dtos.UpdateOrderStatusDto dto = com.vn.sodu.order.dtos.UpdateOrderStatusDto.builder()
+                .status(OrderStatus.CANCELLED)
+                .reason("Out of packaging materials")
+                .build();
+
+        Order cancelled = orderService.updateOrderStatusAsAdmin(302L, dto, staffAuth);
+
+        assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(inventoryService).releaseForOrder(cancelled);
+        verify(eventPublisher).publishEvent(any(OrderCancelledEvent.class));
+    }
+
+    @Test
+    void updateOrderStatusAsAdminInvalidTransitionThrowsException() {
+        Order order = Order.builder()
+                .id(303L)
+                .type(OrderType.NORMAL)
+                .status(OrderStatus.NEW)
+                .build();
+
+        when(orderRepository.findByIdForUpdate(303L)).thenReturn(Optional.of(order));
+
+        com.vn.sodu.order.dtos.UpdateOrderStatusDto dto = com.vn.sodu.order.dtos.UpdateOrderStatusDto.builder()
+                .status(OrderStatus.DELIVERED)
+                .build();
+
+        assertThatThrownBy(() -> orderService.updateOrderStatusAsAdmin(303L, dto, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid order transition from NEW to DELIVERED for NORMAL order");
     }
 
     private Authentication customerAuth() {

@@ -85,10 +85,19 @@ export interface OrderResponseDto extends Partial<OrderShippingLocationDto> {
     lastSyncAt?: string;
     carrierId?: number;
     carrierServiceId?: number;
+    trackingUrl?: string;
+    trackingCode?: string;
+    allowedNextStatuses?: OrderStatus[];
     description?: string;
     items?: OrderItemResponseDto[];
     createdAt?: string;
     updatedAt?: string;
+}
+
+export interface UpdateOrderStatusDto {
+    status: OrderStatus;
+    reason?: string;
+    trackingCode?: string;
 }
 
 export interface OrderSyncResultDto {

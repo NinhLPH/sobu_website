@@ -97,6 +97,7 @@ public class Order {
     private Long carrierId;
     private Long carrierServiceId;
     private String trackingUrl;
+    private String trackingCode;
 
     @Column(precision = 19, scale = 2)
     @Builder.Default

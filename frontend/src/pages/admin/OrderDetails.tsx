@@ -10,10 +10,14 @@ import {
     MapPin,
     Package,
     RefreshCw,
-    User
+    Send,
+    Truck,
+    User,
+    XCircle
 } from 'lucide-react';
 import { useAdminStore } from '../../store/useAdminStore';
 import { useIntegrationStore } from '../../store/useIntegrationStore';
+import { OrderStatus } from '../../enum/union-types';
 import {hasNhanhHistory} from '../../utils/order-sync';
 import { formatCurrency } from '../../utils/format';
 import {useConfirmDialog} from '../../components/common/ConfirmDialog';
@@ -35,6 +39,10 @@ const getStatusColor = (status?: string) => {
             return 'border-purple-200 bg-purple-100 text-purple-800';
         case 'DELIVERED':
             return 'border-green-200 bg-green-100 text-green-800';
+        case 'FAILED':
+            return 'border-red-200 bg-red-100 text-red-800';
+        case 'RETURNED':
+            return 'border-orange-200 bg-orange-100 text-orange-800';
         case 'CANCELLED':
             return 'border-red-200 bg-red-100 text-red-800';
         default:
@@ -59,6 +67,10 @@ const getStatusText = (status?: string) => {
             return 'Đang giao';
         case 'DELIVERED':
             return 'Đã giao';
+        case 'FAILED':
+            return 'Giao thất bại';
+        case 'RETURNED':
+            return 'Chuyển hoàn';
         case 'CANCELLED':
             return 'Đã hủy';
         default:
@@ -118,6 +130,8 @@ export default function AdminOrderDetail() {
         clearCurrentOrder,
         clearOrdersError,
         clearOrderActionMessage,
+        updateOrderStatus,
+        isUpdatingOrderStatus,
         isOrderDetailLoading,
         isAdminPaymentsLoading,
         adminPaymentsError,
@@ -136,6 +150,32 @@ export default function AdminOrderDetail() {
     const showNhanhProductIds = canUseNhanh || Boolean(
         showNhanhHistory && order?.items?.some(item => item.nhanhProductId)
     );
+
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [selectedTargetStatus, setSelectedTargetStatus] = useState<OrderStatus | ''>('');
+    const [statusReason, setStatusReason] = useState('');
+    const [statusTrackingCode, setStatusTrackingCode] = useState('');
+
+    const openStatusModal = (target: OrderStatus) => {
+        setSelectedTargetStatus(target);
+        setStatusReason('');
+        setStatusTrackingCode(order?.trackingCode || '');
+        setIsStatusModalOpen(true);
+    };
+
+    const handleConfirmStatusUpdate = async () => {
+        if (!order || !selectedTargetStatus) return;
+        try {
+            await updateOrderStatus(order.id, {
+                status: selectedTargetStatus,
+                reason: statusReason.trim() || undefined,
+                trackingCode: statusTrackingCode.trim() || undefined
+            });
+            setIsStatusModalOpen(false);
+        } catch {
+            // Error captured in useAdminStore ordersError
+        }
+    };
 
     useEffect(() => {
         void ensureIntegrationLoaded();
@@ -298,6 +338,75 @@ export default function AdminOrderDetail() {
                     {order.lastSyncMessage || order.syncError}
                 </div>
             )}
+
+            {/* Status Management Bar */}
+            <div className="rounded-2xl border border-outline-variant/30 bg-surface p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-outline">
+                            Thao tác trạng thái đơn hàng
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold text-on-surface">Trạng thái hiện tại:</span>
+                            <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${getStatusColor(order.status)}`}>
+                                {getStatusText(order.status)}
+                            </span>
+                            {order.trackingCode && (
+                                <span className="rounded-lg bg-surface-container px-2 py-0.5 text-xs font-mono font-bold text-on-surface">
+                                    Vận đơn: {order.trackingCode}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Quick action buttons for PROCESSING */}
+                        {order.status === 'PROCESSING' && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => openStatusModal('SHIPPED')}
+                                    className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary/90"
+                                >
+                                    <Truck className="h-4 w-4" />
+                                    Xuất giao hàng (SHIPPED)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => openStatusModal('CANCELLED')}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-50 px-3.5 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100"
+                                >
+                                    <XCircle className="h-4 w-4" />
+                                    Hủy đơn (CANCELLED)
+                                </button>
+                            </>
+                        )}
+
+                        {/* Allowed Next Transitions Selector */}
+                        {order.allowedNextStatuses && order.allowedNextStatuses.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-outline">Chuyển sang:</span>
+                                <select
+                                    value=""
+                                    onChange={(e) => {
+                                        if (e.target.value) {
+                                            openStatusModal(e.target.value as OrderStatus);
+                                        }
+                                    }}
+                                    className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                                >
+                                    <option value="" disabled>-- Chọn trạng thái --</option>
+                                    {order.allowedNextStatuses.map((st) => (
+                                        <option key={st} value={st}>
+                                            {getStatusText(st)} ({st})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div className="space-y-6 lg:col-span-2">
@@ -618,6 +727,24 @@ export default function AdminOrderDetail() {
                             </h2>
                         </header>
                         <div className="space-y-4 p-6 text-xs font-bold">
+                            {order.trackingCode && (
+                                <div>
+                                    <p className="mb-1 text-[10px] uppercase text-outline">Mã vận đơn</p>
+                                    <p className="font-mono font-black text-primary select-all">
+                                        {order.trackingCode}
+                                    </p>
+                                    {order.trackingUrl && (
+                                        <a
+                                            href={order.trackingUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="mt-1 inline-block text-[11px] font-bold text-primary hover:underline"
+                                        >
+                                            Tra cứu vận đơn &rarr;
+                                        </a>
+                                    )}
+                                </div>
+                            )}
                             <div>
                                 <p className="mb-1 text-[10px] uppercase text-outline">Địa chỉ</p>
                                 <p className="font-semibold leading-relaxed text-on-surface">
@@ -649,6 +776,103 @@ export default function AdminOrderDetail() {
                     </section>
                 </aside>
             </div>
+
+            {/* Status Update Confirmation Modal */}
+            {isStatusModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-md rounded-2xl border border-outline-variant/30 bg-surface p-6 shadow-xl">
+                        <div className="mb-4 flex items-center justify-between border-b border-outline-variant/20 pb-3">
+                            <h3 className="text-base font-black uppercase tracking-tight text-on-surface">
+                                Cập nhật trạng thái đơn hàng
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setIsStatusModalOpen(false)}
+                                className="rounded-full p-1 text-outline hover:bg-surface-variant hover:text-on-surface"
+                            >
+                                <XCircle className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 text-xs font-bold">
+                            <div className="flex items-center justify-between rounded-xl bg-surface-container/50 p-3">
+                                <div>
+                                    <p className="text-[10px] text-outline uppercase">Hiện tại</p>
+                                    <p className="text-on-surface font-black">{getStatusText(order.status)}</p>
+                                </div>
+                                <span className="text-outline">&rarr;</span>
+                                <div className="text-right">
+                                    <p className="text-[10px] text-outline uppercase">Mục tiêu</p>
+                                    <p className="text-primary font-black">{getStatusText(selectedTargetStatus)}</p>
+                                </div>
+                            </div>
+
+                            {selectedTargetStatus === 'CANCELLED' && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                                    <p className="font-black">Lưu ý khi hủy đơn:</p>
+                                    <p className="mt-0.5 font-medium leading-relaxed">
+                                        Hệ thống sẽ tự động hoàn trả tồn kho khả dụng (stockAvailable) cho các sản phẩm trong đơn hàng.
+                                    </p>
+                                </div>
+                            )}
+
+                            {selectedTargetStatus === 'SHIPPED' && (
+                                <div>
+                                    <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-outline">
+                                        Mã vận đơn (tracking code)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={statusTrackingCode}
+                                        onChange={(e) => setStatusTrackingCode(e.target.value)}
+                                        placeholder="VD: VNPOST123456, GHTK897123..."
+                                        className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2.5 text-xs font-mono font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-outline">
+                                    Lý do / Ghi chú thay đổi (tùy chọn)
+                                </label>
+                                <textarea
+                                    value={statusReason}
+                                    onChange={(e) => setStatusReason(e.target.value)}
+                                    rows={3}
+                                    placeholder="Ghi chú lý do cập nhật trạng thái..."
+                                    className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-normal text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    disabled={isUpdatingOrderStatus}
+                                    onClick={() => setIsStatusModalOpen(false)}
+                                    className="rounded-xl border border-outline-variant/30 px-4 py-2 text-xs font-bold text-outline hover:bg-surface-variant"
+                                >
+                                    Đóng
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isUpdatingOrderStatus}
+                                    onClick={handleConfirmStatusUpdate}
+                                    className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isUpdatingOrderStatus ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Đang cập nhật...
+                                        </>
+                                    ) : (
+                                        'Xác nhận cập nhật'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

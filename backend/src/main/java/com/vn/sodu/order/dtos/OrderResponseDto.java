@@ -12,6 +12,7 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Getter
 @Builder
@@ -129,6 +130,15 @@ public class OrderResponseDto {
 
     @Schema(description = "Carrier service id selected for the order")
     private Long carrierServiceId;
+
+    @Schema(description = "Carrier tracking url")
+    private String trackingUrl;
+
+    @Schema(description = "Shipment tracking code")
+    private String trackingCode;
+
+    @Schema(description = "Allowed next statuses according to the stage transition matrix")
+    private Set<OrderStatus> allowedNextStatuses;
 
     @Schema(description = "Order items")
     private List<OrderItemResponseDto> items;

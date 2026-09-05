@@ -30,6 +30,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -55,7 +57,21 @@ class OrderSyncControllerTest {
     private NhanhEnabled nhanhEnabled;
 
     @Mock
-    private OrderService orderService;
+    private com.vn.sodu.order.services.OrderService orderService;
+
+    @Mock
+    private com.vn.sodu.order.mapper.OrderResponseMapper orderResponseMapper;
+
+    private OrderSyncController createController() {
+        return new OrderSyncController(
+                syncServiceProvider(),
+                orderQueryService,
+                orderService,
+                orderResponseMapper,
+                orderExportService,
+                nhanhEnabled
+        );
+    }
 
     @Test
     void listOrdersRequiresStaffAndReturnsPage() {
@@ -66,7 +82,7 @@ class OrderSyncControllerTest {
                 .build();
         when(orderQueryService.listOrders(0, 20, "createdAt", "DESC"))
                 .thenReturn(new PageImpl<>(List.of(dto), PageRequest.of(0, 20), 1));
-        OrderSyncController controller = controller();
+        OrderSyncController controller = createController();
 
         ResponseEntity<ApiResponseDTO<PageResponse<OrderResponseDto>>> response =
                 controller.listOrders(staffAuth(), 0, 20, "createdAt", "DESC");
@@ -86,7 +102,7 @@ class OrderSyncControllerTest {
                 .items(Collections.emptyList())
                 .build();
         when(orderQueryService.getOrderDetail(1L)).thenReturn(dto);
-        OrderSyncController controller = controller();
+        OrderSyncController controller = createController();
 
         ResponseEntity<ApiResponseDTO<OrderResponseDto>> response =
                 controller.getOrderDetail(1L, staffAuth());
@@ -108,7 +124,7 @@ class OrderSyncControllerTest {
                 .nhanhOrderCode("SOBU-REQ-1")
                 .build();
         when(orderSyncService.retryOrderSync(1L)).thenReturn(order);
-        OrderSyncController controller = controller();
+        OrderSyncController controller = createController();
 
         ResponseEntity<ApiResponseDTO<OrderSyncResultDto>> response =
                 controller.retryOrderSync(1L, staffAuth());
@@ -123,7 +139,7 @@ class OrderSyncControllerTest {
 
     @Test
     void retryOrderSyncRejectsNonStaff() {
-        OrderSyncController controller = controller();
+        OrderSyncController controller = createController();
 
         assertThrows(AccessDeniedException.class,
                 () -> controller.retryOrderSync(1L, new UsernamePasswordAuthenticationToken("user", "n/a")));
@@ -133,7 +149,7 @@ class OrderSyncControllerTest {
     void retryOrderSyncRejectsLocalModeBeforeResolvingSyncService() {
         doThrow(new com.vn.sodu.integration.NhanhIntegrationDisabledException())
                 .when(nhanhEnabled).requireEnabled();
-        OrderSyncController controller = controller();
+        OrderSyncController controller = createController();
 
         assertThrows(
                 com.vn.sodu.integration.NhanhIntegrationDisabledException.class,
@@ -141,6 +157,46 @@ class OrderSyncControllerTest {
         );
         verify(orderSyncServiceProvider, never()).getIfAvailable();
         verify(orderSyncService, never()).retryOrderSync(1L);
+    }
+
+    @Test
+    void updateOrderStatusRequiresStaffAndReturnsUpdatedDto() {
+        Order order = Order.builder()
+                .id(1L)
+                .status(OrderStatus.SHIPPED)
+                .build();
+        OrderResponseDto responseDto = OrderResponseDto.builder()
+                .id(1L)
+                .status(OrderStatus.SHIPPED)
+                .trackingCode("TRACK123")
+                .build();
+        com.vn.sodu.order.dtos.UpdateOrderStatusDto updateDto = com.vn.sodu.order.dtos.UpdateOrderStatusDto.builder()
+                .status(OrderStatus.SHIPPED)
+                .trackingCode("TRACK123")
+                .build();
+
+        when(orderService.updateOrderStatusAsAdmin(eq(1L), any(), any())).thenReturn(order);
+        when(orderResponseMapper.toDto(order)).thenReturn(responseDto);
+
+        OrderSyncController controller = createController();
+        ResponseEntity<ApiResponseDTO<OrderResponseDto>> response =
+                controller.updateOrderStatusPatch(1L, updateDto, staffAuth());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData().getStatus()).isEqualTo(OrderStatus.SHIPPED);
+        assertThat(response.getBody().getData().getTrackingCode()).isEqualTo("TRACK123");
+    }
+
+    @Test
+    void updateOrderStatusRejectsNonStaff() {
+        OrderSyncController controller = createController();
+        com.vn.sodu.order.dtos.UpdateOrderStatusDto updateDto = com.vn.sodu.order.dtos.UpdateOrderStatusDto.builder()
+                .status(OrderStatus.SHIPPED)
+                .build();
+
+        assertThrows(AccessDeniedException.class,
+                () -> controller.updateOrderStatusPatch(1L, updateDto, new UsernamePasswordAuthenticationToken("user", "n/a")));
     }
 
     private ObjectProvider<OrderSyncService> syncServiceProvider() {

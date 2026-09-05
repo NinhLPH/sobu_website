@@ -9,6 +9,8 @@ import com.vn.sodu.location.AddressContract;
 import com.vn.sodu.global.exception.ForbiddenOperationException;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
+import com.vn.sodu.order.dtos.UpdateOrderStatusDto;
+import com.vn.sodu.order.policy.OrderTransitionPolicy;
 import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.PaymentType;
@@ -60,6 +62,7 @@ public class OrderService {
     private final ProductRepo productRepo;
     private final InventoryService inventoryService;
     private final com.vn.sodu.voucher.service.VoucherService voucherService;
+    private final OrderTransitionPolicy orderTransitionPolicy;
 
     @Transactional
     public Order createFromApprovedRequest(Request request) {
@@ -95,6 +98,7 @@ public class OrderService {
     public Order createNormalOrder(CreateNormalOrderDto dto) {
         validateDirectOrder(dto);
         String orderCode = generateUniqueOrderCode();
+        String resolvedAddress = resolveCustomerAddress(dto);
 
         Order order = Order.builder()
                 .orderCode(orderCode)
@@ -107,7 +111,7 @@ public class OrderService {
                 .customerName(trim(dto.getCustomerName()))
                 .customerMobile(trim(dto.getCustomerMobile()))
                 .customerEmail(trim(dto.getCustomerEmail()))
-                .customerAddress(trim(dto.getCustomerAddress()))
+                .customerAddress(resolvedAddress)
                 .customerStreet(trim(dto.getCustomerStreet()))
                 .customerHamlet(trim(dto.getCustomerHamlet()))
                 .customerCityName(trim(dto.getCustomerCityName()))
@@ -129,9 +133,9 @@ public class OrderService {
         for (CreateNormalOrderItemDto itemDto : dto.getItems()) {
             ResolvedOrderItem resolved = resolveOrderItem(itemDto);
             BigDecimal price = resolved.price();
-            BigDecimal discount = money(itemDto.getDiscount());
+            BigDecimal discount = money(BigDecimal.ZERO);
             int quantity = itemDto.getQuantity();
-            BigDecimal lineTotal = price.subtract(discount).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(quantity));
+            BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(quantity));
             total = total.add(lineTotal);
 
             OrderItem item = OrderItem.builder()
@@ -265,6 +269,77 @@ public class OrderService {
                 "Staff fulfilment status update"
         );
         return updatedOrder;
+    public Order updateOrderStatusAsAdmin(Long orderId, UpdateOrderStatusDto dto, Authentication authentication) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("Order id is required");
+        }
+        if (dto == null || dto.getStatus() == null) {
+            throw new IllegalArgumentException("Target status is required");
+        }
+
+        Order order = orderRepository.findByIdForUpdateWithItems(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        OrderStatus currentStatus = order.getStatus();
+        OrderStatus targetStatus = dto.getStatus();
+
+        orderTransitionPolicy.validateTransition(order.getType(), currentStatus, targetStatus);
+
+        if (currentStatus == targetStatus) {
+            if (!isEmpty(dto.getTrackingCode())) {
+                order.setTrackingCode(dto.getTrackingCode().trim());
+                if (isEmpty(order.getTrackingUrl())) {
+                    order.setTrackingUrl(dto.getTrackingCode().trim());
+                }
+                return orderRepository.save(order);
+            }
+            return order;
+        }
+
+        String operator = (authentication != null && authentication.getName() != null && !authentication.getName().isBlank())
+                ? authentication.getName().trim()
+                : "staff";
+
+        if (targetStatus == OrderStatus.CANCELLED) {
+            order.setStatus(OrderStatus.CANCELLED);
+            Order cancelled = orderRepository.save(order);
+            inventoryService.releaseForOrder(cancelled);
+            String note = !isEmpty(dto.getReason()) ? dto.getReason().trim() : "Admin manual status update";
+            auditService.record(
+                    AuditAction.ORDER_STATUS_OVERRIDE,
+                    "ORDER",
+                    String.valueOf(cancelled.getId()),
+                    currentStatus.name(),
+                    targetStatus.name(),
+                    note + " by " + operator
+            );
+            if (nhanhEnabled.isEnabled()) {
+                eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
+            }
+            return cancelled;
+        }
+
+        if (!isEmpty(dto.getTrackingCode())) {
+            order.setTrackingCode(dto.getTrackingCode().trim());
+            if (isEmpty(order.getTrackingUrl())) {
+                order.setTrackingUrl(dto.getTrackingCode().trim());
+            }
+        }
+
+        order.setStatus(targetStatus);
+        Order updated = orderRepository.save(order);
+
+        String note = !isEmpty(dto.getReason()) ? dto.getReason().trim() : "Admin manual status update";
+        auditService.record(
+                AuditAction.ORDER_STATUS_OVERRIDE,
+                "ORDER",
+                String.valueOf(updated.getId()),
+                currentStatus.name(),
+                targetStatus.name(),
+                note + " by " + operator
+        );
+
+        return updated;
     }
 
     private void validateDirectOrder(CreateNormalOrderDto dto) {
@@ -304,10 +379,9 @@ public class OrderService {
                 || dto.getCustomerWardId() == null || dto.getCustomerWardId() <= 0) {
             throw new IllegalArgumentException("Customer city and ward ids are required");
         }
-        String street = trim(dto.getCustomerStreet());
-        String hamlet = trim(dto.getCustomerHamlet());
-        if (isEmpty(street) && isEmpty(hamlet)) {
-            throw new IllegalArgumentException("Either a street or a hamlet is required");
+        String resolvedAddress = resolveCustomerAddress(dto);
+        if (isEmpty(resolvedAddress)) {
+            throw new IllegalArgumentException("Customer address is required");
         }
         if (!addressService.isWardInProvince(dto.getCustomerWardId(), dto.getCustomerCityId())) {
             throw new IllegalArgumentException("Ward does not belong to the selected province");
@@ -365,12 +439,34 @@ public class OrderService {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
     }
 
+    private String resolveCustomerAddress(CreateNormalOrderDto dto) {
+        if (dto == null) {
+            return null;
+        }
+        String address = trim(dto.getCustomerAddress());
+        if (!isEmpty(address)) {
+            return address;
+        }
+        String street = trim(dto.getCustomerStreet());
+        String hamlet = trim(dto.getCustomerHamlet());
+        if (!isEmpty(street) && !isEmpty(hamlet)) {
+            return street + ", " + hamlet;
+        }
+        if (!isEmpty(street)) {
+            return street;
+        }
+        if (!isEmpty(hamlet)) {
+            return hamlet;
+        }
+        return null;
+    }
+
     private String trim(String value) {
         return value == null ? null : value.trim();
     }
 
     private boolean isEmpty(String value) {
-        return value == null || value.isBlank();
+        return value == null || value.trim().isEmpty();
     }
 
     private void applyInitialPreorderStatus(Order order) {

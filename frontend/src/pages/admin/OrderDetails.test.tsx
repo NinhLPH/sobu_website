@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import AdminOrderDetail from './OrderDetails';
 import { useAdminStore } from '../../store/useAdminStore';
@@ -15,6 +15,7 @@ const mockedUseAdminStore = jest.mocked(useAdminStore);
 const fetchOrderDetail = jest.fn(async () => undefined);
 const fetchOrderPayments = jest.fn(async () => []);
 const clearCurrentOrder = jest.fn();
+const updateOrderStatus = jest.fn(async () => undefined);
 
 const renderDetail = (overrides: Record<string, unknown> = {}) => {
     mockedUseAdminStore.mockReturnValue({
@@ -35,6 +36,8 @@ const renderDetail = (overrides: Record<string, unknown> = {}) => {
         clearCurrentOrder,
         clearOrdersError: jest.fn(),
         clearOrderActionMessage: jest.fn(),
+        updateOrderStatus,
+        isUpdatingOrderStatus: false,
         isOrderDetailLoading: false,
         isAdminPaymentsLoading: false,
         adminPaymentsError: null,
@@ -125,5 +128,69 @@ describe('AdminOrderDetail payment history', () => {
         expect(screen.getByText('Chỉ đọc')).toBeTruthy();
         expect(screen.getByText('Old sync error')).toBeTruthy();
         expect(screen.queryByRole('button', {name: /Retry đồng bộ/i})).toBeNull();
+    });
+
+    it('shows quick status actions when PROCESSING and submits update with trackingCode', async () => {
+        renderDetail({
+            currentOrderDetail: {
+                id: 12,
+                orderCode: 'SO-12',
+                type: 'NORMAL',
+                status: 'PROCESSING',
+                totalAmount: 500000,
+                allowedNextStatuses: ['SHIPPED', 'CANCELLED'],
+                items: []
+            }
+        });
+
+        // Quick buttons present
+        const shipButton = screen.getByRole('button', { name: /Xuất giao hàng \(SHIPPED\)/i });
+        const cancelButton = screen.getByRole('button', { name: /Hủy đơn \(CANCELLED\)/i });
+        expect(shipButton).toBeTruthy();
+        expect(cancelButton).toBeTruthy();
+
+        // Click ship button to open modal
+        fireEvent.click(shipButton);
+
+        // Modal should now be open
+        expect(screen.getByText('Cập nhật trạng thái đơn hàng')).toBeTruthy();
+        expect(screen.getByPlaceholderText(/VD: VNPOST123456/i)).toBeTruthy();
+
+        // Fill tracking code and reason
+        fireEvent.change(screen.getByPlaceholderText(/VD: VNPOST123456/i), {
+            target: { value: 'VNPOST998877' }
+        });
+        fireEvent.change(screen.getByPlaceholderText(/Ghi chú lý do cập nhật/i), {
+            target: { value: 'Đã gửi qua bưu cục' }
+        });
+
+        // Submit
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Xác nhận cập nhật/i }));
+        });
+
+        expect(updateOrderStatus).toHaveBeenCalledWith(12, {
+            status: 'SHIPPED',
+            trackingCode: 'VNPOST998877',
+            reason: 'Đã gửi qua bưu cục'
+        });
+    });
+
+    it('displays trackingCode and trackingUrl in shipping info when available', () => {
+        renderDetail({
+            currentOrderDetail: {
+                id: 12,
+                orderCode: 'SO-12',
+                type: 'NORMAL',
+                status: 'SHIPPED',
+                trackingCode: 'GHTK123456',
+                trackingUrl: 'https://tracking.example.com/GHTK123456',
+                totalAmount: 500000,
+                items: []
+            }
+        });
+
+        expect(screen.getAllByText(/GHTK123456/).length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByText(/Tra cứu vận đơn/i)).toBeTruthy();
     });
 });
