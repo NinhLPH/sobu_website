@@ -75,7 +75,8 @@ public class OrderService {
 
         // 2. Resolve customer
         ResolvedOrderCustomer customer = orderCustomerResolver.resolveByPhone(request.getCustomerPhone())
-            .orElseThrow(() -> new IllegalArgumentException("Customer resolution failed for phone: " + request.getCustomerPhone()));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Customer resolution failed for phone: " + request.getCustomerPhone()));
         // use mail to resolve customer
         // 3. Validate for conversion
         orderConversionPolicy.validateForConversion(request, customer);
@@ -87,8 +88,9 @@ public class OrderService {
 
         // 5. Save order
         Order savedOrder = orderRepository.save(newOrder);
-        // 6. Reserve local sellable stock for order items that resolve to a local product.
-        //    A failed reservation rolls back the whole order.
+        // 6. Reserve local sellable stock for order items that resolve to a local
+        // product.
+        // A failed reservation rolls back the whole order.
         inventoryService.reserveForOrder(savedOrder);
         createInitialPreorderDepositIfRequired(savedOrder);
         return savedOrder;
@@ -157,14 +159,17 @@ public class OrderService {
         List<com.vn.sodu.voucher.dto.VoucherCartItemDto> voucherItems = order.getItems().stream()
                 .map(it -> com.vn.sodu.voucher.dto.VoucherCartItemDto.builder()
                         .productId(it.getProductId())
-                        .categoryId(it.getProductId() != null ? productRepo.findById(it.getProductId()).map(Product::getCategoryId).orElse(null) : null)
+                        .categoryId(it.getProductId() != null
+                                ? productRepo.findById(it.getProductId()).map(Product::getCategoryId).orElse(null)
+                                : null)
                         .name(it.getName())
                         .price(it.getPrice())
                         .quantity(it.getQuantity())
                         .build())
                 .toList();
 
-        com.vn.sodu.voucher.dto.VoucherApplyRequestDto voucherReq = com.vn.sodu.voucher.dto.VoucherApplyRequestDto.builder()
+        com.vn.sodu.voucher.dto.VoucherApplyRequestDto voucherReq = com.vn.sodu.voucher.dto.VoucherApplyRequestDto
+                .builder()
                 .discountVoucherCode(dto.getDiscountVoucherCode())
                 .shippingVoucherCode(dto.getShippingVoucherCode())
                 .subtotal(subtotal)
@@ -197,8 +202,7 @@ public class OrderService {
         voucherService.recordVoucherUsage(
                 voucherResp.getItemVoucherCode(),
                 voucherResp.getOrderVoucherCode(),
-                voucherResp.getShippingVoucherCode()
-        );
+                voucherResp.getShippingVoucherCode());
 
         // Reserve sellable stock atomically. A failed reservation rolls back the order.
         inventoryService.reserveForOrder(savedOrder);
@@ -213,7 +217,8 @@ public class OrderService {
 
         String customerEmail = resolveCustomerEmail(authentication);
         Order order = orderRepository.findByIdForUpdate(orderId)
-                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(), customerEmail))
+                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(),
+                        customerEmail))
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
 
         if (!isCustomerCancelable(order.getStatus())) {
@@ -230,8 +235,7 @@ public class OrderService {
                 String.valueOf(cancelled.getId()),
                 previousStatus.name(),
                 cancelled.getStatus().name(),
-                "Customer cancellation"
-        );
+                "Customer cancellation");
         if (nhanhEnabled.isEnabled()) {
             eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
         }
@@ -248,7 +252,8 @@ public class OrderService {
             throw new IllegalArgumentException("Order id and target status are required");
         }
         if (nhanhEnabled.isEnabled()) {
-            throw new ForbiddenOperationException("Trạng thái đơn đang được đồng bộ từ Nhanh.vn và không thể cập nhật thủ công.");
+            throw new ForbiddenOperationException(
+                    "Trạng thái đơn đang được đồng bộ từ Nhanh.vn và không thể cập nhật thủ công.");
         }
 
         Order order = orderRepository.findByIdForUpdate(orderId)
@@ -266,9 +271,11 @@ public class OrderService {
                 String.valueOf(updatedOrder.getId()),
                 previousStatus.name(),
                 updatedOrder.getStatus().name(),
-                "Staff fulfilment status update"
-        );
+                "Staff fulfilment status update");
         return updatedOrder;
+    }
+
+    @Transactional
     public Order updateOrderStatusAsAdmin(Long orderId, UpdateOrderStatusDto dto, Authentication authentication) {
         if (orderId == null) {
             throw new IllegalArgumentException("Order id is required");
@@ -296,9 +303,10 @@ public class OrderService {
             return order;
         }
 
-        String operator = (authentication != null && authentication.getName() != null && !authentication.getName().isBlank())
-                ? authentication.getName().trim()
-                : "staff";
+        String operator = (authentication != null && authentication.getName() != null
+                && !authentication.getName().isBlank())
+                        ? authentication.getName().trim()
+                        : "staff";
 
         if (targetStatus == OrderStatus.CANCELLED) {
             order.setStatus(OrderStatus.CANCELLED);
@@ -311,8 +319,7 @@ public class OrderService {
                     String.valueOf(cancelled.getId()),
                     currentStatus.name(),
                     targetStatus.name(),
-                    note + " by " + operator
-            );
+                    note + " by " + operator);
             if (nhanhEnabled.isEnabled()) {
                 eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
             }
@@ -336,8 +343,7 @@ public class OrderService {
                 String.valueOf(updated.getId()),
                 currentStatus.name(),
                 targetStatus.name(),
-                note + " by " + operator
-        );
+                note + " by " + operator);
 
         return updated;
     }
@@ -405,29 +411,35 @@ public class OrderService {
         String nhanhProductId = trim(itemDto.getNhanhProductId());
         if (itemDto.getProductId() != null) {
             Product product = productRepo.findById(itemDto.getProductId())
-                    .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + itemDto.getProductId()));
-            return new ResolvedOrderItem(product.getId(), null, product.getName(), money(ProductPricing.effectivePrice(product)));
+                    .orElseThrow(
+                            () -> new IllegalArgumentException("Product not found with id: " + itemDto.getProductId()));
+            return new ResolvedOrderItem(product.getId(), null, product.getName(),
+                    money(ProductPricing.effectivePrice(product)));
         }
         if (nhanhProductId != null && !nhanhProductId.isBlank()) {
             try {
                 Optional<Product> product = productRepo.findByExternalId(Long.parseLong(nhanhProductId));
                 if (product.isPresent()) {
                     Product found = product.get();
-                    return new ResolvedOrderItem(found.getId(), nhanhProductId, found.getName(), money(ProductPricing.effectivePrice(found)));
+                    return new ResolvedOrderItem(found.getId(), nhanhProductId, found.getName(),
+                            money(ProductPricing.effectivePrice(found)));
                 }
             } catch (NumberFormatException ignored) {
                 // fall through to legacy snapshot
             }
         }
-        // Legacy path: item does not resolve to a local product; keep the provided snapshot.
+        // Legacy path: item does not resolve to a local product; keep the provided
+        // snapshot.
         return new ResolvedOrderItem(null, nhanhProductId, trim(itemDto.getName()), money(itemDto.getPrice()));
     }
 
-    private record ResolvedOrderItem(Long productId, String nhanhProductId, String name, BigDecimal price) { }
+    private record ResolvedOrderItem(Long productId, String nhanhProductId, String name, BigDecimal price) {
+    }
 
     private String generateUniqueOrderCode() {
         for (int i = 0; i < 20; i++) {
-            String code = "SOBU-ORD-" + LocalDateTime.now().format(ORDER_CODE_FORMATTER) + "-" + String.format("%04d", RANDOM.nextInt(10_000));
+            String code = "SOBU-ORD-" + LocalDateTime.now().format(ORDER_CODE_FORMATTER) + "-"
+                    + String.format("%04d", RANDOM.nextInt(10_000));
             if (orderRepository.findByOrderCode(code).isEmpty()) {
                 return code;
             }
@@ -483,8 +495,7 @@ public class OrderService {
                 log.warn(
                         "Failed to create initial preorder deposit checkout for order id={}: {}",
                         order.getId(),
-                        ex.getMessage()
-                );
+                        ex.getMessage());
             }
         }
     }
