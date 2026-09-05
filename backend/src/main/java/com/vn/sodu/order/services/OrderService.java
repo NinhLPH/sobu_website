@@ -9,6 +9,8 @@ import com.vn.sodu.location.AddressContract;
 import com.vn.sodu.global.exception.ForbiddenOperationException;
 import com.vn.sodu.order.dtos.CreateNormalOrderDto;
 import com.vn.sodu.order.dtos.CreateNormalOrderItemDto;
+import com.vn.sodu.order.dtos.UpdateOrderStatusDto;
+import com.vn.sodu.order.policy.OrderTransitionPolicy;
 import com.vn.sodu.order.mapper.RequestToOrderMapper;
 import com.vn.sodu.order.repo.OrderRepository;
 import com.vn.sodu.payment.PaymentType;
@@ -60,6 +62,7 @@ public class OrderService {
     private final ProductRepo productRepo;
     private final InventoryService inventoryService;
     private final com.vn.sodu.voucher.service.VoucherService voucherService;
+    private final OrderTransitionPolicy orderTransitionPolicy;
 
     @Transactional
     public Order createFromApprovedRequest(Request request) {
@@ -72,7 +75,8 @@ public class OrderService {
 
         // 2. Resolve customer
         ResolvedOrderCustomer customer = orderCustomerResolver.resolveByPhone(request.getCustomerPhone())
-            .orElseThrow(() -> new IllegalArgumentException("Customer resolution failed for phone: " + request.getCustomerPhone()));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Customer resolution failed for phone: " + request.getCustomerPhone()));
         // use mail to resolve customer
         // 3. Validate for conversion
         orderConversionPolicy.validateForConversion(request, customer);
@@ -84,8 +88,9 @@ public class OrderService {
 
         // 5. Save order
         Order savedOrder = orderRepository.save(newOrder);
-        // 6. Reserve local sellable stock for order items that resolve to a local product.
-        //    A failed reservation rolls back the whole order.
+        // 6. Reserve local sellable stock for order items that resolve to a local
+        // product.
+        // A failed reservation rolls back the whole order.
         inventoryService.reserveForOrder(savedOrder);
         createInitialPreorderDepositIfRequired(savedOrder);
         return savedOrder;
@@ -95,6 +100,7 @@ public class OrderService {
     public Order createNormalOrder(CreateNormalOrderDto dto) {
         validateDirectOrder(dto);
         String orderCode = generateUniqueOrderCode();
+        String resolvedAddress = resolveCustomerAddress(dto);
 
         Order order = Order.builder()
                 .orderCode(orderCode)
@@ -107,7 +113,7 @@ public class OrderService {
                 .customerName(trim(dto.getCustomerName()))
                 .customerMobile(trim(dto.getCustomerMobile()))
                 .customerEmail(trim(dto.getCustomerEmail()))
-                .customerAddress(trim(dto.getCustomerAddress()))
+                .customerAddress(resolvedAddress)
                 .customerStreet(trim(dto.getCustomerStreet()))
                 .customerHamlet(trim(dto.getCustomerHamlet()))
                 .customerCityName(trim(dto.getCustomerCityName()))
@@ -129,9 +135,9 @@ public class OrderService {
         for (CreateNormalOrderItemDto itemDto : dto.getItems()) {
             ResolvedOrderItem resolved = resolveOrderItem(itemDto);
             BigDecimal price = resolved.price();
-            BigDecimal discount = money(itemDto.getDiscount());
+            BigDecimal discount = money(BigDecimal.ZERO);
             int quantity = itemDto.getQuantity();
-            BigDecimal lineTotal = price.subtract(discount).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(quantity));
+            BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(quantity));
             total = total.add(lineTotal);
 
             OrderItem item = OrderItem.builder()
@@ -153,14 +159,17 @@ public class OrderService {
         List<com.vn.sodu.voucher.dto.VoucherCartItemDto> voucherItems = order.getItems().stream()
                 .map(it -> com.vn.sodu.voucher.dto.VoucherCartItemDto.builder()
                         .productId(it.getProductId())
-                        .categoryId(it.getProductId() != null ? productRepo.findById(it.getProductId()).map(Product::getCategoryId).orElse(null) : null)
+                        .categoryId(it.getProductId() != null
+                                ? productRepo.findById(it.getProductId()).map(Product::getCategoryId).orElse(null)
+                                : null)
                         .name(it.getName())
                         .price(it.getPrice())
                         .quantity(it.getQuantity())
                         .build())
                 .toList();
 
-        com.vn.sodu.voucher.dto.VoucherApplyRequestDto voucherReq = com.vn.sodu.voucher.dto.VoucherApplyRequestDto.builder()
+        com.vn.sodu.voucher.dto.VoucherApplyRequestDto voucherReq = com.vn.sodu.voucher.dto.VoucherApplyRequestDto
+                .builder()
                 .discountVoucherCode(dto.getDiscountVoucherCode())
                 .shippingVoucherCode(dto.getShippingVoucherCode())
                 .subtotal(subtotal)
@@ -193,8 +202,7 @@ public class OrderService {
         voucherService.recordVoucherUsage(
                 voucherResp.getItemVoucherCode(),
                 voucherResp.getOrderVoucherCode(),
-                voucherResp.getShippingVoucherCode()
-        );
+                voucherResp.getShippingVoucherCode());
 
         // Reserve sellable stock atomically. A failed reservation rolls back the order.
         inventoryService.reserveForOrder(savedOrder);
@@ -209,7 +217,8 @@ public class OrderService {
 
         String customerEmail = resolveCustomerEmail(authentication);
         Order order = orderRepository.findByIdForUpdate(orderId)
-                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(), customerEmail))
+                .filter(existingOrder -> OrderCustomerEmailMatcher.matches(existingOrder.getCustomerEmail(),
+                        customerEmail))
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
 
         if (!isCustomerCancelable(order.getStatus())) {
@@ -226,8 +235,7 @@ public class OrderService {
                 String.valueOf(cancelled.getId()),
                 previousStatus.name(),
                 cancelled.getStatus().name(),
-                "Customer cancellation"
-        );
+                "Customer cancellation");
         if (nhanhEnabled.isEnabled()) {
             eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
         }
@@ -244,7 +252,8 @@ public class OrderService {
             throw new IllegalArgumentException("Order id and target status are required");
         }
         if (nhanhEnabled.isEnabled()) {
-            throw new ForbiddenOperationException("Trạng thái đơn đang được đồng bộ từ Nhanh.vn và không thể cập nhật thủ công.");
+            throw new ForbiddenOperationException(
+                    "Trạng thái đơn đang được đồng bộ từ Nhanh.vn và không thể cập nhật thủ công.");
         }
 
         Order order = orderRepository.findByIdForUpdate(orderId)
@@ -262,9 +271,81 @@ public class OrderService {
                 String.valueOf(updatedOrder.getId()),
                 previousStatus.name(),
                 updatedOrder.getStatus().name(),
-                "Staff fulfilment status update"
-        );
+                "Staff fulfilment status update");
         return updatedOrder;
+    }
+
+    @Transactional
+    public Order updateOrderStatusAsAdmin(Long orderId, UpdateOrderStatusDto dto, Authentication authentication) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("Order id is required");
+        }
+        if (dto == null || dto.getStatus() == null) {
+            throw new IllegalArgumentException("Target status is required");
+        }
+
+        Order order = orderRepository.findByIdForUpdateWithItems(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+
+        OrderStatus currentStatus = order.getStatus();
+        OrderStatus targetStatus = dto.getStatus();
+
+        orderTransitionPolicy.validateTransition(order.getType(), currentStatus, targetStatus);
+
+        if (currentStatus == targetStatus) {
+            if (!isEmpty(dto.getTrackingCode())) {
+                order.setTrackingCode(dto.getTrackingCode().trim());
+                if (isEmpty(order.getTrackingUrl())) {
+                    order.setTrackingUrl(dto.getTrackingCode().trim());
+                }
+                return orderRepository.save(order);
+            }
+            return order;
+        }
+
+        String operator = (authentication != null && authentication.getName() != null
+                && !authentication.getName().isBlank())
+                        ? authentication.getName().trim()
+                        : "staff";
+
+        if (targetStatus == OrderStatus.CANCELLED) {
+            order.setStatus(OrderStatus.CANCELLED);
+            Order cancelled = orderRepository.save(order);
+            inventoryService.releaseForOrder(cancelled);
+            String note = !isEmpty(dto.getReason()) ? dto.getReason().trim() : "Admin manual status update";
+            auditService.record(
+                    AuditAction.ORDER_STATUS_OVERRIDE,
+                    "ORDER",
+                    String.valueOf(cancelled.getId()),
+                    currentStatus.name(),
+                    targetStatus.name(),
+                    note + " by " + operator);
+            if (nhanhEnabled.isEnabled()) {
+                eventPublisher.publishEvent(new OrderCancelledEvent(cancelled.getId()));
+            }
+            return cancelled;
+        }
+
+        if (!isEmpty(dto.getTrackingCode())) {
+            order.setTrackingCode(dto.getTrackingCode().trim());
+            if (isEmpty(order.getTrackingUrl())) {
+                order.setTrackingUrl(dto.getTrackingCode().trim());
+            }
+        }
+
+        order.setStatus(targetStatus);
+        Order updated = orderRepository.save(order);
+
+        String note = !isEmpty(dto.getReason()) ? dto.getReason().trim() : "Admin manual status update";
+        auditService.record(
+                AuditAction.ORDER_STATUS_OVERRIDE,
+                "ORDER",
+                String.valueOf(updated.getId()),
+                currentStatus.name(),
+                targetStatus.name(),
+                note + " by " + operator);
+
+        return updated;
     }
 
     private void validateDirectOrder(CreateNormalOrderDto dto) {
@@ -304,10 +385,9 @@ public class OrderService {
                 || dto.getCustomerWardId() == null || dto.getCustomerWardId() <= 0) {
             throw new IllegalArgumentException("Customer city and ward ids are required");
         }
-        String street = trim(dto.getCustomerStreet());
-        String hamlet = trim(dto.getCustomerHamlet());
-        if (isEmpty(street) && isEmpty(hamlet)) {
-            throw new IllegalArgumentException("Either a street or a hamlet is required");
+        String resolvedAddress = resolveCustomerAddress(dto);
+        if (isEmpty(resolvedAddress)) {
+            throw new IllegalArgumentException("Customer address is required");
         }
         if (!addressService.isWardInProvince(dto.getCustomerWardId(), dto.getCustomerCityId())) {
             throw new IllegalArgumentException("Ward does not belong to the selected province");
@@ -331,29 +411,35 @@ public class OrderService {
         String nhanhProductId = trim(itemDto.getNhanhProductId());
         if (itemDto.getProductId() != null) {
             Product product = productRepo.findById(itemDto.getProductId())
-                    .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + itemDto.getProductId()));
-            return new ResolvedOrderItem(product.getId(), null, product.getName(), money(ProductPricing.effectivePrice(product)));
+                    .orElseThrow(
+                            () -> new IllegalArgumentException("Product not found with id: " + itemDto.getProductId()));
+            return new ResolvedOrderItem(product.getId(), null, product.getName(),
+                    money(ProductPricing.effectivePrice(product)));
         }
         if (nhanhProductId != null && !nhanhProductId.isBlank()) {
             try {
                 Optional<Product> product = productRepo.findByExternalId(Long.parseLong(nhanhProductId));
                 if (product.isPresent()) {
                     Product found = product.get();
-                    return new ResolvedOrderItem(found.getId(), nhanhProductId, found.getName(), money(ProductPricing.effectivePrice(found)));
+                    return new ResolvedOrderItem(found.getId(), nhanhProductId, found.getName(),
+                            money(ProductPricing.effectivePrice(found)));
                 }
             } catch (NumberFormatException ignored) {
                 // fall through to legacy snapshot
             }
         }
-        // Legacy path: item does not resolve to a local product; keep the provided snapshot.
+        // Legacy path: item does not resolve to a local product; keep the provided
+        // snapshot.
         return new ResolvedOrderItem(null, nhanhProductId, trim(itemDto.getName()), money(itemDto.getPrice()));
     }
 
-    private record ResolvedOrderItem(Long productId, String nhanhProductId, String name, BigDecimal price) { }
+    private record ResolvedOrderItem(Long productId, String nhanhProductId, String name, BigDecimal price) {
+    }
 
     private String generateUniqueOrderCode() {
         for (int i = 0; i < 20; i++) {
-            String code = "SOBU-ORD-" + LocalDateTime.now().format(ORDER_CODE_FORMATTER) + "-" + String.format("%04d", RANDOM.nextInt(10_000));
+            String code = "SOBU-ORD-" + LocalDateTime.now().format(ORDER_CODE_FORMATTER) + "-"
+                    + String.format("%04d", RANDOM.nextInt(10_000));
             if (orderRepository.findByOrderCode(code).isEmpty()) {
                 return code;
             }
@@ -365,12 +451,34 @@ public class OrderService {
         return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
     }
 
+    private String resolveCustomerAddress(CreateNormalOrderDto dto) {
+        if (dto == null) {
+            return null;
+        }
+        String address = trim(dto.getCustomerAddress());
+        if (!isEmpty(address)) {
+            return address;
+        }
+        String street = trim(dto.getCustomerStreet());
+        String hamlet = trim(dto.getCustomerHamlet());
+        if (!isEmpty(street) && !isEmpty(hamlet)) {
+            return street + ", " + hamlet;
+        }
+        if (!isEmpty(street)) {
+            return street;
+        }
+        if (!isEmpty(hamlet)) {
+            return hamlet;
+        }
+        return null;
+    }
+
     private String trim(String value) {
         return value == null ? null : value.trim();
     }
 
     private boolean isEmpty(String value) {
-        return value == null || value.isBlank();
+        return value == null || value.trim().isEmpty();
     }
 
     private void applyInitialPreorderStatus(Order order) {
@@ -387,8 +495,7 @@ public class OrderService {
                 log.warn(
                         "Failed to create initial preorder deposit checkout for order id={}: {}",
                         order.getId(),
-                        ex.getMessage()
-                );
+                        ex.getMessage());
             }
         }
     }

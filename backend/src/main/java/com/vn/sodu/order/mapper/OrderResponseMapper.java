@@ -7,6 +7,7 @@ import com.vn.sodu.order.dtos.OrderResponseDto;
 import com.vn.sodu.product.Product;
 import com.vn.sodu.product.repo.ProductRepo;
 import com.vn.sodu.request.Request;
+import com.vn.sodu.order.policy.OrderTransitionPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ import java.util.List;
 public class OrderResponseMapper {
 
     private final ProductRepo productRepo;
+    private final OrderTransitionPolicy orderTransitionPolicy;
 
     public OrderResponseDto toDto(Order order) {
         if (order == null) {
@@ -68,6 +70,9 @@ public class OrderResponseMapper {
                 .lastSyncAt(order.getLastSyncAt())
                 .carrierId(order.getCarrierId())
                 .carrierServiceId(order.getCarrierServiceId())
+                .trackingUrl(order.getTrackingUrl())
+                .trackingCode(order.getTrackingCode())
+                .allowedNextStatuses(orderTransitionPolicy != null ? orderTransitionPolicy.allowedTransitions(order.getType(), order.getStatus()) : null)
                 .items(items)
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())

@@ -140,9 +140,11 @@ public class OrderWebhookHandler implements NhanhWebhookHandler {
             JsonNode trackingUrlNode = carrier.get("trackingUrl");
             if (trackingUrlNode != null && !trackingUrlNode.isNull()) {
                 order.setTrackingUrl(trackingUrlNode.asText());
-            } else {
-                JsonNode carrierCodeNode = carrier.get("carrierCode");
-                if (carrierCodeNode != null && !carrierCodeNode.isNull()) {
+            }
+            JsonNode carrierCodeNode = carrier.get("carrierCode");
+            if (carrierCodeNode != null && !carrierCodeNode.isNull()) {
+                order.setTrackingCode(carrierCodeNode.asText());
+                if (order.getTrackingUrl() == null || order.getTrackingUrl().isBlank()) {
                     order.setTrackingUrl(carrierCodeNode.asText());
                 }
             }

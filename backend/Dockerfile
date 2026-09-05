@@ -33,7 +33,7 @@ COPY --chown=appuser:appgroup --from=builder /app/target/extracted/spring-boot-l
 COPY --chown=appuser:appgroup --from=builder /app/target/extracted/snapshot-dependencies/ ./
 COPY --chown=appuser:appgroup --from=builder /app/target/extracted/application/ ./
 
-RUN mkdir -p /app/uploads && chown appuser:appgroup /app/uploads
+RUN mkdir -p /sobu/uploads && chown appuser:appgroup /sobu/uploads
 
 USER appuser
 

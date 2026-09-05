@@ -9,7 +9,8 @@ import {
     AdminOrderQueryParams,
     OrderPaymentResponseDto,
     OrderResponseDto,
-    OrderSyncResultDto
+    OrderSyncResultDto,
+    UpdateOrderStatusDto
 } from '../interface/order.model';
 import {OrderStatus} from '../enum/union-types';
 
@@ -67,9 +68,9 @@ export const AdminWorkflowService = {
 
     updateAdminOrderStatus: (
         orderId: string | number,
-        status: OrderStatus
+        data: UpdateOrderStatusDto
     ): Promise<ApiResponseDTO<OrderResponseDto>> => {
-        return apiClient.patch(`/api/admin/orders/${orderId}/status`, {status});
+        return apiClient.patch(`/api/admin/orders/${orderId}/status`, data);
     },
 
     createPreorderFinalPayment: (

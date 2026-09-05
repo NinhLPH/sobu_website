@@ -9,6 +9,8 @@ export type OrderStatus =
     | 'PROCESSING'
     | 'SHIPPED'
     | 'DELIVERED'
+    | 'FAILED'
+    | 'RETURNED'
     | 'CANCELLED';
 export type OrderSyncStatus = 'PENDING' | 'SYNCED' | 'NEED_RECONCILE' | 'FAILED' | 'DEAD';
 export type NhanhSyncStage =

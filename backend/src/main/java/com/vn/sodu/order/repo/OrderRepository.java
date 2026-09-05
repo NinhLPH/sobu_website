@@ -26,6 +26,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("select o from Order o where o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select distinct o from Order o left join fetch o.items where o.id = :id")
+    Optional<Order> findByIdForUpdateWithItems(@Param("id") Long id);
+
     @EntityGraph(attributePaths = {"items", "request"})
     Optional<Order> findWithItemsAndRequestById(Long id);
 
