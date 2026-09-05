@@ -10,7 +10,6 @@ import {
     MapPin,
     Package,
     RefreshCw,
-    Send,
     Truck,
     User,
     XCircle

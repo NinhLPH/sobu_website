@@ -69,7 +69,7 @@ services:
 
     environment:
       TZ: Asia/Ho_Chi_Minh
-      APP_STORAGE_LOCAL_DIR: /app/uploads
+      APP_STORAGE_LOCAL_DIR: /sobu/uploads
       SERVER_FORWARD_HEADERS_STRATEGY: framework
 
     env_file:

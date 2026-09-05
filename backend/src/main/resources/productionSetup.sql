@@ -8,6 +8,11 @@
 SET NAMES 'utf8mb4';
 SET CHARACTER SET utf8mb4;
 
+-- Grant full privileges to root from any host (covers Docker bridge IPs like 172.18.0.1)
+-- Run this block as a privileged session if the error persists:
+-- GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+-- FLUSH PRIVILEGES;
+
 -- 1. SYSTEM ROLES
 INSERT INTO role (name, description) VALUES 
 ('ADMIN', 'Quản trị viên hệ thống'),
