@@ -604,7 +604,7 @@ class OrderServiceTest {
                 .status(OrderStatus.PROCESSING)
                 .build();
 
-        when(orderRepository.findByIdForUpdate(301L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdateWithItems(301L)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Authentication staffAuth = new UsernamePasswordAuthenticationToken("admin_user", "n/a");
@@ -636,7 +636,7 @@ class OrderServiceTest {
                 .status(OrderStatus.PROCESSING)
                 .build();
 
-        when(orderRepository.findByIdForUpdate(302L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdateWithItems(302L)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Authentication staffAuth = new UsernamePasswordAuthenticationToken("staff_user", "n/a");
@@ -660,7 +660,7 @@ class OrderServiceTest {
                 .status(OrderStatus.NEW)
                 .build();
 
-        when(orderRepository.findByIdForUpdate(303L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdateWithItems(303L)).thenReturn(Optional.of(order));
 
         com.vn.sodu.order.dtos.UpdateOrderStatusDto dto = com.vn.sodu.order.dtos.UpdateOrderStatusDto.builder()
                 .status(OrderStatus.DELIVERED)

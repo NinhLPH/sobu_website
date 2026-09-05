@@ -5,7 +5,6 @@ import com.vn.sodu.global.dto.PageResponse;
 import com.vn.sodu.order.controller.OrderSyncController;
 import com.vn.sodu.order.dtos.OrderResponseDto;
 import com.vn.sodu.order.dtos.OrderSyncResultDto;
-import com.vn.sodu.order.dtos.UpdateOrderStatusRequest;
 import com.vn.sodu.order.services.OrderQueryService;
 import com.vn.sodu.order.services.OrderService;
 import com.vn.sodu.order.services.OrderSyncService;
@@ -180,7 +179,7 @@ class OrderSyncControllerTest {
 
         OrderSyncController controller = createController();
         ResponseEntity<ApiResponseDTO<OrderResponseDto>> response =
-                controller.updateOrderStatusPatch(1L, updateDto, staffAuth());
+                controller.updateOrderStatus(1L, updateDto, staffAuth());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -196,7 +195,7 @@ class OrderSyncControllerTest {
                 .build();
 
         assertThrows(AccessDeniedException.class,
-                () -> controller.updateOrderStatusPatch(1L, updateDto, new UsernamePasswordAuthenticationToken("user", "n/a")));
+                () -> controller.updateOrderStatus(1L, updateDto, new UsernamePasswordAuthenticationToken("user", "n/a")));
     }
 
     private ObjectProvider<OrderSyncService> syncServiceProvider() {
@@ -205,32 +204,30 @@ class OrderSyncControllerTest {
     }
 
     @Test
-    void updateOrderStatusAdvancesLocalFulfilmentStatusForStaff() {
-        OrderResponseDto dto = OrderResponseDto.builder()
+    void updateOrderStatusPutRequiresStaffAndReturnsUpdatedDto() {
+        Order order = Order.builder()
                 .id(1L)
                 .status(OrderStatus.PROCESSING)
                 .build();
-        when(orderQueryService.getOrderDetail(1L)).thenReturn(dto);
-        UpdateOrderStatusRequest request = new UpdateOrderStatusRequest();
-        request.setStatus(OrderStatus.PROCESSING);
+        OrderResponseDto responseDto = OrderResponseDto.builder()
+                .id(1L)
+                .status(OrderStatus.PROCESSING)
+                .build();
+        com.vn.sodu.order.dtos.UpdateOrderStatusDto updateDto = com.vn.sodu.order.dtos.UpdateOrderStatusDto.builder()
+                .status(OrderStatus.PROCESSING)
+                .build();
 
-        ResponseEntity<ApiResponseDTO<OrderResponseDto>> response = controller()
-                .updateOrderStatus(1L, request, staffAuth());
+        when(orderService.updateOrderStatusAsAdmin(eq(1L), any(), any())).thenReturn(order);
+        when(orderResponseMapper.toDto(order)).thenReturn(responseDto);
+
+        OrderSyncController controller = createController();
+        ResponseEntity<ApiResponseDTO<OrderResponseDto>> response =
+                controller.updateOrderStatusPut(1L, updateDto, staffAuth());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData().getStatus()).isEqualTo(OrderStatus.PROCESSING);
-        verify(orderService).updateFulfilmentStatusByStaff(1L, OrderStatus.PROCESSING);
-    }
-
-    private OrderSyncController controller() {
-        return new OrderSyncController(
-                syncServiceProvider(),
-                orderQueryService,
-                orderExportService,
-                nhanhEnabled,
-                orderService
-        );
+        verify(orderService).updateOrderStatusAsAdmin(eq(1L), eq(updateDto), any());
     }
 
     private Authentication staffAuth() {
