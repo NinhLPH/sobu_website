@@ -20,6 +20,7 @@ import { useIntegrationStore } from '../store/useIntegrationStore';
 import { VoucherService } from '../service/voucher.service';
 import { ActiveVoucher, VoucherApplyResponse } from '../interface/voucher.model';
 import { useConfirmDialog } from '../components/common/ConfirmDialog';
+import VoucherPickerModal from '../components/common/VoucherPickerModal';
 
 interface QuantityControllerProps {
     quantity: number;
@@ -49,6 +50,18 @@ type CheckoutTextField = Exclude<
 >;
 
 type SocialLinks = Record<string, string>;
+type VoucherSelectionGroup = 'discount' | 'shipping';
+
+interface VoucherSelectionAttempt {
+    group: VoucherSelectionGroup;
+    attemptedCode: string;
+    previousCode: string;
+}
+
+interface SelectedVoucherChip {
+    code: string;
+    group: VoucherSelectionGroup;
+}
 
 const initialCheckoutForm: CheckoutForm = {
     customerName: '',
@@ -66,6 +79,16 @@ const initialCheckoutForm: CheckoutForm = {
 
 const MAX_CUSTOMER_ADDRESS_LENGTH = 500;
 const MAX_CUSTOMER_STREET_HAMLET_LENGTH = 255;
+
+const normalizeVoucherCode = (code: string | null | undefined) => code?.trim().toUpperCase() ?? '';
+
+const voucherSelectionGroup = (voucher?: Pick<ActiveVoucher, 'slot' | 'type'> | null): VoucherSelectionGroup =>
+    voucher?.slot === 'SHIPPING' || voucher?.type === 'FREE_SHIP' ? 'shipping' : 'discount';
+
+const isVoucherEligibilityError = (error: any) => {
+    const status = Number(error?.response?.status);
+    return status === 400 || status === 422;
+};
 
 type CompleteShippingQuote = ShippingQuoteDto & {
     carrierId?: number | null;
@@ -167,20 +190,6 @@ const getErrorMessage = (error: any, fallback: string) =>
 const isInsufficientStockError = (error: any) =>
     error?.response?.data?.code === 'INSUFFICIENT_STOCK'
     || /insufficient stock for product/i.test(getErrorMessage(error, ''));
-
-const voucherBenefitText = (voucher: ActiveVoucher) => {
-    if (voucher.type === 'FREE_SHIP') {
-        return voucher.maxDiscountAmount
-            ? `Giảm phí ship tối đa ${formatCurrency(voucher.maxDiscountAmount)}`
-            : 'Miễn phí vận chuyển';
-    }
-    const benefit = voucher.type === 'DISCOUNT_PERCENT'
-        ? `Giảm ${voucher.value ?? 0}%`
-        : `Giảm ${formatCurrency(voucher.value ?? 0)}`;
-    return voucher.minOrderValue
-        ? `${benefit} · Đơn từ ${formatCurrency(voucher.minOrderValue)}`
-        : benefit;
-};
 
 interface LocationComboboxOption {
     id: number;
@@ -514,13 +523,18 @@ export default function Cart() {
     const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
     const [isApplyingVouchers, setIsApplyingVouchers] = useState(false);
     const [voucherError, setVoucherError] = useState<string | null>(null);
+    const [voucherLoadError, setVoucherLoadError] = useState<string | null>(null);
+    const [isVoucherPickerOpen, setIsVoucherPickerOpen] = useState(false);
+    const [voucherPreviewRetry, setVoucherPreviewRetry] = useState(0);
     const confirmShippingQuoteRequestRef = useRef(0);
     const voucherPreviewRequestRef = useRef(0);
+    const voucherSelectionAttemptRef = useRef<VoucherSelectionAttempt | null>(null);
     const socialLinks = useMemo(
         () => parseJsonConfig<SocialLinks>(configMap, 'social_links', {}),
         [configMap]
     );
     const facebookSupportUrl = socialLinks.facebook?.trim() || '';
+    const closeVoucherPicker = useCallback(() => setIsVoucherPickerOpen(false), []);
 
     useEffect(() => {
         void ensureIntegrationLoaded();
@@ -539,15 +553,18 @@ export default function Cart() {
     useEffect(() => {
         let cancelled = false;
         setIsLoadingVouchers(true);
+        setVoucherLoadError(null);
         void VoucherService.getActive()
             .then((response) => {
                 if (cancelled) return;
                 if (!response.success) throw new Error(response.message || 'Could not load vouchers.');
                 setActiveVouchers(response.data ?? []);
+                setVoucherLoadError(null);
             })
             .catch((error) => {
                 if (!cancelled) {
-                    const message = getErrorMessage(error, 'Không thể tải voucher gợi ý.');
+                    const message = getErrorMessage(error, 'Không thể tải danh sách voucher.');
+                    setVoucherLoadError(message);
                     setVoucherError(message);
                     ToastService.error(message);
                 }
@@ -595,6 +612,23 @@ export default function Cart() {
     const selectedShippingFee = isUsableShippingQuote(displayShippingQuote)
         ? shippingQuoteFee(displayShippingQuote)
         : 0;
+    const selectedVoucherChips = useMemo(() => {
+        const chips: SelectedVoucherChip[] = [];
+        const seenCodes = new Set<string>();
+        const addChip = (code: string | null | undefined, group: VoucherSelectionGroup) => {
+            const normalizedCode = normalizeVoucherCode(code);
+            if (!normalizedCode || seenCodes.has(normalizedCode)) return;
+            seenCodes.add(normalizedCode);
+            chips.push({code: normalizedCode, group});
+        };
+
+        addChip(discountVoucherCode, 'discount');
+        addChip(shippingVoucherCode, 'shipping');
+        voucherPreview?.appliedVouchers?.forEach(voucher => {
+            addChip(voucher.code, voucher.slot === 'SHIPPING' ? 'shipping' : 'discount');
+        });
+        return chips;
+    }, [discountVoucherCode, shippingVoucherCode, voucherPreview]);
     const orderTotal = voucherPreview?.finalTotal ?? subtotal + selectedShippingFee;
     const isCheckoutDisabled =
         isSubmitting ||
@@ -697,10 +731,40 @@ export default function Cart() {
         subtotal
     ]);
 
+    const rollbackVoucherSelectionAttempt = useCallback((
+        requestDiscountCode: string,
+        requestShippingCode: string
+    ) => {
+        const attempt = voucherSelectionAttemptRef.current;
+        if (!attempt) return;
+
+        const requestCode = attempt.group === 'shipping'
+            ? requestShippingCode
+            : requestDiscountCode;
+        if (normalizeVoucherCode(requestCode) !== attempt.attemptedCode) return;
+
+        if (attempt.group === 'shipping') {
+            setShippingVoucherCode(current =>
+                normalizeVoucherCode(current) === attempt.attemptedCode
+                    ? attempt.previousCode
+                    : current
+            );
+        } else {
+            setDiscountVoucherCode(current =>
+                normalizeVoucherCode(current) === attempt.attemptedCode
+                    ? attempt.previousCode
+                    : current
+            );
+        }
+        voucherSelectionAttemptRef.current = null;
+    }, []);
+
     useEffect(() => {
         const confirmedFee = isUsableShippingQuote(confirmedShippingQuote)
             ? shippingQuoteFee(confirmedShippingQuote)
             : null;
+        const requestDiscountCode = discountVoucherCode;
+        const requestShippingCode = shippingVoucherCode;
         voucherPreviewRequestRef.current += 1;
         const requestId = voucherPreviewRequestRef.current;
         setVoucherPreview(null);
@@ -714,8 +778,8 @@ export default function Cart() {
         const controller = new AbortController();
         setIsApplyingVouchers(true);
         void VoucherService.apply({
-            discountVoucherCode: discountVoucherCode || undefined,
-            shippingVoucherCode: shippingVoucherCode || undefined,
+            discountVoucherCode: requestDiscountCode || undefined,
+            shippingVoucherCode: requestShippingCode || undefined,
             subtotal,
             shippingFee: confirmedFee,
             items: items.map(({ product, quantity }) => ({
@@ -737,13 +801,24 @@ export default function Cart() {
                     throw new Error(response.message || 'Could not preview vouchers.');
                 }
                 if (!response.data.valid) {
+                    rollbackVoucherSelectionAttempt(requestDiscountCode, requestShippingCode);
                     throw new Error(response.data.message || 'Voucher không hợp lệ.');
                 }
                 setVoucherPreview(response.data);
                 setVoucherError(null);
+                const attempt = voucherSelectionAttemptRef.current;
+                const appliedRequestCode = attempt?.group === 'shipping'
+                    ? requestShippingCode
+                    : requestDiscountCode;
+                if (attempt && normalizeVoucherCode(appliedRequestCode) === attempt.attemptedCode) {
+                    voucherSelectionAttemptRef.current = null;
+                }
             })
             .catch((error) => {
                 if (requestId === voucherPreviewRequestRef.current && error?.code !== 'ERR_CANCELED') {
+                    if (isVoucherEligibilityError(error)) {
+                        rollbackVoucherSelectionAttempt(requestDiscountCode, requestShippingCode);
+                    }
                     const message = getErrorMessage(error, 'Không thể tính ưu đãi. Vui lòng thử lại.');
                     setVoucherError(message);
                     ToastService.error(message);
@@ -764,21 +839,82 @@ export default function Cart() {
         hydrationError,
         isHydratingProducts,
         items,
+        rollbackVoucherSelectionAttempt,
         shippingVoucherCode,
-        subtotal
+        subtotal,
+        voucherPreviewRetry
     ]);
 
     const applyVoucherCode = (rawCode: string) => {
-        const code = rawCode.trim().toUpperCase();
+        const code = normalizeVoucherCode(rawCode);
         if (!code) return;
-        const voucher = activeVouchers.find((item) => item.code.toUpperCase() === code);
-        if (voucher?.slot === 'SHIPPING' || voucher?.type === 'FREE_SHIP') {
+        const voucher = activeVouchers.find((item) => normalizeVoucherCode(item.code) === code);
+        const group = voucherSelectionGroup(voucher);
+        const currentCode = group === 'shipping' ? shippingVoucherCode : discountVoucherCode;
+        const previousAttempt = voucherSelectionAttemptRef.current;
+        const previousCode = previousAttempt?.group === group
+            && previousAttempt.attemptedCode === code
+            && normalizeVoucherCode(currentCode) === code
+            ? previousAttempt.previousCode
+            : currentCode;
+        voucherSelectionAttemptRef.current = {
+            group,
+            attemptedCode: code,
+            previousCode
+        };
+        if (group === 'shipping') {
             setShippingVoucherCode(code);
         } else {
             setDiscountVoucherCode(code);
         }
         setVoucherInput('');
         setVoucherError(null);
+    };
+
+    const handleVoucherSelection = (voucher: ActiveVoucher, selected: boolean) => {
+        const group = voucherSelectionGroup(voucher);
+        const code = normalizeVoucherCode(voucher.code);
+        if (selected) {
+            applyVoucherCode(voucher.code);
+            return;
+        }
+        if (voucherSelectionAttemptRef.current?.attemptedCode === code) {
+            voucherSelectionAttemptRef.current = null;
+        }
+        if (group === 'shipping') {
+            if (normalizeVoucherCode(shippingVoucherCode) === code) {
+                setShippingVoucherCode('');
+                setVoucherError(null);
+            } else if (voucherPreview?.appliedVouchers.some(item => normalizeVoucherCode(item.code) === code)) {
+                setVoucherPreviewRetry(value => value + 1);
+            }
+            return;
+        }
+        if (normalizeVoucherCode(discountVoucherCode) === code) {
+            setDiscountVoucherCode('');
+            setVoucherError(null);
+        } else if (voucherPreview?.appliedVouchers.some(item => normalizeVoucherCode(item.code) === code)) {
+            setVoucherPreviewRetry(value => value + 1);
+        }
+    };
+
+    const handleVoucherChipRemoval = (chip: SelectedVoucherChip) => {
+        const voucher = activeVouchers.find(item => normalizeVoucherCode(item.code) === chip.code);
+        if (voucher) {
+            handleVoucherSelection(voucher, false);
+            return;
+        }
+        if (chip.group === 'shipping' && normalizeVoucherCode(shippingVoucherCode) === chip.code) {
+            setShippingVoucherCode('');
+            setVoucherError(null);
+            return;
+        }
+        if (chip.group === 'discount' && normalizeVoucherCode(discountVoucherCode) === chip.code) {
+            setDiscountVoucherCode('');
+            setVoucherError(null);
+            return;
+        }
+        setVoucherPreviewRetry(value => value + 1);
     };
 
     const handleShippingQuoteSelect = async (quote: ShippingQuoteDto, index: number) => {
@@ -1454,62 +1590,34 @@ export default function Cart() {
                                 </button>
                             </div>
 
-                            {(discountVoucherCode || shippingVoucherCode) && (
-                                <div className="mt-3 flex flex-wrap gap-2" aria-label="Mã voucher đã nhập">
-                                    {discountVoucherCode && (
-                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-black text-primary">
-                                            <Check className="h-3.5 w-3.5" /> {discountVoucherCode}
-                                            <button type="button" aria-label={`Xóa voucher ${discountVoucherCode}`} onClick={() => setDiscountVoucherCode('')} className="cursor-pointer rounded-full p-0.5 transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary/30">
+                            {selectedVoucherChips.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2" aria-label="Mã voucher đang chọn">
+                                    {selectedVoucherChips.map(chip => (
+                                        <span key={chip.code} className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-black text-primary">
+                                            <Check className="h-3.5 w-3.5" /> {chip.code}
+                                            <button type="button" aria-label={`Xóa voucher ${chip.code}`} onClick={() => handleVoucherChipRemoval(chip)} className="cursor-pointer rounded-full p-0.5 transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary/30">
                                                 <X className="h-3 w-3" />
                                             </button>
                                         </span>
-                                    )}
-                                    {shippingVoucherCode && (
-                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-[11px] font-black text-primary">
-                                            <Check className="h-3.5 w-3.5" /> {shippingVoucherCode}
-                                            <button type="button" aria-label={`Xóa voucher ${shippingVoucherCode}`} onClick={() => setShippingVoucherCode('')} className="cursor-pointer rounded-full p-0.5 transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary/30">
-                                                <X className="h-3 w-3" />
-                                            </button>
-                                        </span>
-                                    )}
+                                    ))}
                                 </div>
                             )}
 
-                            {(voucherPreview?.appliedVouchers?.length ?? 0) > 0 && (
-                                <div className="mt-3" aria-live="polite">
-                                    <p className="text-[10px] font-black uppercase tracking-wider text-outline">Ưu đãi đang áp dụng</p>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {voucherPreview?.appliedVouchers.map(voucher => (
-                                            <span key={`${voucher.slot}-${voucher.code}`} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-black text-emerald-800">
-                                                <Check className="h-3.5 w-3.5"/>
-                                                {voucher.code} · -{formatCurrency(voucher.discountAmount)}
-                                                <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-emerald-700">
-                                                    {voucher.autoApplied ? 'Tự động' : 'Đã nhập'}
-                                                </span>
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeVouchers.length > 0 && (
-                                <div className="mt-3 space-y-2">
-                                    <p className="text-[10px] font-black uppercase tracking-wider text-outline">Gợi ý cho bạn</p>
-                                    <div className="grid gap-2 sm:grid-cols-2">
-                                        {activeVouchers.slice(0, 4).map((voucher) => (
-                                            <button
-                                                key={voucher.id}
-                                                type="button"
-                                                onClick={() => applyVoucherCode(voucher.code)}
-                                                className="min-w-0 cursor-pointer rounded-xl border border-surface-container-high bg-surface-container-lowest px-3 py-2.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-primary/30"
-                                            >
-                                                <span className="block truncate text-xs font-black text-on-surface">{voucher.code}</span>
-                                                <span className="mt-0.5 block text-[10px] font-semibold leading-relaxed text-on-surface-variant">{voucherBenefitText(voucher)}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            <button
+                                type="button"
+                                onClick={() => setIsVoucherPickerOpen(true)}
+                                disabled={isSubmitting || isCreatingPayment}
+                                aria-label="Chọn voucher"
+                                className="mt-3 flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-2.5 text-left text-xs font-black text-primary transition-colors hover:border-primary/50 hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    <TicketPercent className="h-4 w-4" aria-hidden="true"/>
+                                    Chọn voucher
+                                </span>
+                                <span className="text-[10px] font-bold text-on-surface-variant">
+                                    {isLoadingVouchers ? 'Đang tải' : `${activeVouchers.length} mã`}
+                                </span>
+                            </button>
                         </section>
 
                         <div className="space-y-2.5 border-t border-surface-container-high pt-4 text-xs font-bold">
@@ -1607,6 +1715,21 @@ export default function Cart() {
                     </div>
                 </aside>
             </form>
+            <VoucherPickerModal
+                open={isVoucherPickerOpen}
+                vouchers={activeVouchers}
+                subtotal={subtotal}
+                discountVoucherCode={discountVoucherCode}
+                shippingVoucherCode={shippingVoucherCode}
+                autoAppliedVoucherCodes={(voucherPreview?.appliedVouchers ?? [])
+                    .filter(voucher => voucher.autoApplied)
+                    .map(voucher => voucher.code)}
+                isLoading={isLoadingVouchers}
+                error={voucherLoadError}
+                disabled={isSubmitting || isCreatingPayment}
+                onSelectionChange={handleVoucherSelection}
+                onClose={closeVoucherPicker}
+            />
         </main>
     );
 }

@@ -130,7 +130,7 @@ describe('AdminOrderDetail payment history', () => {
         expect(screen.queryByRole('button', {name: /Retry đồng bộ/i})).toBeNull();
     });
 
-    it('shows quick status actions when PROCESSING and submits update with trackingCode', async () => {
+    it('shows backend-authorized status actions when PROCESSING and submits update with trackingCode', async () => {
         renderDetail({
             currentOrderDetail: {
                 id: 12,
@@ -144,8 +144,8 @@ describe('AdminOrderDetail payment history', () => {
         });
 
         // Quick buttons present
-        const shipButton = screen.getByRole('button', { name: /Xuất giao hàng \(SHIPPED\)/i });
-        const cancelButton = screen.getByRole('button', { name: /Hủy đơn \(CANCELLED\)/i });
+        const shipButton = screen.getByRole('button', { name: /Chuyển đơn SO-12 sang Đang giao/i });
+        const cancelButton = screen.getByRole('button', { name: /Chuyển đơn SO-12 sang Đã hủy/i });
         expect(shipButton).toBeTruthy();
         expect(cancelButton).toBeTruthy();
 
@@ -174,6 +174,63 @@ describe('AdminOrderDetail payment history', () => {
             trackingCode: 'VNPOST998877',
             reason: 'Đã gửi qua bưu cục'
         });
+    });
+
+    it('shows the same local fulfilment action as the order list when allowedNextStatuses is absent', async () => {
+        renderDetail({
+            currentOrderDetail: {
+                id: 12,
+                orderCode: 'SO-12',
+                type: 'NORMAL',
+                status: 'NEW',
+                totalAmount: 500000,
+                items: []
+            }
+        });
+
+        fireEvent.click(screen.getByRole('button', {name: /Chuyển đơn SO-12 sang Đang xử lý/i}));
+        expect(screen.getByRole('dialog', {name: 'Cập nhật trạng thái đơn hàng'})).toBeTruthy();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Xác nhận cập nhật/i}));
+        });
+        expect(updateOrderStatus).toHaveBeenCalledWith(12, {
+            status: 'PROCESSING',
+            reason: undefined,
+            trackingCode: undefined
+        });
+    });
+
+    it('does not invent a local fallback action while Nhanh integration is enabled', () => {
+        useIntegrationStore.setState({nhanhEnabled: true, loaded: true, loading: false});
+        renderDetail({
+            currentOrderDetail: {
+                id: 12,
+                orderCode: 'SO-12',
+                type: 'NORMAL',
+                status: 'NEW',
+                totalAmount: 500000,
+                items: []
+            }
+        });
+
+        expect(screen.queryByRole('button', {name: /Chuyển đơn SO-12 sang Đang xử lý/i})).toBeNull();
+    });
+
+    it('prefers the transition list returned by the backend over the local fallback', () => {
+        renderDetail({
+            currentOrderDetail: {
+                id: 12,
+                orderCode: 'SO-12',
+                type: 'NORMAL',
+                status: 'NEW',
+                allowedNextStatuses: ['CANCELLED'],
+                totalAmount: 500000,
+                items: []
+            }
+        });
+
+        expect(screen.getByRole('button', {name: /Chuyển đơn SO-12 sang Đã hủy/i})).toBeTruthy();
+        expect(screen.queryByRole('button', {name: /Chuyển đơn SO-12 sang Đang xử lý/i})).toBeNull();
     });
 
     it('displays trackingCode and trackingUrl in shipping info when available', () => {

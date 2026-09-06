@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
     AlertCircle,
+    ArrowRight,
     ArrowLeft,
     Banknote,
     CheckCircle2,
@@ -10,7 +11,6 @@ import {
     MapPin,
     Package,
     RefreshCw,
-    Truck,
     User,
     XCircle
 } from 'lucide-react';
@@ -20,6 +20,7 @@ import { OrderStatus } from '../../enum/union-types';
 import {hasNhanhHistory} from '../../utils/order-sync';
 import { formatCurrency } from '../../utils/format';
 import {useConfirmDialog} from '../../components/common/ConfirmDialog';
+import {getNextAdminOrderStatus} from '../../utils/admin-order-status';
 
 const getStatusColor = (status?: string) => {
     switch (status) {
@@ -284,6 +285,14 @@ export default function AdminOrderDetail() {
     const originalSubtotal = Math.max(0, totalAmount + discountAmount + shippingDiscountAmount - shippingFee);
     const paidAmount = order.paidAmount ?? order.depositAmount ?? 0;
     const remainingAmount = order.remainingAmount ?? Math.max(0, totalAmount - paidAmount);
+    const fallbackStatusTransition = !canUseNhanh
+        ? getNextAdminOrderStatus(order.status)
+        : null;
+    const allowedStatusTargets = order.allowedNextStatuses?.length
+        ? order.allowedNextStatuses
+        : fallbackStatusTransition
+            ? [fallbackStatusTransition.status]
+            : [];
 
     return (
         <div className="space-y-6">
@@ -358,51 +367,26 @@ export default function AdminOrderDetail() {
                         </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        {/* Quick action buttons for PROCESSING */}
-                        {order.status === 'PROCESSING' && (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => openStatusModal('SHIPPED')}
-                                    className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary/90"
-                                >
-                                    <Truck className="h-4 w-4" />
-                                    Xuất giao hàng (SHIPPED)
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => openStatusModal('CANCELLED')}
-                                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 bg-red-50 px-3.5 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100"
-                                >
-                                    <XCircle className="h-4 w-4" />
-                                    Hủy đơn (CANCELLED)
-                                </button>
-                            </>
-                        )}
-
-                        {/* Allowed Next Transitions Selector */}
-                        {order.allowedNextStatuses && order.allowedNextStatuses.length > 0 && (
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-outline">Chuyển sang:</span>
-                                <select
-                                    value=""
-                                    onChange={(e) => {
-                                        if (e.target.value) {
-                                            openStatusModal(e.target.value as OrderStatus);
-                                        }
-                                    }}
-                                    className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
-                                >
-                                    <option value="" disabled>-- Chọn trạng thái --</option>
-                                    {order.allowedNextStatuses.map((st) => (
-                                        <option key={st} value={st}>
-                                            {getStatusText(st)} ({st})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        {allowedStatusTargets.map((target) => (
+                            <button
+                                key={target}
+                                type="button"
+                                onClick={() => openStatusModal(target)}
+                                disabled={isUpdatingOrderStatus}
+                                aria-label={`Chuyển đơn ${order.orderCode || order.id} sang ${getStatusText(target)}`}
+                                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    target === 'CANCELLED'
+                                        ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
+                                        : 'border-primary/25 bg-primary/10 text-primary hover:bg-primary/20'
+                                }`}
+                            >
+                                {target === 'CANCELLED'
+                                    ? <XCircle className="h-4 w-4" aria-hidden="true" />
+                                    : <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+                                Chuyển sang {getStatusText(target)}
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -778,14 +762,15 @@ export default function AdminOrderDetail() {
 
             {/* Status Update Confirmation Modal */}
             {isStatusModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="order-status-dialog-title">
                     <div className="w-full max-w-md rounded-2xl border border-outline-variant/30 bg-surface p-6 shadow-xl">
                         <div className="mb-4 flex items-center justify-between border-b border-outline-variant/20 pb-3">
-                            <h3 className="text-base font-black uppercase tracking-tight text-on-surface">
+                            <h3 id="order-status-dialog-title" className="text-base font-black uppercase tracking-tight text-on-surface">
                                 Cập nhật trạng thái đơn hàng
                             </h3>
                             <button
                                 type="button"
+                                aria-label="Đóng cập nhật trạng thái"
                                 onClick={() => setIsStatusModalOpen(false)}
                                 className="rounded-full p-1 text-outline hover:bg-surface-variant hover:text-on-surface"
                             >

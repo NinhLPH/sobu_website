@@ -701,11 +701,9 @@ describe('Cart payment selection', () => {
         });
         mockedVoucherService.apply.mockImplementation(async (payload) => {
             if (payload.discountVoucherCode === 'INVALID') {
-                return {
-                    success: true,
-                    message: 'Voucher preview rejected',
-                    data: { valid: false, message: 'Mã voucher không hợp lệ.' }
-                } as any;
+                throw {
+                    response: {status: 400, data: {message: 'Mã voucher không hợp lệ.'}}
+                };
             }
             return {
                 success: true,
@@ -730,14 +728,122 @@ describe('Cart payment selection', () => {
         render(<Cart />);
         selectShippingLocation();
         await selectShippingQuote();
-        fireEvent.click(await screen.findByRole('button', { name: /INVALID/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn voucher' }));
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn voucher INVALID' }));
 
         await waitFor(() => expect(mockedToastService.error).toHaveBeenCalledWith('Mã voucher không hợp lệ.'));
+        await waitFor(() => expect((screen.getByRole('checkbox', {name: 'Chọn voucher INVALID'}) as HTMLInputElement).checked).toBe(false));
+        expect(screen.queryByLabelText('Xóa voucher INVALID')).toBeNull();
         expect(screen.queryByText('Mã voucher không hợp lệ.')).toBeNull();
         expect(screen.queryByRole('button', { name: /Tính lại ưu đãi/i })).toBeNull();
     });
 
-    it('applies suggested vouchers, renders the discount breakdown, and submits their codes', async () => {
+    it('keeps the selected voucher when preview fails with a server error', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [{id: 1, code: 'RETRY', name: 'Mã cần thử lại', type: 'DISCOUNT_AMOUNT', slot: 'ORDER', scope: 'ALL', value: 10000}]
+        });
+        mockedVoucherService.apply.mockImplementation(async payload => {
+            if (payload.discountVoucherCode === 'RETRY') {
+                throw {response: {status: 500, data: {message: 'Không thể tính ưu đãi.'}}};
+            }
+            return {
+                success: true,
+                message: 'Voucher preview ready',
+                data: {
+                    valid: true,
+                    itemDiscount: 0,
+                    orderDiscount: 0,
+                    subtotalDiscount: 0,
+                    shippingDiscount: 0,
+                    totalDiscount: 0,
+                    originalSubtotal: payload.subtotal,
+                    originalShippingFee: payload.shippingFee,
+                    finalSubtotal: payload.subtotal,
+                    finalShippingFee: payload.shippingFee,
+                    finalTotal: payload.subtotal + payload.shippingFee,
+                    appliedVouchers: []
+                }
+            };
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+        fireEvent.click(screen.getByRole('button', {name: 'Chọn voucher'}));
+        fireEvent.click(await screen.findByRole('checkbox', {name: 'Chọn voucher RETRY'}));
+
+        await waitFor(() => expect(mockedToastService.error).toHaveBeenCalledWith('Không thể tính ưu đãi.'));
+        expect((screen.getByRole('checkbox', {name: 'Bỏ chọn voucher RETRY'}) as HTMLInputElement).checked).toBe(true);
+        expect(screen.getByLabelText('Xóa voucher RETRY')).toBeTruthy();
+    });
+
+    it('restores the previous valid voucher when a replacement is rejected', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [
+                {id: 1, code: 'GOOD', name: 'Mã hợp lệ', type: 'DISCOUNT_AMOUNT', slot: 'ORDER', scope: 'ALL', value: 10000},
+                {id: 2, code: 'BAD', name: 'Mã không hợp lệ', type: 'DISCOUNT_AMOUNT', slot: 'ORDER', scope: 'ALL', value: 20000}
+            ]
+        });
+        mockedVoucherService.apply.mockImplementation(async payload => {
+            if (payload.discountVoucherCode === 'BAD') {
+                return {
+                    success: true,
+                    message: 'Voucher preview rejected',
+                    data: {valid: false, message: 'Mã voucher không hợp lệ.'}
+                } as any;
+            }
+            const code = payload.discountVoucherCode ?? null;
+            return {
+                success: true,
+                message: 'Voucher preview ready',
+                data: {
+                    valid: true,
+                    discountVoucherCode: code,
+                    shippingVoucherCode: null,
+                    itemDiscount: 0,
+                    orderDiscount: code ? 10000 : 0,
+                    subtotalDiscount: code ? 10000 : 0,
+                    shippingDiscount: 0,
+                    totalDiscount: code ? 10000 : 0,
+                    originalSubtotal: payload.subtotal,
+                    originalShippingFee: payload.shippingFee,
+                    finalSubtotal: payload.subtotal - (code ? 10000 : 0),
+                    finalShippingFee: payload.shippingFee,
+                    finalTotal: payload.subtotal + payload.shippingFee - (code ? 10000 : 0),
+                    appliedVouchers: code ? [{
+                        voucherId: 1,
+                        code,
+                        name: 'Mã hợp lệ',
+                        slot: 'ORDER',
+                        type: 'DISCOUNT_AMOUNT',
+                        discountAmount: 10000,
+                        autoApplied: false
+                    }] : []
+                }
+            };
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+        fireEvent.click(screen.getByRole('button', {name: 'Chọn voucher'}));
+        fireEvent.click(await screen.findByRole('checkbox', {name: 'Chọn voucher GOOD'}));
+        await waitFor(() => expect(screen.getByLabelText('Xóa voucher GOOD')).toBeTruthy());
+
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Chọn voucher BAD'}));
+
+        await waitFor(() => expect(mockedToastService.error).toHaveBeenCalledWith('Mã voucher không hợp lệ.'));
+        await waitFor(() => expect((screen.getByRole('checkbox', {name: 'Bỏ chọn voucher GOOD'}) as HTMLInputElement).checked).toBe(true));
+        expect((screen.getByRole('checkbox', {name: 'Chọn voucher BAD'}) as HTMLInputElement).checked).toBe(false);
+        expect(screen.getByLabelText('Xóa voucher GOOD')).toBeTruthy();
+        expect(screen.queryByLabelText('Xóa voucher BAD')).toBeNull();
+    });
+
+    it('selects discount and shipping vouchers from the picker and submits their codes', async () => {
         mockedVoucherService.getActive.mockResolvedValue({
             success: true,
             message: 'Active vouchers retrieved',
@@ -790,8 +896,12 @@ describe('Cart payment selection', () => {
         selectShippingLocation();
         await selectShippingQuote();
 
-        fireEvent.click(await screen.findByRole('button', { name: /SAVE10/i }));
-        fireEvent.click(await screen.findByRole('button', { name: /FREESHIP/i }));
+        expect(screen.queryByText('Gợi ý cho bạn')).toBeNull();
+        expect(screen.getByPlaceholderText('Nhập mã voucher')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn voucher' }));
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn voucher SAVE10' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Chọn voucher FREESHIP' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất' }));
 
         await waitFor(() => expect(screen.getByText('Giảm sản phẩm')).toBeTruthy());
         expect(screen.getByText('Giảm phí giao hàng')).toBeTruthy();
@@ -806,6 +916,111 @@ describe('Cart payment selection', () => {
         }));
     });
 
+    it('replaces vouchers within one group while preserving cross-group selection', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [
+                {id: 1, code: 'SAVE10', name: 'Giảm 10%', type: 'DISCOUNT_PERCENT', slot: 'ORDER', scope: 'ALL', value: 10},
+                {id: 2, code: 'SAVE20', name: 'Giảm 20%', type: 'DISCOUNT_PERCENT', slot: 'ITEM', scope: 'ALL', value: 20},
+                {id: 3, code: 'FREESHIP', name: 'Miễn phí giao hàng', type: 'FREE_SHIP', slot: 'SHIPPING', scope: 'ALL'}
+            ]
+        });
+
+        render(<Cart />);
+        fireEvent.click(screen.getByRole('button', {name: 'Chọn voucher'}));
+
+        fireEvent.click(await screen.findByRole('checkbox', {name: 'Chọn voucher SAVE10'}));
+        expect(screen.getByLabelText('Xóa voucher SAVE10')).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Chọn voucher SAVE20'}));
+        expect(screen.queryByLabelText('Xóa voucher SAVE10')).toBeNull();
+        expect(screen.getByLabelText('Xóa voucher SAVE20')).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Chọn voucher FREESHIP'}));
+        expect(screen.getByLabelText('Xóa voucher SAVE20')).toBeTruthy();
+        expect(screen.getByLabelText('Xóa voucher FREESHIP')).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Bỏ chọn voucher SAVE20'}));
+        expect(screen.queryByLabelText('Xóa voucher SAVE20')).toBeNull();
+        expect(screen.getByLabelText('Xóa voucher FREESHIP')).toBeTruthy();
+    });
+
+    it('lets the customer replace an automatically applied voucher with a manual voucher', async () => {
+        mockedVoucherService.getActive.mockResolvedValue({
+            success: true,
+            message: 'Active vouchers retrieved',
+            data: [
+                {id: 1, code: 'AUTO10', name: 'Tự động giảm 10%', type: 'DISCOUNT_PERCENT', slot: 'ORDER', scope: 'ALL', value: 10, autoApply: true},
+                {id: 2, code: 'SAVE20', name: 'Giảm 20%', type: 'DISCOUNT_PERCENT', slot: 'ORDER', scope: 'ALL', value: 20}
+            ]
+        });
+        mockedVoucherService.apply.mockImplementation(async payload => {
+            const code = payload.discountVoucherCode || 'AUTO10';
+            const autoApplied = !payload.discountVoucherCode;
+            return {
+                success: true,
+                message: 'Voucher preview ready',
+                data: {
+                    valid: true,
+                    discountVoucherCode: code,
+                    orderVoucherCode: code,
+                    shippingVoucherCode: null,
+                    itemDiscount: 0,
+                    orderDiscount: 20000,
+                    subtotalDiscount: 20000,
+                    shippingDiscount: 0,
+                    totalDiscount: 20000,
+                    originalSubtotal: payload.subtotal,
+                    originalShippingFee: payload.shippingFee,
+                    finalSubtotal: payload.subtotal - 20000,
+                    finalShippingFee: payload.shippingFee,
+                    finalTotal: payload.subtotal + payload.shippingFee - 20000,
+                    appliedVouchers: [{
+                        voucherId: autoApplied ? 1 : 2,
+                        code,
+                        name: autoApplied ? 'Tự động giảm 10%' : 'Giảm 20%',
+                        slot: 'ORDER',
+                        type: 'DISCOUNT_PERCENT',
+                        discountAmount: 20000,
+                        autoApplied
+                    }]
+                }
+            };
+        });
+
+        render(<Cart />);
+        selectShippingLocation();
+        await selectShippingQuote();
+
+        await waitFor(() => expect(screen.getByLabelText('Xóa voucher AUTO10')).toBeTruthy());
+        const previewCallsBeforeChipRemoval = mockedVoucherService.apply.mock.calls.length;
+        fireEvent.click(screen.getByLabelText('Xóa voucher AUTO10'));
+        await waitFor(() => expect(mockedVoucherService.apply.mock.calls.length).toBeGreaterThan(previewCallsBeforeChipRemoval));
+        await waitFor(() => expect(screen.getByLabelText('Xóa voucher AUTO10')).toBeTruthy());
+
+        fireEvent.click(screen.getByRole('button', {name: 'Chọn voucher'}));
+        const previewCallsBeforeDeselect = mockedVoucherService.apply.mock.calls.length;
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Bỏ chọn voucher AUTO10'}));
+        await waitFor(() => expect(mockedVoucherService.apply.mock.calls.length).toBeGreaterThan(previewCallsBeforeDeselect));
+        await waitFor(() => expect((screen.getByRole('checkbox', {name: 'Bỏ chọn voucher AUTO10'}) as HTMLInputElement).checked).toBe(true));
+
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Bỏ chọn voucher AUTO10'}));
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Chọn voucher SAVE20'}));
+
+        await waitFor(() => expect(screen.getByLabelText('Xóa voucher SAVE20')).toBeTruthy());
+        expect(screen.queryByLabelText('Xóa voucher AUTO10')).toBeNull();
+        expect((screen.getByRole('checkbox', {name: 'Bỏ chọn voucher SAVE20'}) as HTMLInputElement).checked).toBe(true);
+        expect((screen.getByRole('checkbox', {name: 'Chọn voucher AUTO10'}) as HTMLInputElement).checked).toBe(false);
+
+        fireEvent.click(screen.getByRole('button', {name: 'Hoàn tất'}));
+        fireEvent.click(getCheckoutButton());
+        await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(
+            expect.objectContaining({discountVoucherCode: 'SAVE20'}),
+            {clearCartOnSuccess: false}
+        ));
+    });
+
     it('preserves a manual ITEM code when preview also selects an automatic ORDER voucher', async () => {
         mockedVoucherService.getActive.mockResolvedValue({
             success: true,
@@ -818,6 +1033,15 @@ describe('Cart payment selection', () => {
                 slot: 'ITEM',
                 scope: 'ALL',
                 value: 20000
+            }, {
+                id: 9,
+                code: 'AUTOORDER',
+                name: 'Tự động giảm toàn đơn',
+                type: 'DISCOUNT_AMOUNT',
+                slot: 'ORDER',
+                scope: 'ALL',
+                value: 10000,
+                autoApply: true
             }]
         });
         mockedVoucherService.apply.mockImplementation(async payload => ({
@@ -863,10 +1087,24 @@ describe('Cart payment selection', () => {
         render(<Cart />);
         selectShippingLocation();
         await selectShippingQuote();
-        fireEvent.click(await screen.findByRole('button', { name: /SAVEITEM/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Chọn voucher' }));
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Chọn voucher SAVEITEM' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất' }));
 
-        expect(await screen.findByText(/AUTOORDER ·/i)).toBeTruthy();
-        expect(screen.getByText('Tự động')).toBeTruthy();
+        await waitFor(() => expect(mockedVoucherService.apply).toHaveBeenCalledWith(
+            expect.objectContaining({discountVoucherCode: 'SAVEITEM'}),
+            expect.anything()
+        ));
+        expect(screen.queryByText('Ưu đãi đang áp dụng')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', {name: 'Chọn voucher'}));
+        const automaticVoucher = await screen.findByRole('checkbox', {
+            name: 'Bỏ chọn voucher AUTOORDER'
+        }) as HTMLInputElement;
+        expect(automaticVoucher.checked).toBe(true);
+        expect(automaticVoucher.disabled).toBe(false);
+        expect(screen.getByLabelText('Xóa voucher AUTOORDER')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', {name: 'Hoàn tất'}));
         fireEvent.click(getCheckoutButton());
 
         await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalledWith(
