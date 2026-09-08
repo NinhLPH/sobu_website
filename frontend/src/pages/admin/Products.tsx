@@ -33,6 +33,13 @@ import {
     inputClass
 } from '../../components/admin/AdminUi';
 import {useConfirmDialog} from '../../components/common/ConfirmDialog';
+import ImageUploader from '../../components/common/ImageUploader';
+
+const PRODUCT_IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+
+const uniqueImageUrls = (urls: string[]) => urls.filter((url, index, allUrls) =>
+    Boolean(url) && allUrls.indexOf(url) === index
+);
 
 const emptyForm: ProductWriteRequest = {
     code: '',
@@ -85,6 +92,8 @@ export default function AdminProducts() {
     const [form, setForm] = useState<ProductWriteRequest>(emptyForm);
     const [detail, setDetail] = useState<AdminProductDetail | null>(null);
     const [saving, setSaving] = useState(false);
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [albumUploading, setAlbumUploading] = useState(false);
     const [lowStockThreshold, setLowStockThreshold] = useState(5);
     const [pendingActiveIds, setPendingActiveIds] = useState<number[]>([]);
 
@@ -133,6 +142,8 @@ export default function AdminProducts() {
     const openCreate = () => {
         setEditingId(null);
         setForm({...emptyForm});
+        setAvatarUploading(false);
+        setAlbumUploading(false);
         setModal('form');
     };
     const openEdit = async (id: number) => {
@@ -140,6 +151,8 @@ export default function AdminProducts() {
         try {
             const p = await AdminCatalogService.getProduct(id);
             setEditingId(id);
+            setAvatarUploading(false);
+            setAlbumUploading(false);
             setForm({
                 code: p.code || '',
                 barcode: p.barcode || '',
@@ -186,6 +199,7 @@ export default function AdminProducts() {
     };
     const submit = async (event: FormEvent) => {
         event.preventDefault();
+        if (avatarUploading || albumUploading) return;
         if (form.oldPrice != null && form.oldPrice <= form.retailPrice) {
             ToastService.error('Giá cũ phải lớn hơn giá bán mới.');
             return;
@@ -236,6 +250,7 @@ export default function AdminProducts() {
         ...prev,
         [key]: value
     }));
+    const imageUploading = avatarUploading || albumUploading;
 
     return <AdminPage title="Sản phẩm"
                       description="Quản lý thông tin bán hàng, giá niêm yết/giá bán và tag hiển thị của sản phẩm."
@@ -336,7 +351,7 @@ export default function AdminProducts() {
                     </div></>}
             <AdminPagination page={page} totalPages={totalPages} onChange={setPage}/></AdminCard>
 
-        <AdminModal open={modal === 'form'} onClose={() => setModal(null)}
+        <AdminModal open={modal === 'form'} onClose={() => setModal(null)} closeDisabled={imageUploading}
                     title={editingId ? 'Cập nhật sản phẩm' : 'Thêm sản phẩm'}
                     description="Các trường giá dùng VNĐ. Giá cũ phải lớn hơn giá bán để hiển thị trạng thái giảm giá."
                     size="xl">
@@ -373,9 +388,30 @@ export default function AdminProducts() {
                                                  onChange={e => set('badgeId', numberOrNull(e.target.value))}>
                     <option value="">Không có tag</option>
                     {badges.filter(x => x.status === 1 && x.name.toUpperCase() !== 'SALE').map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-                </select></Field><Field label="Ảnh đại diện (URL hoặc path)"><input className={inputClass}
-                                                                                    value={form.avatarImage || ''}
-                                                                                    onChange={e => set('avatarImage', e.target.value)}/></Field>
+                </select></Field>
+                    <div className="space-y-3 md:col-span-2">
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <Field label="Ảnh đại diện (URL hoặc path)">
+                                <input className={inputClass}
+                                       value={form.avatarImage || ''}
+                                       disabled={saving || imageUploading}
+                                       onChange={e => set('avatarImage', e.target.value)}/>
+                            </Field>
+                            <div>
+                                <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-outline">Tải ảnh đại diện</p>
+                                <ImageUploader
+                                    uploadedUrls={form.avatarImage ? [form.avatarImage] : []}
+                                    onChange={urls => set('avatarImage', urls[0] || '')}
+                                    disabled={saving || albumUploading}
+                                    subDirectory="products"
+                                    multiple={false}
+                                    maxFileSizeBytes={PRODUCT_IMAGE_MAX_SIZE_BYTES}
+                                    inputAriaLabel="Chọn ảnh đại diện tải lên"
+                                    onUploadingChange={setAvatarUploading}
+                                />
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div className="rounded-xl border border-outline-variant/35 bg-surface-container-low p-4">
                     <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
@@ -422,9 +458,23 @@ export default function AdminProducts() {
                                                       value={form.weight ?? ''}
                                                       onChange={e => set('weight', numberOrNull(e.target.value))}/></Field>
                     </div>
-                    <div className="mt-4"><Field label="Album ảnh" hint="Mỗi dòng là một URL hoặc path ảnh"><textarea
-                        className={`${inputClass} min-h-24 py-2`} value={(form.images || []).join('\n')}
-                        onChange={e => set('images', e.target.value.split('\n').map(x => x.trim()).filter(Boolean))}/></Field>
+                    <div className="mt-4 space-y-4">
+                        <Field label="Album ảnh" hint="Mỗi dòng là một URL hoặc path ảnh"><textarea
+                            className={`${inputClass} min-h-24 py-2`} value={(form.images || []).join('\n')}
+                            disabled={saving || imageUploading}
+                            onChange={e => set('images', uniqueImageUrls(e.target.value.split('\n').map(x => x.trim())))}/></Field>
+                        <div>
+                            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-outline">Tải ảnh album</p>
+                            <ImageUploader
+                                uploadedUrls={form.images || []}
+                                onChange={urls => set('images', uniqueImageUrls(urls))}
+                                disabled={saving || avatarUploading}
+                                subDirectory="products"
+                                maxFileSizeBytes={PRODUCT_IMAGE_MAX_SIZE_BYTES}
+                                inputAriaLabel="Chọn ảnh album tải lên"
+                                onUploadingChange={setAlbumUploading}
+                            />
+                        </div>
                     </div>
                 </details>
                 <Field label="Mô tả ngắn"><textarea className={`${inputClass} min-h-24 py-2`}
@@ -438,8 +488,8 @@ export default function AdminProducts() {
                                                                              className="h-4 w-4 accent-primary"/>Cho
                 phép hiển thị/bán sản phẩm</label>
                 <div className="flex justify-end gap-2 border-t border-outline-variant/30 pt-4"><AdminButton
-                    type="button" variant="secondary" onClick={() => setModal(null)}>Hủy</AdminButton><AdminButton
-                    type="submit" disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu sản phẩm'}</AdminButton></div>
+                    type="button" variant="secondary" disabled={imageUploading} onClick={() => setModal(null)}>Hủy</AdminButton><AdminButton
+                    type="submit" disabled={saving || imageUploading}>{imageUploading ? 'Đang tải ảnh...' : saving ? 'Đang lưu...' : 'Lưu sản phẩm'}</AdminButton></div>
             </form>
         </AdminModal>
 

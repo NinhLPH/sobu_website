@@ -9,6 +9,9 @@ interface ImageUploaderProps {
     disabled?: boolean;
     subDirectory?: string;
     onUploadingChange?: (isUploading: boolean) => void;
+    multiple?: boolean;
+    maxFileSizeBytes?: number;
+    inputAriaLabel?: string;
 }
 
 export default function ImageUploader({
@@ -16,7 +19,10 @@ export default function ImageUploader({
     onChange,
     disabled = false,
     subDirectory = 'requests',
-    onUploadingChange
+    onUploadingChange,
+    multiple = true,
+    maxFileSizeBytes,
+    inputAriaLabel = 'Chọn ảnh tải lên'
 }: ImageUploaderProps) {
     const inputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -28,9 +34,20 @@ export default function ImageUploader({
             return;
         }
 
+        if (!multiple && files.length > 1) {
+            setUploadError('Vui lòng chỉ chọn một ảnh.');
+            return;
+        }
+
         const imageFiles = files.filter((file) => file.type.startsWith('image/'));
         if (imageFiles.length !== files.length) {
             setUploadError('Vui lòng chỉ chọn tệp hình ảnh.');
+            return;
+        }
+
+        if (maxFileSizeBytes && imageFiles.some((file) => file.size > maxFileSizeBytes)) {
+            const maxSizeMb = maxFileSizeBytes / (1024 * 1024);
+            setUploadError(`Mỗi ảnh không được vượt quá ${Number.isInteger(maxSizeMb) ? maxSizeMb : maxSizeMb.toFixed(1)} MB.`);
             return;
         }
 
@@ -49,10 +66,10 @@ export default function ImageUploader({
                 newUrls.push(response.url);
             }
 
-            onChange([...uploadedUrls, ...newUrls]);
+            onChange(multiple ? [...uploadedUrls, ...newUrls] : newUrls.slice(0, 1));
         } catch {
             if (newUrls.length > 0) {
-                onChange([...uploadedUrls, ...newUrls]);
+                onChange(multiple ? [...uploadedUrls, ...newUrls] : newUrls.slice(0, 1));
             }
             setUploadError('Tải ảnh lên thất bại. Vui lòng thử lại.');
         } finally {
@@ -130,9 +147,9 @@ export default function ImageUploader({
                         <input
                             ref={inputRef}
                             type="file"
-                            multiple
+                            multiple={multiple}
                             accept="image/*"
-                            aria-label="Chọn ảnh tải lên"
+                            aria-label={inputAriaLabel}
                             onChange={(event) => {
                                 void uploadFiles(Array.from(event.target.files || []));
                             }}
@@ -148,7 +165,9 @@ export default function ImageUploader({
                             <>
                                 <Upload className="mb-1.5 h-6 w-6 text-outline/80" />
                                 <span className="px-2 text-center text-[10px] font-bold text-outline">
-                                    Chọn hoặc kéo thả ảnh
+                                    {!multiple && uploadedUrls.length > 0
+                                        ? 'Chọn hoặc kéo thả ảnh mới'
+                                        : `Chọn hoặc kéo thả ${multiple ? 'ảnh' : 'một ảnh'}`}
                                 </span>
                             </>
                         )}
@@ -159,6 +178,13 @@ export default function ImageUploader({
             {uploadError && (
                 <p className="text-xs font-bold text-error" role="alert">
                     {uploadError}
+                </p>
+            )}
+            {maxFileSizeBytes && !uploadError && (
+                <p className="text-xs text-outline">
+                    Chỉ tệp ảnh, tối đa {Number.isInteger(maxFileSizeBytes / (1024 * 1024))
+                        ? maxFileSizeBytes / (1024 * 1024)
+                        : (maxFileSizeBytes / (1024 * 1024)).toFixed(1)} MB mỗi tệp.
                 </p>
             )}
         </div>

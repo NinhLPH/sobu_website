@@ -140,18 +140,21 @@ export function AdminError({message, onRetry}: { message: string; onRetry?: () =
         <AdminButton variant="secondary" className="mt-4" onClick={onRetry}>Thử lại</AdminButton>}</div>;
 }
 
-export function AdminModal({open, title, description, children, onClose, size = 'lg'}: {
+export function AdminModal({open, title, description, children, onClose, size = 'lg', closeDisabled = false}: {
     open: boolean;
     title: string;
     description?: string;
     children: ReactNode;
     onClose: () => void;
-    size?: 'md' | 'lg' | 'xl'
+    size?: 'md' | 'lg' | 'xl';
+    closeDisabled?: boolean;
 }) {
     const dialogRef = useRef<HTMLDivElement>(null);
     const onCloseRef = useRef(onClose);
+    const closeDisabledRef = useRef(closeDisabled);
     const titleId = useId();
     onCloseRef.current = onClose;
+    closeDisabledRef.current = closeDisabled;
 
     useEffect(() => {
         if (!open) return;
@@ -164,7 +167,7 @@ export function AdminModal({open, title, description, children, onClose, size = 
         const handler = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                onCloseRef.current();
+                if (!closeDisabledRef.current) onCloseRef.current();
                 return;
             }
             if (event.key !== 'Tab' || !dialog) return;
@@ -194,15 +197,15 @@ export function AdminModal({open, title, description, children, onClose, size = 
     const width = {md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl'}[size];
     return <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-3 sm:p-6" role="dialog"
                 aria-modal="true" aria-labelledby={titleId}
-                onMouseDown={event => event.target === event.currentTarget && onClose()}>
+                onMouseDown={event => event.target === event.currentTarget && !closeDisabled && onClose()}>
         <div ref={dialogRef} tabIndex={-1} className={`max-h-[92vh] w-full ${width} overflow-y-auto rounded-2xl bg-surface shadow-2xl outline-none`}>
             <header
                 className="sticky top-0 z-10 flex items-start justify-between border-b border-outline-variant/35 bg-surface px-5 py-4">
                 <div><h2 id={titleId} className="text-lg font-black text-on-surface">{title}</h2>{description &&
                     <p className="mt-1 text-sm text-outline">{description}</p>}</div>
                 <button type="button"
-                        className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-on-surface"
-                        onClick={onClose} aria-label="Đóng"><X className="h-5 w-5"/></button>
+                        className="rounded-lg p-2 text-outline hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onClose} disabled={closeDisabled} aria-label="Đóng"><X className="h-5 w-5"/></button>
             </header>
             {children}
         </div>
